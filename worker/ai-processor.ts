@@ -1,0 +1,140 @@
+import prisma from '../src/lib/prisma';
+import { classifyEmail, generateFollowUpDraft } from '../src/lib/ai';
+
+export async function processAIClassify(data: {
+  tenantId: string;
+  cardId: string;
+  fromName: string;
+  fromEmail: string;
+  subject: string;
+  body: string;
+}) {
+  const { tenantId, cardId, fromName, fromEmail, subject, body } = data;
+
+  const tenant = await prisma.tenant.findUnique({ where: { id: tenantId } });
+  if (!tenant) return;
+
+  const classification = await classifyEmail({
+    companyContext: tenant.companyInfo || '',
+    fromName,
+    fromEmail,
+    subject,
+    body,
+  });
+
+  console.log(`[AI] Classified card ${cardId}: isLead=${classification.isLead}, confidence=${classification.confidence}`);
+
+  // Log AI classification
+  await prisma.activityLog.create({
+    data: {
+      type: 'ai_classified',
+      content: classification as any,
+      cardId,
+      tenantId,
+    },
+  });
+
+  // Move card to appropriate column
+  const suggestedColumn = classification.isLead ? classification.suggestedColumn : 'Fail';
+  const targetColumn = await prisma.column.findFirst({
+    where: { board: { tenantId }, title: suggestedColumn },
+  });
+
+  if (targetColumn) {
+    await prisma.card.update({
+      where: { id: cardId },
+      data: {
+        columnId: targetColumn.id,
+        metadata: classification as any,
+        lastActivityAt: new Date(),
+      },
+    });
+  }
+
+  // If it's a lead, generate first follow-up draft
+  if (classification.isLead) {
+    const draft = await generateFollowUpDraft({
+      companyContext: tenant.companyInfo || '',
+      contactName: fromName,
+      contactEmail: fromEmail,
+      extractedCompany: classification.extractedCompany,
+      interestLevel: classification.interestLevel,
+      conversationHistory: [body],
+      followUpNumber: 1,
+    });
+
+    await prisma.draftMessage.create({
+      data: {
+        channel: 'email',
+        subject: draft.subject,
+        body: draft.body,
+        status: 'pending',
+        aiGeneratedAt: new Date(),
+        cardId,
+        tenantId,
+      },
+    });
+
+    await prisma.activityLog.create({
+      data: {
+        type: 'ai_drafted',
+        content: { followUpNumber: 1, subject: draft.subject },
+        cardId,
+        tenantId,
+      },
+    });
+  }
+}
+
+export async function processAIDraft(data: {
+  tenantId: string;
+  cardId: string;
+  followUpNumber: number;
+}) {
+  const { tenantId, cardId, followUpNumber } = data;
+
+  const card = await prisma.card.findUnique({
+    where: { id: cardId },
+    include: {
+      activityLogs: { orderBy: { createdAt: 'asc' } },
+    },
+  });
+
+  if (!card) return;
+
+  const tenant = await prisma.tenant.findUnique({ where: { id: tenantId } });
+  if (!tenant) return;
+
+  const history = card.activityLogs
+    .filter((log) => log.type === 'email_received' || log.type === 'email_sent')
+    .map((log) => JSON.stringify(log.content));
+
+  const draft = await generateFollowUpDraft({
+    companyContext: tenant.companyInfo || '',
+    contactName: card.fromName || '',
+    contactEmail: card.fromEmail,
+    conversationHistory: history,
+    followUpNumber,
+  });
+
+  await prisma.draftMessage.create({
+    data: {
+      channel: 'email',
+      subject: draft.subject,
+      body: draft.body,
+      status: 'pending',
+      aiGeneratedAt: new Date(),
+      cardId,
+      tenantId,
+    },
+  });
+
+  await prisma.activityLog.create({
+    data: {
+      type: 'ai_drafted',
+      content: { followUpNumber, subject: draft.subject },
+      cardId,
+      tenantId,
+    },
+  });
+}
