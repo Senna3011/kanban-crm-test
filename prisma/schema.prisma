@@ -1,0 +1,188 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Tenant {
+  id          String   @id @default(cuid())
+  name        String
+  subdomain   String   @unique
+  companyInfo String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  users        User[]
+  emailConfigs EmailConfig[]
+  boards       Board[]
+  cards        Card[]
+  activityLogs ActivityLog[]
+  drafts       DraftMessage[]
+  notifications Notification[]
+  contacts     Contact[]
+}
+
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  name         String?
+  passwordHash String
+  role         String   @default("member")
+  avatar       String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  assignedCards Card[]
+  notifications Notification[]
+}
+
+model EmailConfig {
+  id          String   @id @default(cuid())
+  imapHost    String
+  imapPort    Int      @default(993)
+  imapUser    String
+  imapPass    String
+  smtpHost    String
+  smtpPort    Int      @default(465)
+  smtpUser    String
+  smtpPass    String
+  lastPolledAt DateTime?
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId])
+}
+
+model Board {
+  id        String   @id @default(cuid())
+  title     String   @default("Main Board")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  tenantId String
+  tenant   Tenant  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  columns  Column[]
+
+  @@unique([tenantId])
+}
+
+model Column {
+  id       String @id @default(cuid())
+  title    String
+  position Int
+  color    String @default("#6366f1")
+  isSystem Boolean @default(false)
+
+  boardId String
+  board   Board  @relation(fields: [boardId], references: [id], onDelete: Cascade)
+  cards   Card[]
+
+  @@unique([boardId, title])
+}
+
+model Card {
+  id             String   @id @default(cuid())
+  subject        String
+  fromEmail      String
+  fromName       String?
+  bodyText       String?
+  bodyHtml       String?
+  messageId      String?  @unique
+  inReplyTo      String?
+  status         String   @default("unread")
+  channel        String   @default("email")
+  highlighted    Boolean  @default(false)
+  metadata       Json?
+  lastActivityAt DateTime @default(now())
+  nextFollowUpAt DateTime?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  columnId String
+  column   Column @relation(fields: [columnId], references: [id])
+
+  tenantId  String
+  tenant    Tenant  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  assignedToId String?
+  assignedTo   User?   @relation(fields: [assignedToId], references: [id])
+
+  activityLogs ActivityLog[]
+  drafts       DraftMessage[]
+  notifications Notification[]
+}
+
+model ActivityLog {
+  id        String   @id @default(cuid())
+  type      String
+  content   Json
+  createdAt DateTime @default(now())
+
+  cardId String
+  card   Card   @relation(fields: [cardId], references: [id], onDelete: Cascade)
+
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+}
+
+model DraftMessage {
+  id            String    @id @default(cuid())
+  channel       String    @default("email")
+  subject       String?
+  body          String
+  status        String    @default("pending")
+  aiGeneratedAt DateTime?
+  sentAt        DateTime?
+  editedAt      DateTime?
+
+  cardId String
+  card   Card   @relation(fields: [cardId], references: [id], onDelete: Cascade)
+
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+}
+
+model Notification {
+  id        String   @id @default(cuid())
+  type      String
+  title     String
+  body      String?
+  isRead    Boolean  @default(false)
+  link      String?
+  createdAt DateTime @default(now())
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  cardId   String?
+  card     Card?   @relation(fields: [cardId], references: [id])
+
+  tenantId String
+  tenant   Tenant  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+}
+
+model Contact {
+  id        String   @id @default(cuid())
+  email     String
+  name      String?
+  company   String?
+  phone     String?
+  metadata  Json?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, email])
+}
