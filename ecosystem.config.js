@@ -10,7 +10,8 @@ module.exports = {
     },
     {
       name: 'worker',
-      script: 'worker/index.js',
+      script: 'node_modules/.bin/tsx',
+      args: 'worker/index.ts',
       env: { NODE_ENV: 'production' },
       instances: 1,
       exec_mode: 'fork',
