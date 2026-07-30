@@ -3,13 +3,14 @@
 import { useDroppable } from '@dnd-kit/core';
 import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import KanbanCard from './KanbanCard';
-import type { ColumnData } from '@/types';
+import type { ColumnData, CardData } from '@/types';
 
 interface Props {
   column: ColumnData;
+  onCardClick?: (card: CardData) => void;
 }
 
-export default function KanbanColumn({ column }: Props) {
+export default function KanbanColumn({ column, onCardClick }: Props) {
   const { setNodeRef, isOver } = useDroppable({ id: column.id });
 
   return (
@@ -30,7 +31,7 @@ export default function KanbanColumn({ column }: Props) {
       <div className="flex-1 overflow-y-auto px-2 pb-2 space-y-2">
         <SortableContext items={column.cards.map((c) => c.id)} strategy={verticalListSortingStrategy}>
           {column.cards.map((card) => (
-            <KanbanCard key={card.id} card={card} />
+            <KanbanCard key={card.id} card={card} onClick={() => onCardClick?.(card)} />
           ))}
         </SortableContext>
         {column.cards.length === 0 && (

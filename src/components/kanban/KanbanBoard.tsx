@@ -5,6 +5,7 @@ import { DndContext, DragEndEvent, DragOverlay, DragStartEvent, PointerSensor, u
 import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import KanbanColumn from './KanbanColumn';
 import KanbanCard from './KanbanCard';
+import CardDetailPanel from './CardDetailPanel';
 import type { ColumnData, CardData } from '@/types';
 
 const DEFAULT_COLUMNS: ColumnData[] = [
@@ -21,6 +22,7 @@ const DEFAULT_COLUMNS: ColumnData[] = [
 export default function KanbanBoard() {
   const [columns, setColumns] = useState<ColumnData[]>(DEFAULT_COLUMNS);
   const [activeCard, setActiveCard] = useState<CardData | null>(null);
+  const [selectedCard, setSelectedCard] = useState<CardData | null>(null);
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 8 } })
@@ -74,13 +76,15 @@ export default function KanbanBoard() {
       <DndContext sensors={sensors} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
         <div className="flex-1 flex gap-4 overflow-x-auto pb-4">
           {columns.map((column) => (
-            <KanbanColumn key={column.id} column={column} />
+            <KanbanColumn key={column.id} column={column} onCardClick={(card) => setSelectedCard(card)} />
           ))}
         </div>
         <DragOverlay>
           {activeCard ? <KanbanCard card={activeCard} isDragging /> : null}
         </DragOverlay>
       </DndContext>
+
+      {selectedCard && <CardDetailPanel card={selectedCard} onClose={() => setSelectedCard(null)} />}
     </div>
   );
 }
