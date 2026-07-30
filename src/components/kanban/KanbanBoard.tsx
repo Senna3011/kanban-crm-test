@@ -6,6 +6,7 @@ import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable'
 import KanbanColumn from './KanbanColumn';
 import KanbanCard from './KanbanCard';
 import CardDetailPanel from './CardDetailPanel';
+import ColumnSettings from './ColumnSettings';
 import type { ColumnData, CardData } from '@/types';
 
 const DEFAULT_COLUMNS: ColumnData[] = [
@@ -23,6 +24,7 @@ export default function KanbanBoard() {
   const [columns, setColumns] = useState<ColumnData[]>(DEFAULT_COLUMNS);
   const [activeCard, setActiveCard] = useState<CardData | null>(null);
   const [selectedCard, setSelectedCard] = useState<CardData | null>(null);
+  const [showColumnSettings, setShowColumnSettings] = useState(false);
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 8 } })
@@ -71,6 +73,12 @@ export default function KanbanBoard() {
     <div className="h-full flex flex-col">
       <div className="flex items-center justify-between mb-4">
         <h1 className="text-2xl font-bold text-gray-900">Sales Board</h1>
+        <button
+          onClick={() => setShowColumnSettings(true)}
+          className="px-3 py-1.5 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50"
+        >
+          Manage columns
+        </button>
       </div>
 
       <DndContext sensors={sensors} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
@@ -85,6 +93,7 @@ export default function KanbanBoard() {
       </DndContext>
 
       {selectedCard && <CardDetailPanel card={selectedCard} onClose={() => setSelectedCard(null)} />}
+      {showColumnSettings && <ColumnSettings columns={columns} onChange={setColumns} onClose={() => setShowColumnSettings(false)} />}
     </div>
   );
 }
