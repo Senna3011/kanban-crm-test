@@ -53,7 +53,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     return NextResponse.json({ error: 'Not found' }, { status: 404 });
   }
 
-  const emailConfig = await prisma.emailConfig.findUnique({ where: { tenantId } });
+  const emailConfig = await prisma.emailConfig.findFirst({ where: { tenantId } });
   if (!emailConfig) {
     return NextResponse.json({ error: 'Email not configured' }, { status: 400 });
   }

@@ -36,29 +36,42 @@ function withTimeout<T>(promise: Promise<T>, ms = 15000): Promise<T> {
   ]);
 }
 
-export async function getEmailConfig() {
+export async function getEmailConfigs() {
   const session = await requireSession();
   const tenantId = (session.user as any).tenantId;
-  const [tenant, config] = await Promise.all([
+  const [tenant, configs, boards] = await Promise.all([
     prisma.tenant.findUnique({ where: { id: tenantId }, select: { name: true, companyInfo: true } }),
-    prisma.emailConfig.findUnique({ where: { tenantId } }),
+    prisma.emailConfig.findMany({ where: { tenantId }, orderBy: { createdAt: 'asc' } }),
+    prisma.board.findMany({ where: { tenantId }, select: { id: true, title: true } }),
   ]);
   let companyInfo: { name?: string; products?: string } = {};
   try { if (tenant?.companyInfo) companyInfo = JSON.parse(tenant.companyInfo); } catch {}
   return {
     company: { name: tenant?.name || companyInfo.name || '', products: companyInfo.products || '' },
-    email: config ? {
-      imapHost: config.imapHost, imapPort: config.imapPort, imapUser: config.imapUser,
-      smtpHost: config.smtpHost, smtpPort: config.smtpPort, smtpUser: config.smtpUser,
-      hasImapPassword: Boolean(config.imapPass), hasSmtpPassword: Boolean(config.smtpPass),
-      lastPolledAt: config.lastPolledAt?.toISOString() || null,
-    } : null,
+    configs: configs.map(c => ({
+      id: c.id, name: c.name, boardId: c.boardId || undefined,
+      imapHost: c.imapHost, imapPort: c.imapPort, imapUser: c.imapUser,
+      smtpHost: c.smtpHost, smtpPort: c.smtpPort, smtpUser: c.smtpUser,
+      hasImapPassword: Boolean(c.imapPass), hasSmtpPassword: Boolean(c.smtpPass),
+      lastPolledAt: c.lastPolledAt?.toISOString() || null,
+      isActive: c.isActive,
+    })),
+    boards,
   };
+}
+
+// Keep backward compat
+export async function getEmailConfig() {
+  const result = await getEmailConfigs();
+  return { ...result, email: result.configs[0] || null };
 }
 
 export type { EmailConfigInput };
 
 export async function saveEmailConfig(data: {
+  id?: string;
+  name?: string;
+  boardId?: string;
   imapHost: string;
   imapPort: number;
   imapUser: string;
@@ -70,36 +83,45 @@ export async function saveEmailConfig(data: {
 }) {
   const session = await requireSession();
   const tenantId = (session.user as any).tenantId;
-  const existing = await prisma.emailConfig.findUnique({ where: { tenantId } });
+  const configName = (data.name || 'Default').trim();
+  const existing = data.id
+    ? await prisma.emailConfig.findFirst({ where: { id: data.id, tenantId } })
+    : await prisma.emailConfig.findFirst({ where: { tenantId, name: configName } });
   const editing = Boolean(existing);
   const validation = validateEmailConfigInput(data, editing);
   if (!validation.ok) throw new Error(validation.errors.join(' '));
 
-  await prisma.emailConfig.upsert({
-    where: { tenantId },
-    create: {
-      tenantId,
-      imapHost: data.imapHost,
-      imapPort: data.imapPort,
-      imapUser: data.imapUser,
-      imapPass: encrypt(data.imapPass),
-      smtpHost: data.smtpHost,
-      smtpPort: data.smtpPort,
-      smtpUser: data.smtpUser,
-      smtpPass: encrypt(data.smtpPass),
-    },
-    update: {
-      imapHost: data.imapHost,
-      imapPort: data.imapPort,
-      imapUser: data.imapUser,
-      ...(data.imapPass ? { imapPass: encrypt(data.imapPass) } : {}),
-      smtpHost: data.smtpHost,
-      smtpPort: data.smtpPort,
-      smtpUser: data.smtpUser,
-      ...(data.smtpPass ? { smtpPass: encrypt(data.smtpPass) } : {}),
-    },
-  });
+  const updateData: any = {
+    name: configName,
+    imapHost: data.imapHost,
+    imapPort: data.imapPort,
+    imapUser: data.imapUser,
+    smtpHost: data.smtpHost,
+    smtpPort: data.smtpPort,
+    smtpUser: data.smtpUser,
+    boardId: data.boardId || null,
+  };
+  if (data.imapPass) updateData.imapPass = encrypt(data.imapPass);
+  if (data.smtpPass) updateData.smtpPass = encrypt(data.smtpPass);
 
+  if (existing) {
+    await prisma.emailConfig.update({ where: { id: existing.id }, data: updateData });
+  } else {
+    if (!data.imapPass || !data.smtpPass) throw new Error('Password is required for new email configuration.');
+    await prisma.emailConfig.create({
+      data: { tenantId, ...updateData, imapPass: encrypt(data.imapPass), smtpPass: encrypt(data.smtpPass) },
+    });
+  }
+
+  return { success: true };
+}
+
+export async function deleteEmailConfig(id: string) {
+  const session = await requireSession();
+  const tenantId = (session.user as any).tenantId;
+  const config = await prisma.emailConfig.findFirst({ where: { id, tenantId } });
+  if (!config) throw new Error('Configuration not found.');
+  await prisma.emailConfig.delete({ where: { id } });
   return { success: true };
 }
 

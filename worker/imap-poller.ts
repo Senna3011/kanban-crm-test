@@ -5,11 +5,11 @@ import { aiProcessQueue } from '../queue';
 
 const emailAdapter = new EmailAdapter();
 
-export async function processEmailPoll(data: { tenantId: string }) {
-  const { tenantId } = data;
+export async function processEmailPoll(data: { tenantId: string; emailConfigId: string }) {
+  const { tenantId, emailConfigId } = data;
 
-  const config = await prisma.emailConfig.findUnique({ where: { tenantId } });
-  if (!config || !config.isActive) return;
+  const config = await prisma.emailConfig.findUnique({ where: { id: emailConfigId } });
+  if (!config || !config.isActive || config.tenantId !== tenantId) return;
 
   const imapConfig = {
     host: config.imapHost,
@@ -30,8 +30,14 @@ export async function processEmailPoll(data: { tenantId: string }) {
   
   console.log(`[IMAP Poller] Found ${messages.length} new messages`);
 
-  // Get default board and columns
-  const board = await prisma.board.findUnique({ where: { tenantId } });
+  // Find board linked to this email config
+  let board;
+  if (config.boardId) {
+    board = await prisma.board.findFirst({ where: { id: config.boardId, tenantId } });
+  }
+  if (!board) {
+    board = await prisma.board.findFirst({ where: { tenantId } });
+  }
   if (!board) return;
 
   const unreadsColumn = await prisma.column.findFirst({
@@ -84,6 +90,7 @@ export async function processEmailPoll(data: { tenantId: string }) {
           channel: 'email',
           columnId: unreadsColumn.id,
           tenantId,
+          emailConfigId: config.id,
           lastActivityAt: new Date(),
         },
       });

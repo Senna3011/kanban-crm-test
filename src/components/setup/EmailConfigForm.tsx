@@ -3,10 +3,15 @@
 import { useState } from 'react';
 import Input from '@/components/ui/Input';
 import Button from '@/components/ui/Button';
-import { saveEmailConfig, testImapConnection, testSmtpConnection } from '@/server/actions/email-config';
+import { saveEmailConfig, deleteEmailConfig, testImapConnection, testSmtpConnection } from '@/server/actions/email-config';
 import toast from 'react-hot-toast';
 
+type BoardItem = { id: string; title: string };
+
 type EmailValues = {
+  id?: string;
+  name?: string;
+  boardId?: string;
   imapHost: string;
   imapPort: number;
   imapUser: string;
@@ -22,8 +27,13 @@ const defaults: EmailValues = {
   smtpHost: 'smtp.zoho.com', smtpPort: 465, smtpUser: '', smtpPass: '',
 };
 
-export default function EmailConfigForm({ initial }: { initial?: Partial<EmailValues> }) {
-  const [form, setForm] = useState<EmailValues>({ ...defaults, ...initial, imapPass: '', smtpPass: '' });
+export default function EmailConfigForm({ initial, boards = [], isNew = false }: { initial?: Partial<EmailValues>; boards?: BoardItem[]; isNew?: boolean }) {
+  const [form, setForm] = useState<EmailValues>({
+    ...defaults, ...initial,
+    name: initial?.name || (isNew ? '' : 'Default'),
+    boardId: initial?.boardId || '',
+    imapPass: '', smtpPass: '',
+  });
   const [hasSavedPasswords] = useState(Boolean(initial?.imapUser));
   const [testing, setTesting] = useState<'imap' | 'smtp' | 'all' | null>(null);
   const [saving, setSaving] = useState(false);
@@ -34,12 +44,12 @@ export default function EmailConfigForm({ initial }: { initial?: Partial<EmailVa
     setStatus({});
     try {
       if (kind === 'imap' || kind === 'all') {
-        const result = await testImapConnection({ host: form.imapHost, port: form.imapPort, user: form.imapUser, pass: form.imapPass });
+        const result = await testImapConnection({ host: form.imapHost, port: form.imapPort, user: form.imapUser, pass: form.imapPass || 'test' });
         if (!result.success) { setStatus({ imap: result.error || 'IMAP connection failed.' }); toast.error(`IMAP: ${result.error}`); return; }
         setStatus((current) => ({ ...current, imap: 'Connected' }));
       }
       if (kind === 'smtp' || kind === 'all') {
-        const result = await testSmtpConnection({ host: form.smtpHost, port: form.smtpPort, user: form.smtpUser, pass: form.smtpPass });
+        const result = await testSmtpConnection({ host: form.smtpHost, port: form.smtpPort, user: form.smtpUser, pass: form.smtpPass || 'test' });
         if (!result.success) { setStatus((current) => ({ ...current, smtp: result.error || 'SMTP connection failed.' })); toast.error(`SMTP: ${result.error}`); return; }
         setStatus((current) => ({ ...current, smtp: 'Connected' }));
       }
@@ -52,19 +62,48 @@ export default function EmailConfigForm({ initial }: { initial?: Partial<EmailVa
   async function handleSave() {
     setSaving(true);
     try {
-      await saveEmailConfig(form);
+      await saveEmailConfig({ ...form, name: form.name || 'Default' });
       toast.success('Email configuration saved.');
+      window.location.reload();
     } catch (error: any) {
       toast.error(error?.message || 'Could not save email configuration.');
     } finally { setSaving(false); }
+  }
+
+  async function handleDelete() {
+    if (!form.id) return;
+    if (!confirm('Delete this email configuration?')) return;
+    try {
+      await deleteEmailConfig(form.id);
+      toast.success('Configuration deleted.');
+      window.location.reload();
+    } catch (error: any) {
+      toast.error(error?.message || 'Could not delete configuration.');
+    }
   }
 
   const updateField = (field: keyof EmailValues, value: string | number) => setForm((prev) => ({ ...prev, [field]: value }));
   const passwordHint = hasSavedPasswords ? 'Leave blank to keep the saved password.' : 'Required for the first setup.';
 
   return (
-    <div className="space-y-6 max-w-2xl">
-      <div><h2 className="text-xl font-semibold">Email Configuration</h2><p className="text-gray-500 mt-1">Connect your inbox to start processing leads.</p></div>
+    <div className="space-y-4">
+      {(isNew || !initial?.id) && (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <Input id={`name-${form.id || 'new'}`} label="Configuration Name" value={form.name || ''} onChange={(e) => updateField('name', e.target.value)} placeholder="e.g., Sales, Support, Billing" required />
+          <div className="space-y-1">
+            <label className="block text-sm font-medium text-gray-700">Link to Board</label>
+            <select
+              id={`board-${form.id || 'new'}`}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
+              value={form.boardId || ''}
+              onChange={(e) => updateField('boardId', e.target.value)}
+            >
+              <option value="">No board linked</option>
+              {boards.map(b => <option key={b.id} value={b.id}>{b.title}</option>)}
+            </select>
+          </div>
+        </div>
+      )}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <Input id="imap-host" label="IMAP Host" value={form.imapHost} onChange={(e) => updateField('imapHost', e.target.value)} required />
         <Input id="imap-port" label="IMAP Port" type="number" value={form.imapPort} onChange={(e) => updateField('imapPort', Number(e.target.value))} required />
@@ -84,7 +123,8 @@ export default function EmailConfigForm({ initial }: { initial?: Partial<EmailVa
         <Button variant="secondary" onClick={() => handleTest('imap')} loading={testing === 'imap'} disabled={Boolean(testing)}>Test IMAP</Button>
         <Button variant="secondary" onClick={() => handleTest('smtp')} loading={testing === 'smtp'} disabled={Boolean(testing)}>Test SMTP</Button>
         <Button variant="secondary" onClick={() => handleTest('all')} loading={testing === 'all'} disabled={Boolean(testing)}>Test All</Button>
-        <Button onClick={handleSave} loading={saving} disabled={Boolean(testing)}>Save Configuration</Button>
+        <Button onClick={handleSave} loading={saving} disabled={Boolean(testing)}>{isNew ? 'Add Configuration' : 'Save Configuration'}</Button>
+        {form.id && <Button variant="secondary" onClick={handleDelete} className="text-red-600 hover:text-red-700">Delete</Button>}
       </div>
     </div>
   );

@@ -1,6 +1,7 @@
 export interface EmailPollJob {
   type: 'poll_inbox';
   tenantId: string;
+  emailConfigId: string;
 }
 
 export interface AIClassifyJob {

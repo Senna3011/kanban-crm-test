@@ -3,12 +3,19 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/server/auth';
 import prisma from '@/lib/prisma';
 
-export async function GET() {
+export async function GET(req: NextRequest) {
   const session = await getServerSession(authOptions);
   if (!session?.user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   const tenantId = (session.user as any).tenantId;
-  const board = await prisma.board.findUnique({ where: { tenantId } });
+  const boardId = req.nextUrl.searchParams.get('boardId');
+
+  let board;
+  if (boardId) {
+    board = await prisma.board.findFirst({ where: { id: boardId, tenantId } });
+  } else {
+    board = await prisma.board.findFirst({ where: { tenantId } });
+  }
   if (!board) return NextResponse.json([]);
 
   const columns = await prisma.column.findMany({
@@ -31,7 +38,9 @@ export async function POST(req: NextRequest) {
   const tenantId = (session.user as any).tenantId;
   const body = await req.json();
 
-  const board = await prisma.board.findUnique({ where: { tenantId } });
+  const board = body.boardId
+    ? await prisma.board.findFirst({ where: { id: body.boardId, tenantId } })
+    : await prisma.board.findFirst({ where: { tenantId } });
   if (!board) return NextResponse.json({ error: 'Board not found' }, { status: 404 });
 
   const column = await prisma.column.create({

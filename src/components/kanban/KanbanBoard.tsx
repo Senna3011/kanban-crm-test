@@ -16,6 +16,7 @@ export default function KanbanBoard() {
   const [showColumnSettings, setShowColumnSettings] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [boardName, setBoardName] = useState('Board');
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 8 } })
@@ -24,7 +25,9 @@ export default function KanbanBoard() {
   const fetchColumns = useCallback(async () => {
     try {
       setError(null);
-      const res = await fetch('/api/columns');
+      const boardId = localStorage.getItem('activeBoardId') || '';
+      const url = boardId ? `/api/columns?boardId=${boardId}` : '/api/columns';
+      const res = await fetch(url);
       if (!res.ok) throw new Error('Failed to load board');
       const data: ColumnData[] = await res.json();
       setColumns(
@@ -36,6 +39,15 @@ export default function KanbanBoard() {
           })),
         }))
       );
+      if (data.length > 0) {
+        const boardsRes = await fetch('/api/boards');
+        if (boardsRes.ok) {
+          const boards = await boardsRes.json();
+          const current = boards.find((b: any) => b.id === boardId);
+          if (current) setBoardName(current.title);
+          else if (boards.length > 0) setBoardName(boards[0].title);
+        }
+      }
     } catch (err: any) {
       setError(err.message || 'Failed to load board');
       toast.error('Failed to load board data');
@@ -53,6 +65,13 @@ export default function KanbanBoard() {
     const handler = () => fetchColumns();
     window.addEventListener('board-refresh', handler);
     return () => window.removeEventListener('board-refresh', handler);
+  }, [fetchColumns]);
+
+  // Listen for board switch events
+  useEffect(() => {
+    const handler = () => { setLoading(true); fetchColumns(); };
+    window.addEventListener('board-switched', handler);
+    return () => window.removeEventListener('board-switched', handler);
   }, [fetchColumns]);
 
   function handleDragStart(event: DragStartEvent) {
@@ -149,7 +168,7 @@ export default function KanbanBoard() {
     <div className="h-full flex flex-col">
       <Toaster position="top-right" />
       <div className="flex items-center justify-between mb-4">
-        <h1 className="text-2xl font-bold text-gray-900">Sales Board</h1>
+        <h1 className="text-2xl font-bold text-gray-900">{boardName}</h1>
         <button
           onClick={() => setShowColumnSettings(true)}
           className="px-3 py-1.5 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50"

@@ -11,13 +11,14 @@ export function startSchedulers() {
     try {
       const configs = await prisma.emailConfig.findMany({
         where: { isActive: true },
-        select: { tenantId: true },
+        select: { tenantId: true, id: true },
       });
 
       for (const config of configs) {
         await emailPollQueue.add('poll_inbox', {
           type: 'poll_inbox',
           tenantId: config.tenantId,
+          emailConfigId: config.id,
         });
       }
 

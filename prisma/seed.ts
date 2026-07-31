@@ -33,11 +33,14 @@ async function main() {
   });
 
   // Create board
-  const board = await prisma.board.upsert({
+  let board = await prisma.board.findFirst({
     where: { tenantId: tenant.id },
-    update: {},
-    create: { title: 'Main Board', tenantId: tenant.id },
   });
+  if (!board) {
+    board = await prisma.board.create({
+      data: { title: 'Main Board', tenantId: tenant.id },
+    });
+  }
 
   // Create default columns
   const defaultColumns = [

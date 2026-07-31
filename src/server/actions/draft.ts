@@ -19,7 +19,7 @@ export async function sendDraft(draftId: string) {
 
   if (!draft || draft.tenantId !== tenantId) throw new Error('Not found');
 
-  const emailConfig = await prisma.emailConfig.findUnique({ where: { tenantId } });
+  const emailConfig = await prisma.emailConfig.findFirst({ where: { tenantId } });
   if (!emailConfig) throw new Error('Email not configured');
 
   // Send via SMTP

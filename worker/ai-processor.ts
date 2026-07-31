@@ -34,10 +34,17 @@ export async function processAIClassify(data: {
     },
   });
 
-  // Move card to appropriate column
+  // Move card to appropriate column within the same board the card is on
   const suggestedColumn = classification.isLead ? classification.suggestedColumn : 'Fail';
+  const currentCard = await prisma.card.findUnique({
+    where: { id: cardId },
+    select: { column: { select: { boardId: true } } },
+  });
+  const boardId = currentCard?.column.boardId;
+  if (!boardId) return;
+
   const targetColumn = await prisma.column.findFirst({
-    where: { board: { tenantId }, title: suggestedColumn },
+    where: { boardId, title: suggestedColumn },
   });
 
   if (targetColumn) {

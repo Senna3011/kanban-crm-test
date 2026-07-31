@@ -5,7 +5,7 @@ import { EmailAdapter } from '../../channels/email';
 const emailAdapter = new EmailAdapter();
 
 export async function fetchNewEmails(tenantId: string): Promise<number> {
-  const config = await prisma.emailConfig.findUnique({ where: { tenantId } });
+  const config = await prisma.emailConfig.findFirst({ where: { tenantId } });
   if (!config || !config.isActive) return 0;
 
   const imapConfig = {
@@ -32,7 +32,7 @@ export async function sendEmail(
   body: string,
   inReplyTo?: string
 ): Promise<boolean> {
-  const config = await prisma.emailConfig.findUnique({ where: { tenantId } });
+  const config = await prisma.emailConfig.findFirst({ where: { tenantId } });
   if (!config) return false;
 
   const smtpConfig = {
