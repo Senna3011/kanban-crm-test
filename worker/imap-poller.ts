@@ -5,8 +5,23 @@ import { aiProcessQueue } from '../queue';
 
 const emailAdapter = new EmailAdapter();
 
-async function resolveBoard(tenantId: string, toEmail?: string) {
-  // Load email routing from tenant companyInfo
+// Map IMAP folder names to board titles
+const FOLDER_TO_BOARD: Record<string, string> = {
+  'INBOX': 'General',
+  'Elite': 'Elite Team',
+  'Gold': 'Gold Team',
+  'Premiere': 'Premiere Team',
+  'Nell': 'Nell VH',
+};
+
+async function resolveBoard(tenantId: string, toEmail?: string, folder?: string) {
+  // First try folder-based routing
+  if (folder && FOLDER_TO_BOARD[folder]) {
+    const board = await prisma.board.findFirst({ where: { tenantId, title: FOLDER_TO_BOARD[folder] } });
+    if (board) return board;
+  }
+
+  // Then try recipient-based routing
   const tenant = await prisma.tenant.findUnique({ where: { id: tenantId }, select: { companyInfo: true } });
   let routing: Record<string, string> = {};
   try {
@@ -16,14 +31,77 @@ async function resolveBoard(tenantId: string, toEmail?: string) {
     }
   } catch {}
 
-  // Route based on recipient address
   if (toEmail && routing[toEmail]) {
     const board = await prisma.board.findFirst({ where: { tenantId, title: routing[toEmail] } });
     if (board) return board;
   }
 
-  // Fallback: first board
+  // Fallback: General board or first board
+  const general = await prisma.board.findFirst({ where: { tenantId, title: 'General' } });
+  if (general) return general;
   return prisma.board.findFirst({ where: { tenantId } });
+}
+
+async function pollFolder(imapConfig: Record<string, string>, folder: string, tenantId: string, emailConfigId: string) {
+  console.log(`[IMAP Poller] Polling folder: ${folder}...`);
+  
+  let messages;
+  try {
+    messages = await emailAdapter.pollInbox(imapConfig, folder);
+  } catch (err: any) {
+    console.error(`[IMAP Poller] Error polling ${folder}: ${err.message}`);
+    return 0;
+  }
+  
+  console.log(`[IMAP Poller] Found ${messages.length} messages in ${folder}`);
+  let created = 0;
+
+  for (const msg of messages) {
+    try {
+      const alreadyProcessed = await prisma.card.findUnique({ where: { messageId: msg.messageId }, select: { id: true } });
+      if (alreadyProcessed) continue;
+
+      const board = await resolveBoard(tenantId, msg.toEmail, folder);
+      if (!board) continue;
+
+      const unreads = await prisma.column.findFirst({ where: { boardId: board.id, title: 'Unreads' } });
+      if (!unreads) continue;
+
+      // Check if reply to existing thread
+      let existingCard = null;
+      if (msg.inReplyTo) {
+        existingCard = await prisma.card.findFirst({ where: { messageId: msg.inReplyTo, tenantId } });
+      }
+
+      if (existingCard) {
+        await prisma.card.update({ where: { id: existingCard.id }, data: { highlighted: true, lastActivityAt: new Date() } });
+        await prisma.activityLog.create({
+          data: { type: 'email_received', content: { messageId: msg.messageId, subject: msg.subject, from: msg.fromEmail }, cardId: existingCard.id, tenantId },
+        });
+      } else {
+        const card = await prisma.card.create({
+          data: {
+            subject: msg.subject, fromEmail: msg.fromEmail, fromName: msg.fromName,
+            bodyText: msg.bodyText, bodyHtml: msg.bodyHtml,
+            messageId: msg.messageId, inReplyTo: msg.inReplyTo || null,
+            channel: 'email', columnId: unreads.id, tenantId, emailConfigId: emailConfigId,
+            lastActivityAt: msg.receivedAt || new Date(),
+          },
+        });
+        await prisma.activityLog.create({
+          data: { type: 'email_received', content: { messageId: msg.messageId, subject: msg.subject, from: msg.fromEmail }, cardId: card.id, tenantId },
+        });
+        await aiProcessQueue.add('classify_email', {
+          type: 'classify_email', tenantId, cardId: card.id,
+          fromName: msg.fromName || '', fromEmail: msg.fromEmail, subject: msg.subject, body: msg.bodyText,
+        });
+        created++;
+      }
+    } catch (error: any) {
+      console.error(`[IMAP Poller] Failed message ${msg.messageId}: ${error?.message}`);
+    }
+  }
+  return created;
 }
 
 export async function processEmailPoll(data: { tenantId: string; emailConfigId: string }) {
@@ -40,108 +118,17 @@ export async function processEmailPoll(data: { tenantId: string; emailConfigId: 
   };
 
   console.log(`[IMAP Poller] Polling ${config.imapUser}...`);
-  
-  let messages;
-  try {
-    messages = await emailAdapter.pollInbox(imapConfig);
-  } catch (err: any) {
-    console.error(`[IMAP Poller] Error polling ${config.imapUser}: ${err.message}`);
-    return;
-  }
-  
-  console.log(`[IMAP Poller] Found ${messages.length} new messages`);
 
-  for (const msg of messages) {
-    try {
-      const alreadyProcessed = await prisma.card.findUnique({ where: { messageId: msg.messageId }, select: { id: true } });
-      if (alreadyProcessed) {
-        console.log(`[IMAP Poller] Skipping duplicate message ${msg.messageId}`);
-        continue;
-      }
-
-      // Resolve target board based on recipient
-      const board = await resolveBoard(tenantId, msg.toEmail);
-      if (!board) {
-        console.log(`[IMAP Poller] No board found for ${msg.toEmail}, skipping`);
-        continue;
-      }
-
-      const unreadsColumn = await prisma.column.findFirst({
-        where: { boardId: board.id, title: 'Unreads' },
-      });
-      if (!unreadsColumn) {
-        console.log(`[IMAP Poller] No Unreads column in board ${board.title}`);
-        continue;
-      }
-
-      // Check if it's a reply to an existing thread
-      let existingCard = null;
-    if (msg.inReplyTo) {
-      existingCard = await prisma.card.findFirst({
-        where: { messageId: msg.inReplyTo, tenantId },
-      });
-    }
-
-    if (existingCard) {
-      // Append to existing thread — highlight card
-      await prisma.card.update({
-        where: { id: existingCard.id },
-        data: { highlighted: true, lastActivityAt: new Date() },
-      });
-
-      await prisma.activityLog.create({
-        data: {
-          type: 'email_received',
-          content: { messageId: msg.messageId, subject: msg.subject, from: msg.fromEmail },
-          cardId: existingCard.id,
-          tenantId,
-        },
-      });
-    } else {
-      // Create new card in Unreads
-      const card = await prisma.card.create({
-        data: {
-          subject: msg.subject,
-          fromEmail: msg.fromEmail,
-          fromName: msg.fromName,
-          bodyText: msg.bodyText,
-          bodyHtml: msg.bodyHtml,
-          messageId: msg.messageId,
-          inReplyTo: msg.inReplyTo || null,
-          channel: 'email',
-          columnId: unreadsColumn.id,
-          tenantId,
-          emailConfigId: config.id,
-          lastActivityAt: new Date(),
-        },
-      });
-
-      await prisma.activityLog.create({
-        data: {
-          type: 'email_received',
-          content: { messageId: msg.messageId, subject: msg.subject, from: msg.fromEmail },
-          cardId: card.id,
-          tenantId,
-        },
-      });
-
-      // Queue AI classification
-      await aiProcessQueue.add('classify_email', {
-        type: 'classify_email',
-        tenantId,
-        cardId: card.id,
-        fromName: msg.fromName || '',
-        fromEmail: msg.fromEmail,
-        subject: msg.subject,
-        body: msg.bodyText,
-      });
-      }
-    } catch (error: any) {
-      console.error(`[IMAP Poller] Failed message ${msg.messageId}: ${error?.message || 'unknown error'}`);
-    }
+  let totalCreated = 0;
+  // Poll INBOX + all shared mailbox folders
+  const folders = ['INBOX', 'Elite', 'Gold', 'Premiere', 'Nell'];
+  for (const folder of folders) {
+    const created = await pollFolder(imapConfig, folder, tenantId, emailConfigId);
+    totalCreated += created;
   }
 
-  // Update last polled time
+  console.log(`[IMAP Poller] Total: ${totalCreated} new cards created`);
+
   await prisma.emailConfig.update({
     where: { id: config.id },
     data: { lastPolledAt: new Date() },

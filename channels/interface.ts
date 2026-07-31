@@ -4,7 +4,7 @@ export interface ChannelAdapter {
   readonly channel: string;
 
   /** Poll for new inbound messages */
-  pollInbox(config: Record<string, string>): Promise<InboundMessage[]>;
+  pollInbox(config: Record<string, string>, folder?: string): Promise<InboundMessage[]>;
 
   /** Send an outbound message */
   sendMessage(params: SendParams, config: Record<string, string>): Promise<SendResult>;

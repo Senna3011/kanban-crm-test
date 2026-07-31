@@ -7,7 +7,7 @@ import type { InboundMessage, SendParams, SendResult } from '../src/types';
 export class EmailAdapter implements ChannelAdapter {
   readonly channel = 'email';
 
-  async pollInbox(config: Record<string, string>): Promise<InboundMessage[]> {
+  async pollInbox(config: Record<string, string>, folder = 'INBOX'): Promise<InboundMessage[]> {
     return new Promise((resolve, reject) => {
       const imap = new Imap({
         user: config.user,
@@ -29,7 +29,7 @@ export class EmailAdapter implements ChannelAdapter {
       };
 
       imap.once('ready', () => {
-        imap.openBox('INBOX', false, (err) => {
+        imap.openBox(folder, false, (err) => {
           if (err) return finish(err);
           imap.search(['UNSEEN'], (searchError, results) => {
             if (searchError) return finish(searchError);
