@@ -18,8 +18,8 @@ type EmailValues = {
 };
 
 const defaults: EmailValues = {
-  imapHost: 'mail.pesat.ai', imapPort: 993, imapUser: '', imapPass: '',
-  smtpHost: 'mail.pesat.ai', smtpPort: 465, smtpUser: '', smtpPass: '',
+  imapHost: 'imap.zoho.com', imapPort: 993, imapUser: '', imapPass: '',
+  smtpHost: 'smtp.zoho.com', smtpPort: 465, smtpUser: '', smtpPass: '',
 };
 
 export default function EmailConfigForm({ initial }: { initial?: Partial<EmailValues> }) {
@@ -66,18 +66,18 @@ export default function EmailConfigForm({ initial }: { initial?: Partial<EmailVa
     <div className="space-y-6 max-w-2xl">
       <div><h2 className="text-xl font-semibold">Email Configuration</h2><p className="text-gray-500 mt-1">Connect your inbox to start processing leads.</p></div>
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <Input label="IMAP Host" value={form.imapHost} onChange={(e) => updateField('imapHost', e.target.value)} required />
-        <Input label="IMAP Port" type="number" value={form.imapPort} onChange={(e) => updateField('imapPort', Number(e.target.value))} required />
-        <Input label="IMAP Username" value={form.imapUser} onChange={(e) => updateField('imapUser', e.target.value)} required />
-        <div><Input label="IMAP Password" type="password" value={form.imapPass} onChange={(e) => updateField('imapPass', e.target.value)} required={!hasSavedPasswords} /><p className="text-xs text-gray-500 mt-1">{passwordHint}</p></div>
+        <Input id="imap-host" label="IMAP Host" value={form.imapHost} onChange={(e) => updateField('imapHost', e.target.value)} required />
+        <Input id="imap-port" label="IMAP Port" type="number" value={form.imapPort} onChange={(e) => updateField('imapPort', Number(e.target.value))} required />
+        <Input id="imap-user" label="IMAP Username" value={form.imapUser} onChange={(e) => updateField('imapUser', e.target.value)} required />
+        <div><Input id="imap-pass" label="IMAP Password" type="password" value={form.imapPass} onChange={(e) => updateField('imapPass', e.target.value)} required={!hasSavedPasswords} /><p className="text-xs text-gray-500 mt-1">{passwordHint}</p></div>
       </div>
       {status.imap && <p className="text-sm text-green-700">IMAP: {status.imap}</p>}
       <hr className="border-gray-200" />
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <Input label="SMTP Host" value={form.smtpHost} onChange={(e) => updateField('smtpHost', e.target.value)} required />
-        <Input label="SMTP Port" type="number" value={form.smtpPort} onChange={(e) => updateField('smtpPort', Number(e.target.value))} required />
-        <Input label="SMTP Username" value={form.smtpUser} onChange={(e) => updateField('smtpUser', e.target.value)} required />
-        <div><Input label="SMTP Password" type="password" value={form.smtpPass} onChange={(e) => updateField('smtpPass', e.target.value)} required={!hasSavedPasswords} /><p className="text-xs text-gray-500 mt-1">{passwordHint}</p></div>
+        <Input id="smtp-host" label="SMTP Host" value={form.smtpHost} onChange={(e) => updateField('smtpHost', e.target.value)} required />
+        <Input id="smtp-port" label="SMTP Port" type="number" value={form.smtpPort} onChange={(e) => updateField('smtpPort', Number(e.target.value))} required />
+        <Input id="smtp-user" label="SMTP Username" value={form.smtpUser} onChange={(e) => updateField('smtpUser', e.target.value)} required />
+        <div><Input id="smtp-pass" label="SMTP Password" type="password" value={form.smtpPass} onChange={(e) => updateField('smtpPass', e.target.value)} required={!hasSavedPasswords} /><p className="text-xs text-gray-500 mt-1">{passwordHint}</p></div>
       </div>
       {status.smtp && <p className="text-sm text-green-700">SMTP: {status.smtp}</p>}
       <div className="flex flex-wrap gap-3">

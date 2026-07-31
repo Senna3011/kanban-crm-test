@@ -28,8 +28,8 @@ export default function CompanyInfoForm({ onNext, initial }: Props) {
   return (
     <form onSubmit={handleSubmit} className="space-y-6 max-w-2xl">
       <div><h2 className="text-xl font-semibold">Company Information</h2><p className="text-gray-500 mt-1">Tell us about your business for AI personalization.</p></div>
-      <Input label="Company Name" value={name} onChange={(e) => setName(e.target.value)} placeholder="Jet Digital Pro" required />
-      <div className="space-y-1"><label className="block text-sm font-medium text-gray-700">Products / Services</label><textarea className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 h-32" value={products} onChange={(e) => setProducts(e.target.value)} placeholder="Describe what you sell, target audience, pricing model..." required /></div>
+      <Input id="company-name" label="Company Name" value={name} onChange={(e) => setName(e.target.value)} placeholder="Jet Digital Pro" required />
+      <div className="space-y-1"><label className="block text-sm font-medium text-gray-700">Products / Services</label><textarea id="company-products" className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 h-32" value={products} onChange={(e) => setProducts(e.target.value)} placeholder="Describe what you sell, target audience, pricing model..." required /></div>
       <Button type="submit" loading={loading}>{onNext ? 'Continue →' : 'Save Company Information'}</Button>
     </form>
   );
