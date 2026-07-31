@@ -40,8 +40,15 @@ export async function processEmailPoll(data: { tenantId: string }) {
   if (!unreadsColumn) return;
 
   for (const msg of messages) {
-    // Check if it's a reply to an existing thread
-    let existingCard = null;
+    try {
+      const alreadyProcessed = await prisma.card.findUnique({ where: { messageId: msg.messageId }, select: { id: true } });
+      if (alreadyProcessed) {
+        console.log(`[IMAP Poller] Skipping duplicate message ${msg.messageId}`);
+        continue;
+      }
+
+      // Check if it's a reply to an existing thread
+      let existingCard = null;
     if (msg.inReplyTo) {
       existingCard = await prisma.card.findFirst({
         where: { messageId: msg.inReplyTo, tenantId },
@@ -100,6 +107,9 @@ export async function processEmailPoll(data: { tenantId: string }) {
         subject: msg.subject,
         body: msg.bodyText,
       });
+      }
+    } catch (error: any) {
+      console.error(`[IMAP Poller] Failed message ${msg.messageId}: ${error?.message || 'unknown error'}`);
     }
   }
 

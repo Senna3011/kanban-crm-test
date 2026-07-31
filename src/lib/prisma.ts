@@ -1,4 +1,7 @@
 import { PrismaClient } from '@prisma/client';
+import { validateRuntimeEnv } from './runtime-env';
+
+validateRuntimeEnv();
 
 const globalForPrisma = globalThis as unknown as { prisma: PrismaClient };
 

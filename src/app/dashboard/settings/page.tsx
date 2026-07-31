@@ -1,50 +1,19 @@
-import { getServerSession } from 'next-auth';
-import { redirect } from 'next/navigation';
-import { authOptions } from '@/server/auth';
-import prisma from '@/lib/prisma';
+import { getEmailConfig } from '@/server/actions/email-config';
+import CompanyInfoForm from '@/components/setup/CompanyInfoForm';
+import EmailConfigForm from '@/components/setup/EmailConfigForm';
+import Link from 'next/link';
 
 export default async function SettingsPage() {
-  const session = await getServerSession(authOptions);
-  if (!session?.user) redirect('/login');
-
-  const tenantId = (session.user as any).tenantId;
-  const tenant = await prisma.tenant.findUnique({
-    where: { id: tenantId },
-    include: { emailConfigs: true },
-  });
-
-  let companyInfo: { name?: string; products?: string } = {};
-  try {
-    if (tenant?.companyInfo) companyInfo = JSON.parse(tenant.companyInfo);
-  } catch {}
+  const config = await getEmailConfig();
 
   return (
-    <div className="max-w-2xl space-y-8">
-      <div>
-        <h1 className="text-2xl font-bold text-gray-900">Settings</h1>
-        <p className="text-gray-500 mt-1">Manage your company info and email configuration</p>
+    <div className="max-w-4xl space-y-8">
+      <div className="flex items-start justify-between gap-4">
+        <div><h1 className="text-2xl font-bold text-gray-900">Settings</h1><p className="text-gray-500 mt-1">Manage your company information and email configuration.</p></div>
+        <Link href="/dashboard" className="text-sm text-primary-700 hover:underline">Back to board</Link>
       </div>
-
-      <div className="bg-white rounded-xl border border-gray-200 p-6 space-y-4">
-        <h2 className="text-lg font-semibold">Company Information</h2>
-        <div className="p-4 bg-gray-50 rounded-lg space-y-2">
-          <p className="text-sm"><strong>Name:</strong> {companyInfo.name || 'Not set'}</p>
-          <p className="text-sm"><strong>Products:</strong> {companyInfo.products || 'Not set'}</p>
-        </div>
-      </div>
-
-      <div className="bg-white rounded-xl border border-gray-200 p-6">
-        <h2 className="text-lg font-semibold mb-4">Email Configuration</h2>
-        {tenant?.emailConfigs[0] ? (
-          <div className="p-4 bg-gray-50 rounded-lg space-y-2 text-sm">
-            <p><strong>IMAP:</strong> {tenant.emailConfigs[0].imapHost}:{tenant.emailConfigs[0].imapPort}</p>
-            <p><strong>SMTP:</strong> {tenant.emailConfigs[0].smtpHost}:{tenant.emailConfigs[0].smtpPort}</p>
-            <p><strong>Last Polled:</strong> {tenant.emailConfigs[0].lastPolledAt?.toLocaleString() || 'Never'}</p>
-          </div>
-        ) : (
-          <p className="text-gray-500">Not configured. Go to setup to configure email.</p>
-        )}
-      </div>
+      <section className="bg-white rounded-xl border border-gray-200 p-6"><CompanyInfoForm initial={config.company} /></section>
+      <section className="bg-white rounded-xl border border-gray-200 p-6"><EmailConfigForm initial={config.email || undefined} /></section>
     </div>
   );
 }

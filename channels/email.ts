@@ -13,63 +13,63 @@ export class EmailAdapter implements ChannelAdapter {
         user: config.user,
         password: config.password,
         host: config.host,
-        port: parseInt(config.port),
-        tls: true,
+        port: parseInt(config.port, 10),
+        tls: parseInt(config.port, 10) === 993,
+        autotls: parseInt(config.port, 10) === 143 ? 'always' : 'never',
+        connTimeout: 15000,
+        authTimeout: 15000,
       });
-
       const messages: InboundMessage[] = [];
+      let settled = false;
+      const finish = (error?: Error) => {
+        if (settled) return;
+        settled = true;
+        try { imap.end(); } catch {}
+        error ? reject(error) : resolve(messages);
+      };
 
       imap.once('ready', () => {
-        imap.openBox('INBOX', true, (err, box) => {
-          if (err) { imap.end(); return reject(err); }
+        imap.openBox('INBOX', false, (err) => {
+          if (err) return finish(err);
+          imap.search(['UNSEEN'], (searchError, results) => {
+            if (searchError) return finish(searchError);
+            if (!results?.length) return finish();
 
-          // Search for unseen messages
-          imap.search(['UNSEEN'], (err, results) => {
-            if (err) { imap.end(); return reject(err); }
-            if (!results || results.length === 0) { imap.end(); return resolve([]); }
-
-            const fetch = imap.fetch(results, { bodies: '', markSeen: false });
-
+            const fetch = imap.fetch(results, { bodies: '', markSeen: true });
+            const parsing: Promise<void>[] = [];
             fetch.on('message', (msg) => {
-              let buffer = '';
-
-              msg.on('body', (stream) => {
-                stream.on('data', (chunk: Buffer) => { buffer += chunk.toString('utf8'); });
-              });
-
-              msg.once('end', async () => {
-                try {
-                  const parsed = await simpleParser(buffer);
-                  messages.push({
-                    messageId: parsed.messageId || `msg-${Date.now()}-${Math.random()}`,
-                    inReplyTo: parsed.inReplyTo || undefined,
-                    fromEmail: (parsed.from?.value[0]?.address) || 'unknown',
-                    fromName: parsed.from?.value[0]?.name || undefined,
-                    subject: parsed.subject || '(No subject)',
-                    bodyText: parsed.text || '',
-                    bodyHtml: parsed.html || undefined,
-                    receivedAt: parsed.date || new Date(),
-                  });
-                } catch (e) {
-                  // Skip malformed messages
-                }
-              });
+              parsing.push(new Promise<void>((done) => {
+                let buffer = '';
+                msg.on('body', (stream) => stream.on('data', (chunk: Buffer) => { buffer += chunk.toString('utf8'); }));
+                msg.once('end', async () => {
+                  try {
+                    const parsed = await simpleParser(buffer);
+                    const messageId = parsed.messageId?.trim();
+                    if (!messageId) return done();
+                    messages.push({
+                      messageId,
+                      inReplyTo: parsed.inReplyTo || undefined,
+                      fromEmail: parsed.from?.value[0]?.address || 'unknown',
+                      fromName: parsed.from?.value[0]?.name || undefined,
+                      subject: parsed.subject || '(No subject)',
+                      bodyText: parsed.text || '',
+                      bodyHtml: parsed.html || undefined,
+                      receivedAt: parsed.date || new Date(),
+                    });
+                  } catch {}
+                  done();
+                });
+              }));
             });
-
-            fetch.once('end', () => {
-              imap.end();
-              resolve(messages);
-            });
-
-            fetch.once('error', (err) => {
-              imap.end();
-              reject(err);
+            fetch.once('error', (fetchError) => finish(fetchError));
+            fetch.once('end', async () => {
+              await Promise.all(parsing);
+              finish();
             });
           });
         });
       });
-
-      imap.once('error', (err) => reject(err));
+      imap.once('error', (error) => finish(error));
       imap.connect();
     });
   }

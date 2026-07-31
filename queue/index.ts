@@ -1,7 +1,12 @@
 import { Queue } from 'bullmq';
 import IORedis from 'ioredis';
 
-export const connection = new IORedis(process.env.REDIS_URL || 'redis://localhost:6379', {
+const redisUrl = process.env.REDIS_URL;
+if (process.env.NODE_ENV === 'production' && !redisUrl) {
+  throw new Error('REDIS_URL must be configured in production.');
+}
+
+export const connection = new IORedis(redisUrl || 'redis://localhost:6379', {
   maxRetriesPerRequest: null,
 });
 
