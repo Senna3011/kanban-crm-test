@@ -51,6 +51,7 @@ export class EmailAdapter implements ChannelAdapter {
                       inReplyTo: parsed.inReplyTo || undefined,
                       fromEmail: parsed.from?.value[0]?.address || 'unknown',
                       fromName: parsed.from?.value[0]?.name || undefined,
+                      toEmail: Array.isArray(parsed.to) ? parsed.to[0]?.value[0]?.address : parsed.to?.value[0]?.address || undefined,
                       subject: parsed.subject || '(No subject)',
                       bodyText: parsed.text || '',
                       bodyHtml: parsed.html || undefined,

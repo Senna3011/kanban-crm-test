@@ -5,6 +5,27 @@ import { aiProcessQueue } from '../queue';
 
 const emailAdapter = new EmailAdapter();
 
+async function resolveBoard(tenantId: string, toEmail?: string) {
+  // Load email routing from tenant companyInfo
+  const tenant = await prisma.tenant.findUnique({ where: { id: tenantId }, select: { companyInfo: true } });
+  let routing: Record<string, string> = {};
+  try {
+    if (tenant?.companyInfo) {
+      const info = JSON.parse(tenant.companyInfo);
+      routing = info.emailRouting || {};
+    }
+  } catch {}
+
+  // Route based on recipient address
+  if (toEmail && routing[toEmail]) {
+    const board = await prisma.board.findFirst({ where: { tenantId, title: routing[toEmail] } });
+    if (board) return board;
+  }
+
+  // Fallback: first board
+  return prisma.board.findFirst({ where: { tenantId } });
+}
+
 export async function processEmailPoll(data: { tenantId: string; emailConfigId: string }) {
   const { tenantId, emailConfigId } = data;
 
@@ -30,26 +51,26 @@ export async function processEmailPoll(data: { tenantId: string; emailConfigId: 
   
   console.log(`[IMAP Poller] Found ${messages.length} new messages`);
 
-  // Find board linked to this email config
-  let board;
-  if (config.boardId) {
-    board = await prisma.board.findFirst({ where: { id: config.boardId, tenantId } });
-  }
-  if (!board) {
-    board = await prisma.board.findFirst({ where: { tenantId } });
-  }
-  if (!board) return;
-
-  const unreadsColumn = await prisma.column.findFirst({
-    where: { boardId: board.id, title: 'Unreads' },
-  });
-  if (!unreadsColumn) return;
-
   for (const msg of messages) {
     try {
       const alreadyProcessed = await prisma.card.findUnique({ where: { messageId: msg.messageId }, select: { id: true } });
       if (alreadyProcessed) {
         console.log(`[IMAP Poller] Skipping duplicate message ${msg.messageId}`);
+        continue;
+      }
+
+      // Resolve target board based on recipient
+      const board = await resolveBoard(tenantId, msg.toEmail);
+      if (!board) {
+        console.log(`[IMAP Poller] No board found for ${msg.toEmail}, skipping`);
+        continue;
+      }
+
+      const unreadsColumn = await prisma.column.findFirst({
+        where: { boardId: board.id, title: 'Unreads' },
+      });
+      if (!unreadsColumn) {
+        console.log(`[IMAP Poller] No Unreads column in board ${board.title}`);
         continue;
       }
 

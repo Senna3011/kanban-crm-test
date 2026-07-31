@@ -64,6 +64,7 @@ export interface InboundMessage {
   inReplyTo?: string;
   fromEmail: string;
   fromName?: string;
+  toEmail?: string;
   subject: string;
   bodyText: string;
   bodyHtml?: string;
