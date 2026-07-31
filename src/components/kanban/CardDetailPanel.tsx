@@ -1,7 +1,7 @@
 'use client';
 
-import { useState } from 'react';
-import type { CardData } from '@/types';
+import { useState, useEffect } from 'react';
+import type { CardData, ActivityLogData, DraftData } from '@/types';
 import Button from '@/components/ui/Button';
 import { sendDraft, editDraft } from '@/server/actions/draft';
 import toast from 'react-hot-toast';
@@ -12,15 +12,52 @@ interface Props {
 }
 
 export default function CardDetailPanel({ card, onClose }: Props) {
-  const [draftBody, setDraftBody] = useState(
-    `Hi ${card.fromName || card.fromEmail},\n\nI noticed your interest in our services. Would you like to schedule a call?\n\nBest regards`
-  );
+  const [draftBody, setDraftBody] = useState('');
+  const [draftId, setDraftId] = useState<string | null>(null);
+  const [activityLogs, setActivityLogs] = useState<ActivityLogData[]>([]);
   const [sending, setSending] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    async function loadCardDetails() {
+      try {
+        setLoading(true);
+        const res = await fetch(`/api/cards/${card.id}`);
+        if (!res.ok) throw new Error('Failed to load card');
+        const data = await res.json();
+
+        setActivityLogs(data.activityLogs || []);
+
+        // Load latest pending draft
+        const drafts = data.drafts || [];
+        const pending = drafts.find((d: DraftData) => d.status === 'pending');
+        if (pending) {
+          setDraftId(pending.id);
+          setDraftBody(pending.body);
+        } else {
+          // Generate default draft text
+          setDraftBody(
+            `Hi ${card.fromName || card.fromEmail},\n\nI noticed your interest in our services. Would you like to schedule a call?\n\nBest regards`
+          );
+        }
+      } catch (err: any) {
+        setError(err.message);
+      } finally {
+        setLoading(false);
+      }
+    }
+    loadCardDetails();
+  }, [card.id, card.fromName, card.fromEmail]);
 
   async function handleSend() {
+    if (!draftId) {
+      toast.error('No draft to send');
+      return;
+    }
     setSending(true);
     try {
-      await sendDraft('draft-1');
+      await sendDraft(draftId);
       toast.success('Email sent!');
     } catch (e: any) {
       toast.error(e.message);
@@ -29,13 +66,15 @@ export default function CardDetailPanel({ card, onClose }: Props) {
     }
   }
 
-  const mockActivity = [
-    {
-      type: 'email_received',
-      content: `Email from ${card.fromName || card.fromEmail}`,
-      time: new Date(card.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-    },
-  ];
+  async function handleEdit() {
+    if (!draftId) return;
+    try {
+      await editDraft(draftId, draftBody);
+      toast.success('Draft saved');
+    } catch (e: any) {
+      toast.error(e.message);
+    }
+  }
 
   return (
     <div className="fixed inset-0 z-50 flex justify-end">
@@ -53,53 +92,77 @@ export default function CardDetailPanel({ card, onClose }: Props) {
         </div>
 
         <div className="flex-1 overflow-y-auto p-4 space-y-6">
-          {/* Email body */}
-          <section>
-            <h3 className="text-sm font-semibold text-gray-700 mb-2">Original Email</h3>
-            <div className="bg-gray-50 rounded-lg p-3 text-sm text-gray-700 whitespace-pre-wrap">
-              {card.bodyText || '(No text content)'}
+          {loading ? (
+            <div className="flex items-center justify-center py-12">
+              <div className="animate-spin h-6 w-6 border-2 border-primary-200 border-t-primary-600 rounded-full" />
             </div>
-          </section>
+          ) : error ? (
+            <div className="text-center py-8 text-red-500">
+              <p>{error}</p>
+            </div>
+          ) : (
+            <>
+              {/* Email body */}
+              <section>
+                <h3 className="text-sm font-semibold text-gray-700 mb-2">Original Email</h3>
+                <div className="bg-gray-50 rounded-lg p-3 text-sm text-gray-700 whitespace-pre-wrap">
+                  {card.bodyText || '(No text content)'}
+                </div>
+              </section>
 
-          {/* Activity Log */}
-          <section>
-            <h3 className="text-sm font-semibold text-gray-700 mb-2">Activity</h3>
-            <div className="space-y-3">
-              {mockActivity.map((log, i) => (
-                <div key={i} className="flex gap-3 text-sm">
-                  <span className="text-xs text-gray-400 w-16 pt-0.5 flex-shrink-0">{log.time}</span>
-                  <div className="flex-1 bg-gray-50 rounded-lg p-3">
-                    <span className="text-xs text-gray-500 uppercase tracking-wide">{log.type.replace(/_/g, ' ')}</span>
-                    <p className="text-gray-700 mt-1">{log.content}</p>
+              {/* Activity Log */}
+              <section>
+                <h3 className="text-sm font-semibold text-gray-700 mb-2">Activity</h3>
+                {activityLogs.length === 0 ? (
+                  <p className="text-sm text-gray-400 text-center py-4">No activity yet</p>
+                ) : (
+                  <div className="space-y-3">
+                    {activityLogs.map((log) => (
+                      <div key={log.id} className="flex gap-3 text-sm">
+                        <span className="text-xs text-gray-400 w-16 pt-0.5 flex-shrink-0">
+                          {new Date(log.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                        </span>
+                        <div className="flex-1 bg-gray-50 rounded-lg p-3">
+                          <span className="text-xs text-gray-500 uppercase tracking-wide">
+                            {log.type.replace(/_/g, ' ')}
+                          </span>
+                          <p className="text-gray-700 mt-1 text-xs">
+                            {typeof log.content === 'string' ? log.content : JSON.stringify(log.content)}
+                          </p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </section>
+
+              {/* Draft Reply */}
+              <section>
+                <h3 className="text-sm font-semibold text-gray-700 mb-2">Draft Reply</h3>
+                <div className="bg-gray-50 rounded-lg p-4 space-y-3">
+                  <textarea
+                    className="w-full h-40 px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 resize-none"
+                    value={draftBody}
+                    onChange={(e) => setDraftBody(e.target.value)}
+                    placeholder="Write your reply..."
+                  />
+                  <div className="flex items-center gap-2">
+                    <Button size="sm" onClick={handleSend} loading={sending}>
+                      Send Now
+                    </Button>
+                    <Button size="sm" variant="secondary" onClick={handleEdit}>
+                      Save Draft
+                    </Button>
+                    <Button size="sm" variant="ghost" onClick={() => {
+                      setDraftBody(`Hi ${card.fromName || card.fromEmail},\n\nI noticed your interest in our services. Would you like to schedule a call?\n\nBest regards`);
+                    }}>
+                      Reset
+                    </Button>
                   </div>
                 </div>
-              ))}
-            </div>
-          </section>
-
-          {/* Draft Reply */}
-          <section>
-            <h3 className="text-sm font-semibold text-gray-700 mb-2">Draft Reply</h3>
-            <div className="bg-gray-50 rounded-lg p-4 space-y-3">
-              <textarea
-                className="w-full h-40 px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 resize-none"
-                value={draftBody}
-                onChange={(e) => setDraftBody(e.target.value)}
-                placeholder="Write your reply..."
-              />
-              <div className="flex items-center gap-2">
-                <Button size="sm" onClick={handleSend} loading={sending}>
-                  Send Now
-                </Button>
-                <Button size="sm" variant="secondary">
-                  Edit Draft
-                </Button>
-                <Button size="sm" variant="ghost">
-                  AI Regenerate
-                </Button>
-              </div>
-            </div>
-          </section>
+              </section>
+            </>
+          )}
         </div>
       </div>
     </div>
