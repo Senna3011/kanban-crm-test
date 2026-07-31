@@ -23,6 +23,7 @@ model Tenant {
   drafts       DraftMessage[]
   notifications Notification[]
   contacts     Contact[]
+  spamLogs     SpamLog[]
 }
 
 model User {
@@ -44,6 +45,7 @@ model User {
 
 model EmailConfig {
   id          String   @id @default(cuid())
+  name        String   @default("Default")
   imapHost    String
   imapPort    Int      @default(993)
   imapUser    String
@@ -57,10 +59,16 @@ model EmailConfig {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  tenantId String
-  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  tenantId  String
+  tenant    Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
-  @@unique([tenantId])
+  boardId String?  @unique
+  board   Board? @relation(fields: [boardId], references: [id])
+
+  cards    Card[]
+  spamLogs SpamLog[]
+
+  @@unique([tenantId, name])
 }
 
 model Board {
@@ -73,7 +81,7 @@ model Board {
   tenant   Tenant  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   columns  Column[]
 
-  @@unique([tenantId])
+  emailConfig EmailConfig?
 }
 
 model Column {
@@ -114,12 +122,16 @@ model Card {
   tenantId  String
   tenant    Tenant  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
+  emailConfigId String?
+  emailConfig   EmailConfig? @relation(fields: [emailConfigId], references: [id])
+
   assignedToId String?
   assignedTo   User?   @relation(fields: [assignedToId], references: [id])
 
   activityLogs ActivityLog[]
   drafts       DraftMessage[]
   notifications Notification[]
+  recoveredSpam SpamLog[]
 }
 
 model ActivityLog {
@@ -144,6 +156,7 @@ model DraftMessage {
   aiGeneratedAt DateTime?
   sentAt        DateTime?
   editedAt      DateTime?
+  fromAddress   String?
 
   cardId String
   card   Card   @relation(fields: [cardId], references: [id], onDelete: Cascade)
@@ -185,4 +198,23 @@ model Contact {
   tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
   @@unique([tenantId, email])
+}
+
+model SpamLog {
+  id            String   @id @default(cuid())
+  fromEmail     String
+  fromName      String?
+  subject       String
+  bodyPreview   String?  @db.Text
+  reason        String?
+  receivedAt    DateTime @default(now())
+
+  tenantId       String
+  tenant         Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  emailConfigId  String
+  emailConfig    EmailConfig  @relation(fields: [emailConfigId], references: [id])
+
+  recoveredToId  String?
+  recoveredTo    Card?        @relation(fields: [recoveredToId], references: [id])
 }
