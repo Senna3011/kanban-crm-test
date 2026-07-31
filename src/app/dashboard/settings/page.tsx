@@ -10,10 +10,10 @@ export default async function SettingsPage() {
     <div className="max-w-4xl space-y-8">
       <div className="flex items-start justify-between gap-4">
         <div><h1 className="text-2xl font-bold text-gray-900">Settings</h1><p className="text-gray-500 mt-1">Manage your company information and email configuration.</p></div>
-        <Link href="/dashboard" className="text-sm text-primary-700 hover:underline">Back to board</Link>
+        <Link href="/dashboard" className="text-sm text-primary-700 hover:underline">← Back to board</Link>
       </div>
-      <section className="bg-white rounded-xl border border-gray-200 p-6"><CompanyInfoForm initial={config.company} /></section>
-      <section className="bg-white rounded-xl border border-gray-200 p-6"><EmailConfigForm initial={config.email || undefined} /></section>
+      <section className="bg-white rounded-xl border border-gray-200 p-6"><h2 className="text-lg font-semibold mb-4">Company Information</h2><CompanyInfoForm initial={config.company} /></section>
+      <section className="bg-white rounded-xl border border-gray-200 p-6"><h2 className="text-lg font-semibold mb-4">Email Configuration</h2><EmailConfigForm initial={config.email || undefined} /></section>
     </div>
   );
 }

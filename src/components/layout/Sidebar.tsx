@@ -7,7 +7,6 @@ import clsx from 'clsx';
 const navItems = [
   { href: '/dashboard', label: 'Board', icon: '📋' },
   { href: '/dashboard/settings', label: 'Settings', icon: '⚙️' },
-  { href: '/setup', label: 'Email Setup', icon: '✉️' },
 ];
 
 export default function Sidebar() {
