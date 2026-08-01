@@ -75,6 +75,7 @@ Body: ${params.body}`,
 
 export async function generateFollowUpDraft(params: {
   companyContext: string;
+  senderName: string;
   contactName: string;
   contactEmail: string;
   extractedCompany?: string;
@@ -97,12 +98,16 @@ export async function generateFollowUpDraft(params: {
       messages: [
         {
           role: 'system',
-          content: `You are a sales AI assistant. Write a professional follow-up email.
+          content: `You are a sales AI assistant for JetDigitalPro. Write a professional follow-up email.
 
 Company context: ${params.companyContext}
 This is follow-up #${params.followUpNumber}.
 
-Rules:
+CRITICAL RULES:
+- The email is FROM: ${params.senderName} (JetDigitalPro)
+- The email is TO: the CLIENT (not to the sender or internal team)
+- If the conversation history shows a forwarded email, extract the ORIGINAL client from the "To:" header
+- Do NOT address the email to the person who forwarded it
 - Keep under 150 words
 - Professional but not pushy
 - Include a clear CTA
@@ -118,7 +123,7 @@ Respond in JSON:
         {
           role: 'user',
           content: `Contact: ${params.contactName} <${params.contactEmail}>
-	Interest: ${params.interestLevel || 'medium'}
+Interest: ${params.interestLevel || 'medium'}
 Company: ${params.extractedCompany || 'Unknown'}${historyText}`,
         },
       ],

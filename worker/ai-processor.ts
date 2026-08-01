@@ -60,10 +60,19 @@ export async function processAIClassify(data: {
 
   // If it's a lead, generate first follow-up draft
   if (classification.isLead) {
+    // Parse forwarded email to find actual client
+    let contactName = fromName;
+    let contactEmail = fromEmail;
+    const toMatch = body.match(/To:\s*<?([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})>?/i);
+    const nameMatch = body.match(/To:\s*([A-Za-z\s]+)\s*</i);
+    if (nameMatch) contactName = nameMatch[1].trim();
+    if (toMatch) contactEmail = toMatch[1];
+
     const draft = await generateFollowUpDraft({
       companyContext: tenant.companyInfo || '',
-      contactName: fromName,
-      contactEmail: fromEmail,
+      senderName: 'Nell VH',
+      contactName,
+      contactEmail,
       extractedCompany: classification.extractedCompany,
       interestLevel: classification.interestLevel,
       conversationHistory: [body],
@@ -118,6 +127,7 @@ export async function processAIDraft(data: {
 
   const draft = await generateFollowUpDraft({
     companyContext: tenant.companyInfo || '',
+    senderName: 'Nell VH',
     contactName: card.fromName || '',
     contactEmail: card.fromEmail,
     conversationHistory: history,
