@@ -63,10 +63,19 @@ export async function processAIClassify(data: {
     // Parse forwarded email to find actual client
     let contactName = fromName;
     let contactEmail = fromEmail;
-    const toMatch = body.match(/To:\s*<?([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})>?/i);
-    const nameMatch = body.match(/To:\s*([A-Za-z\s]+)\s*</i);
-    if (nameMatch) contactName = nameMatch[1].trim();
-    if (toMatch) contactEmail = toMatch[1];
+    // Try multiple patterns to extract client from forwarded email
+    const toPatterns = [
+      /To:\s*([A-Za-z\s]+)\s*<([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})>/i,
+      /To:\s*<?([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})>?/i,
+    ];
+    for (const pattern of toPatterns) {
+      const match = body.match(pattern);
+      if (match) {
+        if (match[2]) { contactName = match[1].trim(); contactEmail = match[2]; }
+        else if (match[1] && match[1].includes('@')) { contactEmail = match[1]; }
+        break;
+      }
+    }
 
     const draft = await generateFollowUpDraft({
       companyContext: tenant.companyInfo || '',
