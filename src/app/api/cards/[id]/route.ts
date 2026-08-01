@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/server/auth';
 import prisma from '@/lib/prisma';
+import { syncMarkAsRead, syncArchiveEmail } from '@/lib/imap-sync';
 
 export async function GET(req: NextRequest, { params }: { params: { id: string } }) {
   const session = await getServerSession(authOptions);
@@ -30,7 +31,10 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
   const tenantId = (session.user as any).tenantId;
   const body = await req.json();
 
-  const card = await prisma.card.findUnique({ where: { id: params.id } });
+  const card = await prisma.card.findUnique({
+    where: { id: params.id },
+    include: { column: { select: { title: true } } },
+  });
   if (!card || card.tenantId !== tenantId) {
     return NextResponse.json({ error: 'Not found' }, { status: 404 });
   }
@@ -45,6 +49,13 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
     },
   });
 
+  // Sync: if moved FROM Unreads to another column, mark as read in Zoho
+  if (card.column.title === 'Unreads' && body.columnId && body.columnId !== card.columnId) {
+    syncMarkAsRead(tenantId, params.id).catch((err) =>
+      console.error(`[IMAP Sync] Failed to mark as read: ${err.message}`)
+    );
+  }
+
   return NextResponse.json(updated);
 }
 
@@ -57,6 +68,11 @@ export async function DELETE(req: NextRequest, { params }: { params: { id: strin
   if (!card || card.tenantId !== tenantId) {
     return NextResponse.json({ error: 'Not found' }, { status: 404 });
   }
+
+  // Sync: archive email in Zoho before deleting from CRM
+  syncArchiveEmail(tenantId, params.id).catch((err) =>
+    console.error(`[IMAP Sync] Failed to archive: ${err.message}`)
+  );
 
   await prisma.activityLog.deleteMany({ where: { cardId: params.id } });
   await prisma.draftMessage.deleteMany({ where: { cardId: params.id } });

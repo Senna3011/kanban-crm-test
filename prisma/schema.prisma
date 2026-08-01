@@ -107,6 +107,8 @@ model Card {
   bodyHtml       String?
   messageId      String?  @unique
   inReplyTo      String?
+  imapUid        Int?
+  imapFolder     String?  @default("INBOX")
   status         String   @default("unread")
   channel        String   @default("email")
   highlighted    Boolean  @default(false)

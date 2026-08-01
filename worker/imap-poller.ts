@@ -84,6 +84,7 @@ async function pollFolder(imapConfig: Record<string, string>, folder: string, te
             subject: msg.subject, fromEmail: msg.fromEmail, fromName: msg.fromName,
             bodyText: msg.bodyText, bodyHtml: msg.bodyHtml,
             messageId: msg.messageId, inReplyTo: msg.inReplyTo || null,
+            imapUid: msg.uid || null, imapFolder: folder,
             channel: 'email', columnId: unreads.id, tenantId, emailConfigId: emailConfigId,
             lastActivityAt: msg.receivedAt || new Date(),
           },
