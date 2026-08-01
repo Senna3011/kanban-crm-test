@@ -66,7 +66,8 @@ export async function processAIClassify(data: {
     // Try multiple patterns to extract client from forwarded email
     const toPatterns = [
       /To:\s*([A-Za-z\s]+)\s*<([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})>/i,
-      /To:\s*<?([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})>?/i,
+      /To:\s*<([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})>/i,
+      /To:\s*([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})/i,
     ];
     for (const pattern of toPatterns) {
       const match = body.match(pattern);
