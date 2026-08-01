@@ -35,7 +35,7 @@ export async function processAIClassify(data: {
   });
 
   // Move card to appropriate column within the same board the card is on
-  const suggestedColumn = classification.isLead ? classification.suggestedColumn : 'Fail';
+  const suggestedColumn = classification.suggestedColumn || (classification.isLead ? 'Leads' : 'General');
   const currentCard = await prisma.card.findUnique({
     where: { id: cardId },
     select: { column: { select: { boardId: true } } },

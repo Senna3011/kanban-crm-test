@@ -46,12 +46,13 @@ async function main() {
   const defaultColumns = [
     { title: 'Unreads', position: 0, color: '#6b7280', isSystem: true },
     { title: 'Leads', position: 1, color: '#3b82f6', isSystem: false },
-    { title: 'Follow up 1', position: 2, color: '#f59e0b', isSystem: false },
-    { title: 'Follow up 2', position: 3, color: '#f59e0b', isSystem: false },
-    { title: 'Follow up 3', position: 4, color: '#f59e0b', isSystem: false },
-    { title: 'Fail', position: 5, color: '#ef4444', isSystem: false },
-    { title: 'Pending', position: 6, color: '#8b5cf6', isSystem: false },
-    { title: 'Success', position: 7, color: '#22c55e', isSystem: false },
+    { title: 'General', position: 2, color: '#64748b', isSystem: false },
+    { title: 'Follow up 1', position: 3, color: '#f59e0b', isSystem: false },
+    { title: 'Follow up 2', position: 4, color: '#f59e0b', isSystem: false },
+    { title: 'Follow up 3', position: 5, color: '#f59e0b', isSystem: false },
+    { title: 'Fail', position: 6, color: '#ef4444', isSystem: false },
+    { title: 'Pending', position: 7, color: '#8b5cf6', isSystem: false },
+    { title: 'Success', position: 8, color: '#22c55e', isSystem: false },
   ];
 
   for (const col of defaultColumns) {

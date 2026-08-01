@@ -7,6 +7,7 @@ export interface AIClassification {
   extractedCompany?: string;
   interestLevel: 'high' | 'medium' | 'low';
   suggestedColumn: string;
+  category: 'lead' | 'general' | 'spam';
 }
 
 export interface FollowUpDraft {
@@ -32,8 +33,13 @@ export async function classifyEmail(params: {
       messages: [
         {
           role: 'system',
-          content: `You are a CRM AI assistant. Classify inbound emails as leads or not.
+          content: `You are a CRM AI assistant. Classify inbound emails into exactly one category.
 Company context: ${params.companyContext}
+
+Categories:
+- "lead": the sender shows genuine purchase intent, inquiry about services/pricing, or is a prospective client/partner conversation.
+- "general": legitimate email that is NOT a sales lead — internal forwards without a clear external ask, system/service notifications (password reset, login alerts, delivery status), collaboration/document comments, work correspondence unrelated to sales.
+- "spam": unsolicited marketing, phishing, suspicious content, or clearly irrelevant junk.
 
 Respond in JSON format only:
 {
@@ -42,8 +48,14 @@ Respond in JSON format only:
   "reason": "brief reason",
   "extractedCompany": "company name if mentioned",
   "interestLevel": "high|medium|low",
-  "suggestedColumn": "Leads|Fail"
-}`,
+  "category": "lead|general|spam",
+  "suggestedColumn": "Leads|General|Fail"
+}
+
+Rules:
+- category "lead" -> isLead true, suggestedColumn "Leads"
+- category "general" -> isLead false, suggestedColumn "General"
+- category "spam" -> isLead false, suggestedColumn "Fail"`,
         },
         {
           role: 'user',
@@ -68,7 +80,8 @@ Body: ${params.body}`,
       confidence: 0,
       reason: 'Failed to parse AI response',
       interestLevel: 'low',
-      suggestedColumn: 'Fail',
+      category: 'general',
+      suggestedColumn: 'General',
     };
   }
 }
