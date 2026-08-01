@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import type { CardData, ActivityLogData, DraftData } from '@/types';
 import Button from '@/components/ui/Button';
 import { sendDraft, editDraft } from '@/server/actions/draft';
-import toast from 'react-hot-toast';
+import toast, { Toaster } from 'react-hot-toast';
 
 interface Props {
   card: CardData;
@@ -16,6 +16,7 @@ export default function CardDetailPanel({ card, onClose }: Props) {
   const [draftId, setDraftId] = useState<string | null>(null);
   const [activityLogs, setActivityLogs] = useState<ActivityLogData[]>([]);
   const [sending, setSending] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -76,8 +77,25 @@ export default function CardDetailPanel({ card, onClose }: Props) {
     }
   }
 
+  async function handleDelete() {
+    if (!confirm('Delete this card permanently?')) return;
+    setDeleting(true);
+    try {
+      const res = await fetch(`/api/cards/${card.id}`, { method: 'DELETE' });
+      if (!res.ok) throw new Error('Failed to delete');
+      toast.success('Card deleted');
+      window.dispatchEvent(new Event('board-refresh'));
+      onClose();
+    } catch (e: any) {
+      toast.error(e.message || 'Delete failed');
+    } finally {
+      setDeleting(false);
+    }
+  }
+
   return (
     <div className="fixed inset-0 z-50 flex justify-end">
+      <Toaster position="top-right" />
       <div className="absolute inset-0 bg-black/30" onClick={onClose} />
       <div className="relative w-full max-w-lg bg-white shadow-xl flex flex-col">
         {/* Header */}
@@ -88,7 +106,17 @@ export default function CardDetailPanel({ card, onClose }: Props) {
               {card.fromName ? `${card.fromName} <${card.fromEmail}>` : card.fromEmail}
             </p>
           </div>
-          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 text-xl ml-4">&times;</button>
+          <div className="flex items-center gap-2 ml-4">
+            <button
+              onClick={handleDelete}
+              disabled={deleting}
+              className="text-red-400 hover:text-red-600 text-sm px-2 py-1 rounded hover:bg-red-50 disabled:opacity-50"
+              title="Delete card"
+            >
+              {deleting ? '...' : '🗑️'}
+            </button>
+            <button onClick={onClose} className="text-gray-400 hover:text-gray-600 text-xl">&times;</button>
+          </div>
         </div>
 
         <div className="flex-1 overflow-y-auto p-4 space-y-6">

@@ -47,3 +47,20 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
 
   return NextResponse.json(updated);
 }
+
+export async function DELETE(req: NextRequest, { params }: { params: { id: string } }) {
+  const session = await getServerSession(authOptions);
+  if (!session?.user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+
+  const tenantId = (session.user as any).tenantId;
+  const card = await prisma.card.findUnique({ where: { id: params.id } });
+  if (!card || card.tenantId !== tenantId) {
+    return NextResponse.json({ error: 'Not found' }, { status: 404 });
+  }
+
+  await prisma.activityLog.deleteMany({ where: { cardId: params.id } });
+  await prisma.draftMessage.deleteMany({ where: { cardId: params.id } });
+  await prisma.card.delete({ where: { id: params.id } });
+
+  return NextResponse.json({ success: true });
+}
