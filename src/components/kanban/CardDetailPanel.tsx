@@ -19,16 +19,29 @@ export default function CardDetailPanel({ card, onClose }: Props) {
   const [deleting, setDeleting] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [fromAddresses, setFromAddresses] = useState<string[]>([]);
+  const [selectedFrom, setSelectedFrom] = useState('');
 
   useEffect(() => {
     async function loadCardDetails() {
       try {
         setLoading(true);
-        const res = await fetch(`/api/cards/${card.id}`);
-        if (!res.ok) throw new Error('Failed to load card');
-        const data = await res.json();
+        const [cardRes, configRes] = await Promise.all([
+          fetch(`/api/cards/${card.id}`),
+          fetch(`/api/email-configs`),
+        ]);
+        if (!cardRes.ok) throw new Error('Failed to load card');
+        const data = await cardRes.json();
 
         setActivityLogs(data.activityLogs || []);
+
+        // Load available email addresses for from-selection
+        if (configRes.ok) {
+          const configs = await configRes.json();
+          const addresses = configs.map((c: any) => c.smtpUser).filter(Boolean);
+          setFromAddresses([...new Set(addresses)] as string[]);
+          if (addresses.length > 0 && !selectedFrom) setSelectedFrom(addresses[0]);
+        }
 
         // Load latest pending draft
         const drafts = data.drafts || [];
@@ -58,8 +71,9 @@ export default function CardDetailPanel({ card, onClose }: Props) {
     }
     setSending(true);
     try {
-      await sendDraft(draftId);
+      await sendDraft(draftId, selectedFrom || undefined);
       toast.success('Email sent!');
+      window.dispatchEvent(new Event('board-refresh'));
     } catch (e: any) {
       toast.error(e.message);
     } finally {
@@ -174,6 +188,20 @@ export default function CardDetailPanel({ card, onClose }: Props) {
                     onChange={(e) => setDraftBody(e.target.value)}
                     placeholder="Write your reply..."
                   />
+                  {fromAddresses.length > 1 && (
+                    <div className="space-y-1">
+                      <label className="text-xs font-medium text-gray-600">Send from</label>
+                      <select
+                        className="w-full px-3 py-1.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
+                        value={selectedFrom}
+                        onChange={(e) => setSelectedFrom(e.target.value)}
+                      >
+                        {fromAddresses.map((addr) => (
+                          <option key={addr} value={addr}>{addr}</option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
                   <div className="flex items-center gap-2">
                     <Button size="sm" onClick={handleSend} loading={sending}>
                       Send Now

@@ -6,7 +6,7 @@ import prisma from '@/lib/prisma';
 import { decrypt } from '@/lib/encryption';
 import { createTransport } from 'nodemailer';
 
-export async function sendDraft(draftId: string) {
+export async function sendDraft(draftId: string, fromAddress?: string) {
   const session = await getServerSession(authOptions);
   if (!session?.user) throw new Error('Unauthorized');
 
@@ -19,7 +19,14 @@ export async function sendDraft(draftId: string) {
 
   if (!draft || draft.tenantId !== tenantId) throw new Error('Not found');
 
-  const emailConfig = await prisma.emailConfig.findFirst({ where: { tenantId } });
+  // Find the right email config: prefer one matching fromAddress, else first active
+  let emailConfig;
+  if (fromAddress) {
+    emailConfig = await prisma.emailConfig.findFirst({ where: { tenantId, smtpUser: fromAddress, isActive: true } });
+  }
+  if (!emailConfig) {
+    emailConfig = await prisma.emailConfig.findFirst({ where: { tenantId, isActive: true } });
+  }
   if (!emailConfig) throw new Error('Email not configured');
 
   // Send via SMTP
@@ -33,8 +40,9 @@ export async function sendDraft(draftId: string) {
     },
   });
 
+  const sendFrom = fromAddress || emailConfig.smtpUser;
   await transporter.sendMail({
-    from: emailConfig.smtpUser,
+    from: sendFrom,
     to: draft.card.fromEmail,
     subject: draft.subject || '',
     text: draft.body,

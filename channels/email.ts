@@ -1,19 +1,23 @@
-import Imap from 'node-imap';
+import { ImapFlow } from 'imapflow';
 import { simpleParser } from 'mailparser';
 import nodemailer from 'nodemailer';
 import type { ChannelAdapter } from './interface';
 import type { InboundMessage, SendParams, SendResult } from '../src/types';
 
-function createImapConnection(config: Record<string, string>) {
-  return new Imap({
-    user: config.user,
-    password: config.password,
+function createImapConnection(config: Record<string, string>): ImapFlow {
+  const port = parseInt(config.port, 10);
+  return new ImapFlow({
     host: config.host,
-    port: parseInt(config.port, 10),
-    tls: parseInt(config.port, 10) === 993,
-    autotls: parseInt(config.port, 10) === 143 ? 'always' : 'never',
-    connTimeout: 15000,
-    authTimeout: 15000,
+    port,
+    secure: port === 993,
+    auth: {
+      user: config.user,
+      pass: config.password,
+    },
+    tls: {
+      rejectUnauthorized: false,
+    },
+    logger: false,
   });
 }
 
@@ -21,109 +25,72 @@ export class EmailAdapter implements ChannelAdapter {
   readonly channel = 'email';
 
   async pollInbox(config: Record<string, string>, folder = 'INBOX'): Promise<InboundMessage[]> {
-    return new Promise((resolve, reject) => {
-      const imap = createImapConnection(config);
+    const imap = createImapConnection(config);
+    try {
+      await imap.connect();
+      await imap.mailboxOpen(folder, { readOnly: false });
+
       const messages: InboundMessage[] = [];
-      let settled = false;
-      const finish = (error?: Error) => {
-        if (settled) return;
-        settled = true;
-        try { imap.end(); } catch {}
-        error ? reject(error) : resolve(messages);
-      };
 
-      imap.once('ready', () => {
-        imap.openBox(folder, false, (err) => {
-          if (err) return finish(err);
-          imap.search(['UNSEEN'], (searchError, results) => {
-            if (searchError) return finish(searchError);
-            if (!results?.length) return finish();
+      for await (const message of imap.fetch({ seen: false }, { source: true, uid: true })) {
+        if (!message.source) continue;
+        const uid = message.uid;
+        if (!uid) continue;
 
-            const fetch = imap.fetch(results, { bodies: '', struct: true, markSeen: false });
-            const parsing: Promise<void>[] = [];
-            fetch.on('message', (msg, seqno) => {
-              parsing.push(new Promise<void>((done) => {
-                let buffer = '';
-                let uid = 0;
-                msg.on('attributes', (attrs: any) => { uid = attrs.uid; });
-                msg.on('body', (stream) => stream.on('data', (chunk: Buffer) => { buffer += chunk.toString('utf8'); }));
-                msg.once('end', async () => {
-                  try {
-                    const parsed = await simpleParser(buffer);
-                    const messageId = parsed.messageId?.trim();
-                    if (!messageId) return done();
-                    messages.push({
-                      messageId,
-                      uid,
-                      inReplyTo: parsed.inReplyTo || undefined,
-                      fromEmail: parsed.from?.value[0]?.address || 'unknown',
-                      fromName: parsed.from?.value[0]?.name || undefined,
-                      toEmail: Array.isArray(parsed.to) ? parsed.to[0]?.value[0]?.address : parsed.to?.value[0]?.address || undefined,
-                      subject: parsed.subject || '(No subject)',
-                      bodyText: parsed.text || '',
-                      bodyHtml: parsed.html || undefined,
-                      receivedAt: parsed.date || new Date(),
-                    });
-                  } catch {}
-                  done();
-                });
-              }));
-            });
-            fetch.once('error', (fetchError) => finish(fetchError));
-            fetch.once('end', async () => {
-              await Promise.all(parsing);
-              finish();
-            });
+        try {
+          const parsed = await simpleParser(message.source);
+          const messageId = parsed.messageId?.trim();
+          if (!messageId) continue;
+
+          messages.push({
+            messageId,
+            uid,
+            inReplyTo: parsed.inReplyTo || undefined,
+            fromEmail: parsed.from?.value[0]?.address || 'unknown',
+            fromName: parsed.from?.value[0]?.name || undefined,
+            toEmail: Array.isArray(parsed.to) ? parsed.to[0]?.value[0]?.address : parsed.to?.value[0]?.address || undefined,
+            subject: parsed.subject || '(No subject)',
+            bodyText: parsed.text || '',
+            bodyHtml: parsed.html || undefined,
+            receivedAt: parsed.date || new Date(),
           });
-        });
-      });
-      imap.once('error', (error) => finish(error));
-      imap.connect();
-    });
+        } catch {
+          // Skip messages that fail to parse
+        }
+      }
+
+      return messages;
+    } finally {
+      await imap.logout();
+    }
   }
 
   async markAsRead(config: Record<string, string>, uid: number): Promise<boolean> {
-    return new Promise((resolve) => {
-      const imap = createImapConnection(config);
-      let settled = false;
-      const finish = (result: boolean) => { if (!settled) { settled = true; try { imap.end(); } catch {} resolve(result); } };
-
-      imap.once('ready', () => {
-        imap.openBox('INBOX', false, (err) => {
-          if (err) return finish(false);
-          imap.addFlags(uid, ['\\Seen'], (err2) => {
-            finish(!err2);
-          });
-        });
-      });
-      imap.once('error', () => finish(false));
-      imap.connect();
-    });
+    const imap = createImapConnection(config);
+    try {
+      await imap.connect();
+      await imap.mailboxOpen('INBOX', { readOnly: false });
+      await imap.messageFlagsAdd({ uid }, ['\\Seen'], { uid: true });
+      return true;
+    } catch {
+      return false;
+    } finally {
+      await imap.logout();
+    }
   }
 
   async moveToFolder(config: Record<string, string>, uid: number, targetFolder: string): Promise<boolean> {
-    return new Promise((resolve) => {
-      const imap = createImapConnection(config);
-      let settled = false;
-      const finish = (result: boolean) => { if (!settled) { settled = true; try { imap.end(); } catch {} resolve(result); } };
-
-      imap.once('ready', () => {
-        imap.openBox('INBOX', false, (err) => {
-          if (err) return finish(false);
-          imap.copy(uid, targetFolder, (err2) => {
-            if (err2) return finish(false);
-            imap.addFlags(uid, ['\\Deleted'], (err3) => {
-              if (err3) return finish(false);
-              imap.expunge((err4) => {
-                finish(!err4);
-              });
-            });
-          });
-        });
-      });
-      imap.once('error', () => finish(false));
-      imap.connect();
-    });
+    const imap = createImapConnection(config);
+    try {
+      await imap.connect();
+      await imap.mailboxOpen('INBOX', { readOnly: false });
+      await imap.messageMove({ uid }, targetFolder, { uid: true });
+      return true;
+    } catch {
+      return false;
+    } finally {
+      await imap.logout();
+    }
   }
 
   async sendMessage(params: SendParams, config: Record<string, string>): Promise<SendResult> {
@@ -151,25 +118,13 @@ export class EmailAdapter implements ChannelAdapter {
   }
 
   async testConnection(config: Record<string, string>): Promise<{ success: boolean; error?: string }> {
-    return new Promise((resolve) => {
-      const imap = new Imap({
-        user: config.user,
-        password: config.password,
-        host: config.host,
-        port: parseInt(config.port),
-        tls: true,
-      });
-
-      imap.once('ready', () => {
-        imap.end();
-        resolve({ success: true });
-      });
-
-      imap.once('error', (err) => {
-        resolve({ success: false, error: err.message });
-      });
-
-      imap.connect();
-    });
+    const imap = createImapConnection(config);
+    try {
+      await imap.connect();
+      await imap.logout();
+      return { success: true };
+    } catch (err: any) {
+      return { success: false, error: err.message };
+    }
   }
 }

@@ -5,7 +5,7 @@ import { authOptions } from '@/server/auth';
 import prisma from '@/lib/prisma';
 import { encrypt, decrypt } from '@/lib/encryption';
 import { validateEmailConfigInput, type EmailConfigInput } from '@/lib/email-config-validation';
-import Imap from 'node-imap';
+import { ImapFlow } from 'imapflow';
 import nodemailer from 'nodemailer';
 
 function requireSession() {
@@ -134,22 +134,21 @@ export async function testImapConnection(data: {
   await requireSession();
   try {
     validateConnectionInput(data);
-    await withTimeout(new Promise<void>((resolve, reject) => {
-      const imap = new Imap({
-        user: data.user,
-        password: data.pass,
-        host: data.host,
-        port: data.port,
-        tls: data.port === 993,
-        autotls: data.port === 143 ? 'always' : 'never',
-        connTimeout: 12000,
-        authTimeout: 12000,
-      });
-      const close = () => { try { imap.end(); } catch {} };
-      imap.once('ready', () => { close(); resolve(); });
-      imap.once('error', (err) => { close(); reject(err); });
-      imap.connect();
-    }));
+    const imap = new ImapFlow({
+      host: data.host,
+      port: data.port,
+      secure: data.port === 993,
+      auth: { user: data.user, pass: data.pass },
+      tls: { rejectUnauthorized: false },
+      logger: false,
+    });
+    await withTimeout((async () => {
+      try {
+        await imap.connect();
+      } finally {
+        await imap.logout();
+      }
+    })());
     return { success: true };
   } catch (err: any) {
     return { success: false, error: err?.message || 'IMAP connection failed.' };
