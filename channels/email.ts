@@ -33,14 +33,14 @@ export class EmailAdapter implements ChannelAdapter {
       const messages: InboundMessage[] = [];
 
       for await (const message of imap.fetch({ seen: false }, { source: true, uid: true })) {
-        if (!message.source) continue;
+        if (!message.source) { console.log('[IMAP] Skipping message with no source'); continue; }
         const uid = message.uid;
-        if (!uid) continue;
+        if (!uid) { console.log('[IMAP] Skipping message with no uid'); continue; }
 
         try {
           const parsed = await simpleParser(message.source);
           const messageId = parsed.messageId?.trim();
-          if (!messageId) continue;
+          if (!messageId) { console.log('[IMAP] Skipping message with no messageId, subject:', parsed.subject); continue; }
 
           messages.push({
             messageId,
@@ -54,8 +54,8 @@ export class EmailAdapter implements ChannelAdapter {
             bodyHtml: parsed.html || undefined,
             receivedAt: parsed.date || new Date(),
           });
-        } catch {
-          // Skip messages that fail to parse
+        } catch (e: any) {
+          console.log('[IMAP] Failed to parse message:', e?.message || 'unknown error');
         }
       }
 

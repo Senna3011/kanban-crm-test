@@ -21,6 +21,9 @@ export default function CardDetailPanel({ card, onClose }: Props) {
   const [error, setError] = useState<string | null>(null);
   const [fromAddresses, setFromAddresses] = useState<string[]>([]);
   const [selectedFrom, setSelectedFrom] = useState('');
+  const [showHtml, setShowHtml] = useState(false);
+  const [cardHtml, setCardHtml] = useState('');
+  const [cardData, setCardData] = useState<any>(null);
 
   useEffect(() => {
     async function loadCardDetails() {
@@ -34,6 +37,8 @@ export default function CardDetailPanel({ card, onClose }: Props) {
         const data = await cardRes.json();
 
         setActivityLogs(data.activityLogs || []);
+        setCardData(data);
+        setCardHtml(data.bodyHtml || '');
 
         // Load available email addresses for from-selection
         if (configRes.ok) {
@@ -146,10 +151,32 @@ export default function CardDetailPanel({ card, onClose }: Props) {
             <>
               {/* Email body */}
               <section>
-                <h3 className="text-sm font-semibold text-gray-700 mb-2">Original Email</h3>
-                <div className="bg-gray-50 rounded-lg p-3 text-sm text-gray-700 whitespace-pre-wrap">
-                  {card.bodyText || '(No text content)'}
+                <div className="flex items-center justify-between mb-2">
+                  <h3 className="text-sm font-semibold text-gray-700">Original Email</h3>
+                  {cardHtml && (
+                    <button
+                      onClick={() => setShowHtml(!showHtml)}
+                      className="text-xs text-primary-600 hover:underline"
+                    >
+                      {showHtml ? 'Show Text' : 'Show HTML'}
+                    </button>
+                  )}
                 </div>
+                {showHtml && cardHtml ? (
+                  <div className="bg-white border border-gray-200 rounded-lg overflow-hidden">
+                    <iframe
+                      srcDoc={cardHtml}
+                      className="w-full border-0"
+                      style={{ minHeight: 300 }}
+                      sandbox="allow-same-origin"
+                      title="Email HTML"
+                    />
+                  </div>
+                ) : (
+                  <div className="bg-gray-50 rounded-lg p-3 text-sm text-gray-700 whitespace-pre-wrap">
+                    {card.bodyText || '(No text content)'}
+                  </div>
+                )}
               </section>
 
               {/* Activity Log */}

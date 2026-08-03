@@ -15,6 +15,7 @@ export default function KanbanBoard() {
   const [selectedCard, setSelectedCard] = useState<CardData | null>(null);
   const [showColumnSettings, setShowColumnSettings] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [syncing, setSyncing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [boardName, setBoardName] = useState('Board');
 
@@ -123,6 +124,20 @@ export default function KanbanBoard() {
     }
   }
 
+  async function handleSync() {
+    setSyncing(true);
+    try {
+      const res = await fetch('/api/sync', { method: 'POST' });
+      if (!res.ok) throw new Error('Sync failed');
+      toast.success('Syncing emails...');
+      // Wait a bit then refresh
+      setTimeout(() => { fetchColumns(); setSyncing(false); }, 5000);
+    } catch (err: any) {
+      toast.error(err.message || 'Sync failed');
+      setSyncing(false);
+    }
+  }
+
   if (loading) {
     return (
       <div className="h-full flex items-center justify-center">
@@ -169,12 +184,21 @@ export default function KanbanBoard() {
       <Toaster position="top-right" />
       <div className="flex items-center justify-between mb-4">
         <h1 className="text-2xl font-bold text-gray-900">{boardName}</h1>
-        <button
-          onClick={() => setShowColumnSettings(true)}
-          className="px-3 py-1.5 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50"
-        >
-          Manage columns
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={handleSync}
+            disabled={syncing}
+            className="px-3 py-1.5 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50"
+          >
+            {syncing ? '⏳ Syncing...' : '🔄 Sync'}
+          </button>
+          <button
+            onClick={() => setShowColumnSettings(true)}
+            className="px-3 py-1.5 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50"
+          >
+            Manage columns
+          </button>
+        </div>
       </div>
 
       <DndContext sensors={sensors} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
