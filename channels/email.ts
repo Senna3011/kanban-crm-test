@@ -43,7 +43,7 @@ export class EmailAdapter implements ChannelAdapter {
           if (!messageId) { console.log('[IMAP] Skipping message with no messageId, subject:', parsed.subject); continue; }
 
           const isRead = message.flags instanceof Set && [...message.flags].some(f => f.endsWith('Seen'));
-          console.log(`[IMAP] Message UID:${uid} flags:[${[...message.flags]}] isRead:${isRead}`);
+          if (uid <= 3) console.log(`[IMAP] Message UID:${uid} flags:[${message.flags ? [...message.flags] : 'none'}] isRead:${isRead}`);
 
           messages.push({
             messageId,
