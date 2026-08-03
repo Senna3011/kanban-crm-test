@@ -32,7 +32,9 @@ export class EmailAdapter implements ChannelAdapter {
 
       const messages: InboundMessage[] = [];
 
-      for await (const message of imap.fetch({ all: true }, { source: true, uid: true, flags: true })) {
+      const since = new Date();
+      since.setDate(since.getDate() - 30);
+      for await (const message of imap.fetch({ since }, { source: true, uid: true, flags: true })) {
         if (!message.source) { console.log('[IMAP] Skipping message with no source'); continue; }
         const uid = message.uid;
         if (!uid) { console.log('[IMAP] Skipping message with no uid'); continue; }
@@ -43,7 +45,6 @@ export class EmailAdapter implements ChannelAdapter {
           if (!messageId) { console.log('[IMAP] Skipping message with no messageId, subject:', parsed.subject); continue; }
 
           const isRead = message.flags instanceof Set && [...message.flags].some(f => f.endsWith('Seen'));
-          if (uid <= 3) console.log(`[IMAP] Message UID:${uid} flags:[${message.flags ? [...message.flags] : 'none'}] isRead:${isRead}`);
 
           messages.push({
             messageId,
