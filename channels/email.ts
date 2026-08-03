@@ -32,9 +32,10 @@ export class EmailAdapter implements ChannelAdapter {
 
       const messages: InboundMessage[] = [];
 
+      // Fetch unseen messages for new cards
       const since = new Date();
       since.setDate(since.getDate() - 30);
-      for await (const message of imap.fetch({ since }, { source: true, uid: true, flags: true })) {
+      for await (const message of imap.fetch({ since, seen: false }, { source: true, uid: true, flags: true })) {
         if (!message.source) { console.log('[IMAP] Skipping message with no source'); continue; }
         const uid = message.uid;
         if (!uid) { console.log('[IMAP] Skipping message with no uid'); continue; }
@@ -79,6 +80,30 @@ export class EmailAdapter implements ChannelAdapter {
       return true;
     } catch {
       return false;
+    } finally {
+      await imap.logout();
+    }
+  }
+
+  async syncReadStatus(config: Record<string, string>, folder = 'INBOX'): Promise<Map<string, boolean>> {
+    const statusMap = new Map<string, boolean>();
+    const imap = createImapConnection(config);
+    try {
+      await imap.connect();
+      await imap.mailboxOpen(folder, { readOnly: true });
+      const since = new Date();
+      since.setDate(since.getDate() - 30);
+      for await (const message of imap.fetch({ since }, { uid: true, flags: true })) {
+        // We need messageId to match with DB, but we don't have it here
+        // So we return uid -> isRead mapping
+        const uid = message.uid;
+        if (!uid) continue;
+        const isRead = message.flags instanceof Set && [...message.flags].some(f => f.endsWith('Seen'));
+        statusMap.set(String(uid), isRead);
+      }
+      return statusMap;
+    } catch {
+      return statusMap;
     } finally {
       await imap.logout();
     }

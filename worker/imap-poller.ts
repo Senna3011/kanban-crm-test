@@ -7,7 +7,7 @@ const emailAdapter = new EmailAdapter();
 
 // Map IMAP folder names to board titles
 const FOLDER_TO_BOARD: Record<string, string> = {
-  'INBOX': 'General',
+  'INBOX': 'JetDigitaPro',
   'Elite': 'Elite Team',
   'Gold': 'Gold Team',
   'Premiere': 'Premiere Team',
@@ -137,6 +137,34 @@ export async function processEmailPoll(data: { tenantId: string; emailConfigId: 
   }
 
   console.log(`[IMAP Poller] Total: ${totalCreated} new cards created`);
+
+  // Sync read/unread status for existing cards
+  for (const folder of folders) {
+    try {
+      const statusMap = await emailAdapter.syncReadStatus(imapConfig, folder);
+      if (statusMap.size === 0) continue;
+      
+      const cards = await prisma.card.findMany({
+        where: { imapUid: { not: null }, imapFolder: folder },
+        select: { id: true, imapUid: true, status: true },
+      });
+      
+      let updated = 0;
+      for (const card of cards) {
+        if (!card.imapUid) continue;
+        const isRead = statusMap.get(String(card.imapUid));
+        if (isRead === undefined) continue;
+        const newStatus = isRead ? 'read' : 'unread';
+        if (card.status !== newStatus) {
+          await prisma.card.update({ where: { id: card.id }, data: { status: newStatus } });
+          updated++;
+        }
+      }
+      if (updated > 0) console.log(`[IMAP Poller] Updated ${updated} cards status in ${folder}`);
+    } catch (err: any) {
+      console.error(`[IMAP Poller] Status sync error for ${folder}: ${err.message}`);
+    }
+  }
 
   await prisma.emailConfig.update({
     where: { id: config.id },
