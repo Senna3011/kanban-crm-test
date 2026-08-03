@@ -17,9 +17,14 @@ export default function KanbanCard({ card, onClick, isDragging }: Props) {
     disabled: !!isDragging,
   });
 
+  const isUnread = card.status === 'unread';
+  const isReply = card.highlighted;
+
   const style = {
     transform: CSS.Transform.toString(transform),
     transition,
+    borderLeftWidth: '4px',
+    borderLeftColor: isUnread ? '#3b82f6' : isReply ? '#f97316' : '#e5e7eb',
   };
 
   return (
@@ -30,22 +35,30 @@ export default function KanbanCard({ card, onClick, isDragging }: Props) {
       {...listeners}
       onClick={onClick}
       className={clsx(
-        'bg-white rounded-lg border p-3 cursor-pointer shadow-sm hover:shadow-md transition-shadow',
-        card.highlighted && 'ring-2 ring-orange-400 border-orange-300',
+        'bg-white rounded-r-lg border border-l-0 p-3 cursor-pointer shadow-sm hover:shadow-md transition-shadow',
         (isDragging || isSortableDragging) && 'opacity-50 shadow-lg',
-        !card.highlighted && 'border-gray-200'
+        isUnread ? 'border-blue-200' : isReply ? 'border-orange-200' : 'border-gray-200'
       )}
     >
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0 flex-1">
-          <p className="text-sm font-medium text-gray-900 truncate">{card.subject}</p>
+          <p className={clsx('text-sm truncate', isUnread ? 'font-bold text-gray-900' : 'font-medium text-gray-700')}>
+            {card.subject}
+          </p>
           <p className="text-xs text-gray-500 mt-0.5 truncate">{card.fromName || card.fromEmail}</p>
         </div>
-        {card.highlighted && (
-          <span className="text-xs bg-orange-100 text-orange-700 px-1.5 py-0.5 rounded-full whitespace-nowrap">
-            Reply
-          </span>
-        )}
+        <div className="flex flex-col gap-1 items-end">
+          {isUnread && (
+            <span className="text-xs bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded-full whitespace-nowrap font-medium">
+              NEW
+            </span>
+          )}
+          {isReply && !isUnread && (
+            <span className="text-xs bg-orange-100 text-orange-700 px-1.5 py-0.5 rounded-full whitespace-nowrap">
+              REPLY
+            </span>
+          )}
+        </div>
       </div>
       <div className="flex items-center justify-between mt-2">
         <span className="text-xs text-gray-400">

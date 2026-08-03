@@ -24,6 +24,7 @@ export default function CardDetailPanel({ card, onClose }: Props) {
   const [showHtml, setShowHtml] = useState(false);
   const [cardHtml, setCardHtml] = useState('');
   const [cardData, setCardData] = useState<any>(null);
+  const [isUnread, setIsUnread] = useState(card.status === 'unread');
 
   useEffect(() => {
     async function loadCardDetails() {
@@ -112,6 +113,23 @@ export default function CardDetailPanel({ card, onClose }: Props) {
     }
   }
 
+  async function handleToggleUnread() {
+    try {
+      const newStatus = isUnread ? 'read' : 'unread';
+      const res = await fetch(`/api/cards/${card.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: newStatus }),
+      });
+      if (!res.ok) throw new Error('Failed to update');
+      setIsUnread(!isUnread);
+      toast.success(isUnread ? 'Marked as read' : 'Marked as unread');
+      window.dispatchEvent(new Event('board-refresh'));
+    } catch (e: any) {
+      toast.error(e.message);
+    }
+  }
+
   return (
     <div className="fixed inset-0 z-50 flex justify-end">
       <Toaster position="top-right" />
@@ -126,6 +144,13 @@ export default function CardDetailPanel({ card, onClose }: Props) {
             </p>
           </div>
           <div className="flex items-center gap-2 ml-4">
+            <button
+              onClick={handleToggleUnread}
+              className="text-sm px-2 py-1 rounded hover:bg-gray-100"
+              title={isUnread ? 'Mark as read' : 'Mark as unread'}
+            >
+              {isUnread ? '👁️' : '🔵'}
+            </button>
             <button
               onClick={handleDelete}
               disabled={deleting}
