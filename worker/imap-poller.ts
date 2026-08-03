@@ -58,8 +58,15 @@ async function pollFolder(imapConfig: Record<string, string>, folder: string, te
 
   for (const msg of messages) {
     try {
-      const alreadyProcessed = await prisma.card.findUnique({ where: { messageId: msg.messageId }, select: { id: true } });
-      if (alreadyProcessed) continue;
+      const existingCard = await prisma.card.findUnique({ where: { messageId: msg.messageId }, select: { id: true, status: true } });
+      if (existingCard) {
+        // Update read status if changed
+        const newStatus = msg.isRead ? 'read' : 'unread';
+        if (existingCard.status !== newStatus) {
+          await prisma.card.update({ where: { id: existingCard.id }, data: { status: newStatus } });
+        }
+        continue;
+      }
 
       const board = await resolveBoard(tenantId, msg.toEmail, folder);
       if (!board) continue;
@@ -68,15 +75,15 @@ async function pollFolder(imapConfig: Record<string, string>, folder: string, te
       if (!unreads) continue;
 
       // Check if reply to existing thread
-      let existingCard = null;
+      let replyCard = null;
       if (msg.inReplyTo) {
-        existingCard = await prisma.card.findFirst({ where: { messageId: msg.inReplyTo, tenantId } });
+        replyCard = await prisma.card.findFirst({ where: { messageId: msg.inReplyTo, tenantId } });
       }
 
-      if (existingCard) {
-        await prisma.card.update({ where: { id: existingCard.id }, data: { highlighted: true, lastActivityAt: new Date() } });
+      if (replyCard) {
+        await prisma.card.update({ where: { id: replyCard.id }, data: { highlighted: true, lastActivityAt: new Date() } });
         await prisma.activityLog.create({
-          data: { type: 'email_received', content: { messageId: msg.messageId, subject: msg.subject, from: msg.fromEmail }, cardId: existingCard.id, tenantId },
+          data: { type: 'email_received', content: { messageId: msg.messageId, subject: msg.subject, from: msg.fromEmail }, cardId: replyCard.id, tenantId },
         });
       } else {
         const card = await prisma.card.create({
@@ -85,6 +92,7 @@ async function pollFolder(imapConfig: Record<string, string>, folder: string, te
             bodyText: msg.bodyText, bodyHtml: msg.bodyHtml,
             messageId: msg.messageId, inReplyTo: msg.inReplyTo || null,
             imapUid: msg.uid || null, imapFolder: folder,
+            status: msg.isRead ? 'read' : 'unread',
             channel: 'email', columnId: unreads.id, tenantId, emailConfigId: emailConfigId,
             lastActivityAt: msg.receivedAt || new Date(),
           },

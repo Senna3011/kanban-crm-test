@@ -62,6 +62,7 @@ export interface ChannelConnection {
 export interface InboundMessage {
   messageId: string;
   uid?: number;
+  isRead?: boolean;
   inReplyTo?: string;
   fromEmail: string;
   fromName?: string;
