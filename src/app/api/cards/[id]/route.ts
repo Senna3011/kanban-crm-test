@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/server/auth';
 import prisma from '@/lib/prisma';
-import { syncMarkAsRead, syncArchiveEmail } from '@/lib/imap-sync';
+import { syncArchiveEmail } from '@/lib/imap-sync';
 
 export async function GET(req: NextRequest, { params }: { params: { id: string } }) {
   const session = await getServerSession(authOptions);
@@ -48,13 +48,6 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
       assignedToId: body.assignedToId,
     },
   });
-
-  // Sync: if moved FROM Unreads to another column, mark as read in Zoho
-  if (card.column.title === 'Unreads' && body.columnId && body.columnId !== card.columnId) {
-    syncMarkAsRead(tenantId, params.id).catch((err) =>
-      console.error(`[IMAP Sync] Failed to mark as read: ${err.message}`)
-    );
-  }
 
   return NextResponse.json(updated);
 }

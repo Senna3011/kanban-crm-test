@@ -9,9 +9,11 @@ interface Props {
   card: CardData;
   isDragging?: boolean;
   onClick?: () => void;
+  onToggleRead?: (cardId: string, currentStatus: string) => void;
+  onDelete?: (cardId: string) => void;
 }
 
-export default function KanbanCard({ card, onClick, isDragging }: Props) {
+export default function KanbanCard({ card, onClick, isDragging, onToggleRead, onDelete }: Props) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging: isSortableDragging } = useSortable({
     id: card.id,
     disabled: !!isDragging,
@@ -35,7 +37,7 @@ export default function KanbanCard({ card, onClick, isDragging }: Props) {
       {...listeners}
       onClick={onClick}
       className={clsx(
-        'bg-white rounded-r-lg border border-l-0 p-3 cursor-pointer shadow-sm hover:shadow-md transition-shadow',
+        'bg-white rounded-r-lg border border-l-0 p-3 cursor-pointer shadow-sm hover:shadow-md transition-shadow group',
         (isDragging || isSortableDragging) && 'opacity-50 shadow-lg',
         isUnread ? 'border-blue-200' : isReply ? 'border-orange-200' : 'border-gray-200'
       )}
@@ -64,6 +66,34 @@ export default function KanbanCard({ card, onClick, isDragging }: Props) {
         <span className="text-xs text-gray-400">
           {new Date(card.lastActivityAt).toLocaleDateString()}
         </span>
+        {!isDragging && (
+          <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+            <button
+              onClick={(e) => { e.stopPropagation(); onToggleRead?.(card.id, card.status); }}
+              className="p-1 rounded hover:bg-gray-100 text-gray-400 hover:text-gray-600"
+              title={isUnread ? 'Mark as read' : 'Mark as unread'}
+            >
+              {isUnread ? (
+                <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M3 19v-8.93a2 2 0 01.89-1.664l7-4.666a2 2 0 012.22 0l7 4.666A2 2 0 0121 10.07V19M3 19a2 2 0 002 2h14a2 2 0 002-2M3 19l6.75-4.5M21 19l-6.75-4.5M3 10l6.75 4.5M21 10l-6.75 4.5m0 0l-1.14.76a2 2 0 01-2.22 0l-1.14-.76" />
+                </svg>
+              ) : (
+                <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M21.75 6.75v10.5a2.25 2.25 0 01-2.25 2.25h-15a2.25 2.25 0 01-2.25-2.25V6.75m19.5 0A2.25 2.25 0 0019.5 4.5h-15a2.25 2.25 0 00-2.25 2.25m19.5 0v.243a2.25 2.25 0 01-1.07 1.916l-7.5 4.615a2.25 2.25 0 01-2.36 0L3.32 8.91a2.25 2.25 0 01-1.07-1.916V6.75" />
+                </svg>
+              )}
+            </button>
+            <button
+              onClick={(e) => { e.stopPropagation(); onDelete?.(card.id); }}
+              className="p-1 rounded hover:bg-red-50 text-gray-400 hover:text-red-500"
+              title="Delete"
+            >
+              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 00-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 013.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 00-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 00-7.5 0" />
+              </svg>
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );

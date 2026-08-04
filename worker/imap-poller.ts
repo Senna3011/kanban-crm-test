@@ -71,8 +71,8 @@ async function pollFolder(imapConfig: Record<string, string>, folder: string, te
       const board = await resolveBoard(tenantId, msg.toEmail, folder);
       if (!board) continue;
 
-      const unreads = await prisma.column.findFirst({ where: { boardId: board.id, title: 'Unreads' } });
-      if (!unreads) continue;
+      const general = await prisma.column.findFirst({ where: { boardId: board.id, title: 'General' } });
+      if (!general) continue;
 
       // Check if reply to existing thread
       let replyCard = null;
@@ -93,7 +93,7 @@ async function pollFolder(imapConfig: Record<string, string>, folder: string, te
             messageId: msg.messageId, inReplyTo: msg.inReplyTo || null,
             imapUid: msg.uid || null, imapFolder: folder,
             status: msg.isRead ? 'read' : 'unread',
-            channel: 'email', columnId: unreads.id, tenantId, emailConfigId: emailConfigId,
+            channel: 'email', columnId: general.id, tenantId, emailConfigId: emailConfigId,
             lastActivityAt: msg.receivedAt || new Date(),
           },
         });

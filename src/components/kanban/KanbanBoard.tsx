@@ -153,6 +153,46 @@ export default function KanbanBoard() {
     }
   }
 
+  async function handleToggleRead(cardId: string, currentStatus: string) {
+    const newStatus = currentStatus === 'unread' ? 'read' : 'unread';
+    // Optimistic update
+    setColumns(prev => prev.map(col => ({
+      ...col,
+      cards: col.cards.map(c => c.id === cardId ? { ...c, status: newStatus } : c),
+    })));
+    if (selectedCard?.id === cardId) {
+      setSelectedCard(prev => prev ? { ...prev, status: newStatus } : prev);
+    }
+    try {
+      await fetch(`/api/cards/${cardId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: newStatus }),
+      });
+      toast.success(newStatus === 'unread' ? 'Marked as unread' : 'Marked as read');
+    } catch {
+      toast.error('Failed to update status');
+      fetchColumns();
+    }
+  }
+
+  async function handleDeleteCard(cardId: string) {
+    if (!confirm('Delete this card? This will also archive the email in Zoho.')) return;
+    // Optimistic remove
+    setColumns(prev => prev.map(col => ({
+      ...col,
+      cards: col.cards.filter(c => c.id !== cardId),
+    })));
+    if (selectedCard?.id === cardId) setSelectedCard(null);
+    try {
+      await fetch(`/api/cards/${cardId}`, { method: 'DELETE' });
+      toast.success('Card deleted');
+    } catch {
+      toast.error('Failed to delete card');
+      fetchColumns();
+    }
+  }
+
   async function handleSync() {
     setSyncing(true);
     try {
@@ -241,7 +281,13 @@ export default function KanbanBoard() {
           onMouseLeave={handleMouseUp}
         >
           {columns.map((column) => (
-            <KanbanColumn key={column.id} column={column} onCardClick={(card) => setSelectedCard(card)} />
+            <KanbanColumn
+              key={column.id}
+              column={column}
+              onCardClick={(card) => setSelectedCard(card)}
+              onToggleRead={handleToggleRead}
+              onDelete={handleDeleteCard}
+            />
           ))}
         </div>
         <DragOverlay>

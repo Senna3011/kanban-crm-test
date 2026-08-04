@@ -1,5 +1,6 @@
 'use client';
 
+import { useState, useMemo } from 'react';
 import { useDroppable } from '@dnd-kit/core';
 import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import KanbanCard from './KanbanCard';
@@ -8,10 +9,24 @@ import type { ColumnData, CardData } from '@/types';
 interface Props {
   column: ColumnData;
   onCardClick?: (card: CardData) => void;
+  onToggleRead?: (cardId: string, currentStatus: string) => void;
+  onDelete?: (cardId: string) => void;
 }
 
-export default function KanbanColumn({ column, onCardClick }: Props) {
+export default function KanbanColumn({ column, onCardClick, onToggleRead, onDelete }: Props) {
   const { setNodeRef, isOver } = useDroppable({ id: column.id });
+  const [sortUnreads, setSortUnreads] = useState(false);
+
+  const sortedCards = useMemo(() => {
+    if (!sortUnreads) return column.cards;
+    return [...column.cards].sort((a, b) => {
+      if (a.status === 'unread' && b.status !== 'unread') return -1;
+      if (a.status !== 'unread' && b.status === 'unread') return 1;
+      return 0;
+    });
+  }, [column.cards, sortUnreads]);
+
+  const unreadCount = column.cards.filter(c => c.status === 'unread').length;
 
   return (
     <div
@@ -26,12 +41,31 @@ export default function KanbanColumn({ column, onCardClick }: Props) {
             {column.cards.length}
           </span>
         </div>
+        {unreadCount > 0 && (
+          <button
+            onClick={() => setSortUnreads(!sortUnreads)}
+            className={`text-xs px-2 py-1 rounded-md transition-colors ${
+              sortUnreads
+                ? 'bg-blue-100 text-blue-700 font-medium'
+                : 'text-gray-500 hover:bg-gray-200'
+            }`}
+            title={sortUnreads ? 'Showing unreads first' : 'Sort by unreads'}
+          >
+            🔵 {unreadCount}
+          </button>
+        )}
       </div>
 
       <div className="flex-1 overflow-y-auto px-2 pb-2 space-y-2">
-        <SortableContext items={column.cards.map((c) => c.id)} strategy={verticalListSortingStrategy}>
-          {column.cards.map((card) => (
-            <KanbanCard key={card.id} card={card} onClick={() => onCardClick?.(card)} />
+        <SortableContext items={sortedCards.map((c) => c.id)} strategy={verticalListSortingStrategy}>
+          {sortedCards.map((card) => (
+            <KanbanCard
+              key={card.id}
+              card={card}
+              onClick={() => onCardClick?.(card)}
+              onToggleRead={onToggleRead}
+              onDelete={onDelete}
+            />
           ))}
         </SortableContext>
         {column.cards.length === 0 && (
