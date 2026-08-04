@@ -58,12 +58,15 @@ async function pollFolder(imapConfig: Record<string, string>, folder: string, te
 
   for (const msg of messages) {
     try {
-      const existingCard = await prisma.card.findUnique({ where: { messageId: msg.messageId }, select: { id: true, status: true } });
+      const existingCard = await prisma.card.findUnique({ where: { messageId: msg.messageId }, select: { id: true, status: true, imapUid: true } });
       if (existingCard) {
-        // Update read status if changed
+        // Update read status and imapUid if changed
         const newStatus = msg.isRead ? 'read' : 'unread';
-        if (existingCard.status !== newStatus) {
-          await prisma.card.update({ where: { id: existingCard.id }, data: { status: newStatus } });
+        const updateData: any = {};
+        if (existingCard.status !== newStatus) updateData.status = newStatus;
+        if (msg.uid && existingCard.imapUid !== msg.uid) updateData.imapUid = msg.uid;
+        if (Object.keys(updateData).length > 0) {
+          await prisma.card.update({ where: { id: existingCard.id }, data: updateData });
         }
         continue;
       }
