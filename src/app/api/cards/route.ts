@@ -10,15 +10,23 @@ export async function GET(req: NextRequest) {
   const tenantId = (session.user as any).tenantId;
   const { searchParams } = new URL(req.url);
   const columnId = searchParams.get('columnId');
+  const status = searchParams.get('status');
 
   const where: any = { tenantId };
   if (columnId) where.columnId = columnId;
+  if (status) where.status = status;
 
-  const cards = await prisma.card.findMany({
-    where,
-    orderBy: { lastActivityAt: 'desc' },
-    include: { assignedTo: { select: { id: true, name: true, avatar: true } } },
-  });
+  const cards = status === 'unread'
+    ? await prisma.card.findMany({
+        where,
+        orderBy: { lastActivityAt: 'desc' },
+        select: { id: true },
+      })
+    : await prisma.card.findMany({
+        where,
+        orderBy: { lastActivityAt: 'desc' },
+        include: { assignedTo: { select: { id: true, name: true, avatar: true } } },
+      });
 
   return NextResponse.json(cards);
 }

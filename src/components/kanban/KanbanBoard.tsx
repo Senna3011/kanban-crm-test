@@ -18,6 +18,7 @@ export default function KanbanBoard() {
   const [syncing, setSyncing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [boardName, setBoardName] = useState('Board');
+  const [totalUnread, setTotalUnread] = useState(0);
   const scrollRef = useRef<HTMLDivElement>(null);
   const isDragging = useRef(false);
   const startX = useRef(0);
@@ -89,6 +90,14 @@ export default function KanbanBoard() {
   useEffect(() => {
     fetchColumns();
   }, [fetchColumns]);
+
+  // Fetch total unread count across all boards
+  useEffect(() => {
+    fetch('/api/cards?status=unread')
+      .then(r => r.json())
+      .then((cards: any[]) => setTotalUnread(cards.length))
+      .catch(() => {});
+  }, []);
 
   // Listen for real-time refresh events
   useEffect(() => {
@@ -163,6 +172,8 @@ export default function KanbanBoard() {
     if (selectedCard?.id === cardId) {
       setSelectedCard(prev => prev ? { ...prev, status: newStatus } : prev);
     }
+    // Update global unread count
+    setTotalUnread(prev => newStatus === 'unread' ? prev + 1 : prev - 1);
     try {
       await fetch(`/api/cards/${cardId}`, {
         method: 'PATCH',
@@ -172,18 +183,26 @@ export default function KanbanBoard() {
       toast.success(newStatus === 'unread' ? 'Marked as unread' : 'Marked as read');
     } catch {
       toast.error('Failed to update status');
+      setTotalUnread(prev => newStatus === 'unread' ? prev - 1 : prev + 1);
       fetchColumns();
     }
   }
 
   async function handleDeleteCard(cardId: string) {
     if (!confirm('Delete this card? This will also archive the email in Zoho.')) return;
+    // Check if card is unread before removing
+    let wasUnread = false;
+    columns.forEach(col => {
+      const card = col.cards.find(c => c.id === cardId);
+      if (card && card.status === 'unread') wasUnread = true;
+    });
     // Optimistic remove
     setColumns(prev => prev.map(col => ({
       ...col,
       cards: col.cards.filter(c => c.id !== cardId),
     })));
     if (selectedCard?.id === cardId) setSelectedCard(null);
+    if (wasUnread) setTotalUnread(prev => Math.max(0, prev - 1));
     try {
       await fetch(`/api/cards/${cardId}`, { method: 'DELETE' });
       toast.success('Card deleted');
@@ -252,7 +271,14 @@ export default function KanbanBoard() {
     <div className="h-full flex flex-col">
       <Toaster position="top-right" />
       <div className="flex items-center justify-between mb-4">
-        <h1 className="text-2xl font-bold text-gray-900">{boardName}</h1>
+        <div className="flex items-center gap-3">
+          <h1 className="text-2xl font-bold text-gray-900">{boardName}</h1>
+          {totalUnread > 0 && (
+            <span className="text-sm bg-blue-100 text-blue-700 px-2.5 py-1 rounded-full font-medium">
+              🔵 {totalUnread} unread
+            </span>
+          )}
+        </div>
         <div className="flex items-center gap-2">
           <button
             onClick={handleSync}
