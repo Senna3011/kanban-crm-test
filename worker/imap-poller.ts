@@ -83,7 +83,7 @@ async function pollFolder(imapConfig: Record<string, string>, folder: string, te
       if (replyCard) {
         await prisma.card.update({ where: { id: replyCard.id }, data: { highlighted: true, lastActivityAt: new Date() } });
         await prisma.activityLog.create({
-          data: { type: 'email_received', content: { messageId: msg.messageId, subject: msg.subject, from: msg.fromEmail }, cardId: replyCard.id, tenantId },
+          data: { type: 'email_received', content: { messageId: msg.messageId, subject: msg.subject, from: msg.fromEmail, to: msg.toEmail }, cardId: replyCard.id, tenantId },
         });
       } else {
         const card = await prisma.card.create({
@@ -98,7 +98,7 @@ async function pollFolder(imapConfig: Record<string, string>, folder: string, te
           },
         });
         await prisma.activityLog.create({
-          data: { type: 'email_received', content: { messageId: msg.messageId, subject: msg.subject, from: msg.fromEmail }, cardId: card.id, tenantId },
+          data: { type: 'email_received', content: { messageId: msg.messageId, subject: msg.subject, from: msg.fromEmail, to: msg.toEmail }, cardId: card.id, tenantId },
         });
         await aiProcessQueue.add('classify_email', {
           type: 'classify_email', tenantId, cardId: card.id,
