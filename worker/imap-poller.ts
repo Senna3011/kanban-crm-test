@@ -142,17 +142,23 @@ export async function processEmailPoll(data: { tenantId: string; emailConfigId: 
   console.log(`[IMAP Poller] Total: ${totalCreated} new cards created`);
 
   // Sync read/unread status for existing cards (match by Message-ID, stable across compaction)
+  console.log(`[IMAP Poller] Starting status sync for ${folders.length} folders...`);
   for (const folder of folders) {
     try {
       const statusMap = await emailAdapter.syncReadStatus(imapConfig, folder);
-      if (statusMap.size === 0) continue;
+      if (statusMap.size === 0) {
+        console.log(`[IMAP Poller] Status sync ${folder}: empty map, skipping`);
+        continue;
+      }
 
       const cards = await prisma.card.findMany({
         where: { imapFolder: folder },
         select: { id: true, imapUid: true, messageId: true, status: true },
       });
+      console.log(`[IMAP Poller] Status sync ${folder}: ${statusMap.size} entries, ${cards.length} cards`);
 
       let updated = 0;
+      let matched = 0;
       for (const card of cards) {
         // Primary: match by Message-ID (stable)
         let isRead: boolean | undefined;
@@ -164,13 +170,14 @@ export async function processEmailPoll(data: { tenantId: string; emailConfigId: 
           isRead = statusMap.get(`uid:${card.imapUid}`);
         }
         if (isRead === undefined) continue;
+        matched++;
         const newStatus = isRead ? 'read' : 'unread';
         if (card.status !== newStatus) {
           await prisma.card.update({ where: { id: card.id }, data: { status: newStatus } });
           updated++;
         }
       }
-      if (updated > 0) console.log(`[IMAP Poller] Updated ${updated} cards status in ${folder}`);
+      console.log(`[IMAP Poller] Status sync ${folder}: ${matched} matched, ${updated} updated`);
     } catch (err: any) {
       console.error(`[IMAP Poller] Status sync error for ${folder}: ${err.message}`);
     }
