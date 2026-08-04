@@ -85,6 +85,21 @@ export class EmailAdapter implements ChannelAdapter {
     }
   }
 
+  async findUidByMessageId(config: Record<string, string>, messageId: string): Promise<number | null> {
+    const imap = createImapConnection(config);
+    try {
+      await imap.connect();
+      await imap.mailboxOpen('INBOX', { readOnly: true });
+      const results = await imap.search({ header: { 'Message-ID': messageId } });
+      if (results && results.length > 0) return results[0];
+      return null;
+    } catch {
+      return null;
+    } finally {
+      await imap.logout();
+    }
+  }
+
   async syncReadStatus(config: Record<string, string>, folder = 'INBOX'): Promise<Map<string, boolean>> {
     const statusMap = new Map<string, boolean>();
     const imap = createImapConnection(config);
@@ -93,13 +108,25 @@ export class EmailAdapter implements ChannelAdapter {
       await imap.mailboxOpen(folder, { readOnly: true });
       const since = new Date();
       since.setDate(since.getDate() - 30);
-      for await (const message of imap.fetch({ since }, { uid: true, flags: true })) {
-        // We need messageId to match with DB, but we don't have it here
-        // So we return uid -> isRead mapping
+      // Fetch source + flags so we can match by Message-ID (stable across compaction)
+      for await (const message of imap.fetch({ since }, { source: true, uid: true, flags: true })) {
+        if (!message.source) continue;
         const uid = message.uid;
         if (!uid) continue;
         const isRead = message.flags instanceof Set && [...message.flags].some(f => f.endsWith('Seen'));
-        statusMap.set(String(uid), isRead);
+        try {
+          const { simpleParser } = await import('mailparser');
+          const parsed = await simpleParser(message.source);
+          const messageId = parsed.messageId?.trim();
+          if (messageId) {
+            statusMap.set(messageId, isRead);
+          }
+          // Also map by UID for backward compatibility
+          statusMap.set(`uid:${uid}`, isRead);
+        } catch {
+          // Fallback: UID-only mapping
+          statusMap.set(`uid:${uid}`, isRead);
+        }
       }
       return statusMap;
     } catch {

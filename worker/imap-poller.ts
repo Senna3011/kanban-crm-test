@@ -138,21 +138,28 @@ export async function processEmailPoll(data: { tenantId: string; emailConfigId: 
 
   console.log(`[IMAP Poller] Total: ${totalCreated} new cards created`);
 
-  // Sync read/unread status for existing cards
+  // Sync read/unread status for existing cards (match by Message-ID, stable across compaction)
   for (const folder of folders) {
     try {
       const statusMap = await emailAdapter.syncReadStatus(imapConfig, folder);
       if (statusMap.size === 0) continue;
-      
+
       const cards = await prisma.card.findMany({
-        where: { imapUid: { not: null }, imapFolder: folder },
-        select: { id: true, imapUid: true, status: true },
+        where: { imapFolder: folder },
+        select: { id: true, imapUid: true, messageId: true, status: true },
       });
-      
+
       let updated = 0;
       for (const card of cards) {
-        if (!card.imapUid) continue;
-        const isRead = statusMap.get(String(card.imapUid));
+        // Primary: match by Message-ID (stable)
+        let isRead: boolean | undefined;
+        if (card.messageId) {
+          isRead = statusMap.get(card.messageId);
+        }
+        // Fallback: match by UID (may be stale after compaction)
+        if (isRead === undefined && card.imapUid) {
+          isRead = statusMap.get(`uid:${card.imapUid}`);
+        }
         if (isRead === undefined) continue;
         const newStatus = isRead ? 'read' : 'unread';
         if (card.status !== newStatus) {

@@ -17,22 +17,35 @@ async function getImapConfig(tenantId: string) {
 
 export async function syncMarkAsRead(tenantId: string, cardId: string): Promise<boolean> {
   const card = await prisma.card.findUnique({ where: { id: cardId } });
-  if (!card || !card.imapUid) return false;
+  if (!card) return false;
 
   const imapConfig = await getImapConfig(tenantId);
   if (!imapConfig) return false;
 
-  console.log(`[IMAP Sync] Marking ${card.messageId} as read (UID: ${card.imapUid})`);
-  return emailAdapter.markAsRead(imapConfig, card.imapUid);
+  // Try by UID first, fallback to search by Message-ID
+  let uid = card.imapUid;
+  if (!uid && card.messageId) {
+    uid = await emailAdapter.findUidByMessageId(imapConfig, card.messageId);
+  }
+  if (!uid) return false;
+
+  console.log(`[IMAP Sync] Marking ${card.messageId} as read (UID: ${uid})`);
+  return emailAdapter.markAsRead(imapConfig, uid);
 }
 
 export async function syncArchiveEmail(tenantId: string, cardId: string): Promise<boolean> {
   const card = await prisma.card.findUnique({ where: { id: cardId } });
-  if (!card || !card.imapUid) return false;
+  if (!card) return false;
 
   const imapConfig = await getImapConfig(tenantId);
   if (!imapConfig) return false;
 
-  console.log(`[IMAP Sync] Archiving ${card.messageId} (UID: ${card.imapUid})`);
-  return emailAdapter.moveToFolder(imapConfig, card.imapUid, 'Archive');
+  let uid = card.imapUid;
+  if (!uid && card.messageId) {
+    uid = await emailAdapter.findUidByMessageId(imapConfig, card.messageId);
+  }
+  if (!uid) return false;
+
+  console.log(`[IMAP Sync] Archiving ${card.messageId} (UID: ${uid})`);
+  return emailAdapter.moveToFolder(imapConfig, uid, 'Archive');
 }

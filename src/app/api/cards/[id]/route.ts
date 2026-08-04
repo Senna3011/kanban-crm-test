@@ -70,7 +70,7 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
   });
 
   // Sync: if marking as unread, remove \Seen flag in Zoho
-  if (body.status === 'unread' && card.imapUid) {
+  if (body.status === 'unread') {
     try {
       const { ImapFlow } = await import('imapflow');
       const config = await prisma.emailConfig.findFirst({ where: { tenantId, isActive: true } });
@@ -84,9 +84,17 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
         });
         await imap.connect();
         await imap.mailboxOpen('INBOX', { readOnly: false });
-        await imap.messageFlagsRemove({ uid: card.imapUid }, ['\\Seen'], { uid: true });
+        // Find UID: try imapUid first, fallback to search by Message-ID
+        let uid = card.imapUid;
+        if (!uid && card.messageId) {
+          const results = await imap.search({ header: { 'Message-ID': card.messageId } });
+          if (results && results.length > 0) uid = results[0];
+        }
+        if (uid) {
+          await imap.messageFlagsRemove({ uid }, ['\\Seen'], { uid: true });
+          console.log(`[IMAP Sync] Marked ${card.messageId} as unread (UID: ${uid})`);
+        }
         await imap.logout();
-        console.log(`[IMAP Sync] Marked ${card.messageId} as unread`);
       }
     } catch (err: any) {
       console.error(`[IMAP Sync] Failed to mark as unread: ${err.message}`);
