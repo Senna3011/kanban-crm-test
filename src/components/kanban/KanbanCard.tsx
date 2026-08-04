@@ -55,7 +55,7 @@ export default function KanbanCard({ card, onClick, isDragging }: Props) {
           )}
           {isReply && !isUnread && (
             <span className="text-xs bg-orange-100 text-orange-700 px-1.5 py-0.5 rounded-full whitespace-nowrap">
-              REPLY
+              Replied
             </span>
           )}
         </div>

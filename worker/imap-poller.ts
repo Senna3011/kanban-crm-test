@@ -15,13 +15,7 @@ const FOLDER_TO_BOARD: Record<string, string> = {
 };
 
 async function resolveBoard(tenantId: string, toEmail?: string, folder?: string) {
-  // First try folder-based routing
-  if (folder && FOLDER_TO_BOARD[folder]) {
-    const board = await prisma.board.findFirst({ where: { tenantId, title: FOLDER_TO_BOARD[folder] } });
-    if (board) return board;
-  }
-
-  // Then try recipient-based routing
+  // First try recipient-based routing (more specific)
   const tenant = await prisma.tenant.findUnique({ where: { id: tenantId }, select: { companyInfo: true } });
   let routing: Record<string, string> = {};
   try {
@@ -36,8 +30,14 @@ async function resolveBoard(tenantId: string, toEmail?: string, folder?: string)
     if (board) return board;
   }
 
-  // Fallback: General board or first board
-  const general = await prisma.board.findFirst({ where: { tenantId, title: 'General' } });
+  // Then try folder-based routing
+  if (folder && FOLDER_TO_BOARD[folder]) {
+    const board = await prisma.board.findFirst({ where: { tenantId, title: FOLDER_TO_BOARD[folder] } });
+    if (board) return board;
+  }
+
+  // Fallback: JetDigitaPro board or first board
+  const general = await prisma.board.findFirst({ where: { tenantId, title: 'JetDigitaPro' } });
   if (general) return general;
   return prisma.board.findFirst({ where: { tenantId } });
 }

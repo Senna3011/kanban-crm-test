@@ -32,10 +32,10 @@ export class EmailAdapter implements ChannelAdapter {
 
       const messages: InboundMessage[] = [];
 
-      // Fetch unseen messages for new cards
+      // Fetch all recent messages (not just unseen) to catch team emails
       const since = new Date();
       since.setDate(since.getDate() - 30);
-      for await (const message of imap.fetch({ since, seen: false }, { source: true, uid: true, flags: true })) {
+      for await (const message of imap.fetch({ since }, { source: true, uid: true, flags: true })) {
         if (!message.source) { console.log('[IMAP] Skipping message with no source'); continue; }
         const uid = message.uid;
         if (!uid) { console.log('[IMAP] Skipping message with no uid'); continue; }
