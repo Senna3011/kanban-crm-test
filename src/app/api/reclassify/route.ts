@@ -1,0 +1,120 @@
+import { NextResponse } from 'next/server';
+import { getServerSession } from 'next-auth';
+import { authOptions } from '@/server/auth';
+import prisma from '@/lib/prisma';
+import { classifyEmail } from '@/lib/ai';
+
+export async function POST() {
+  const session = await getServerSession(authOptions);
+  if (!session?.user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+
+  const tenantId = (session.user as any).tenantId;
+  const tenant = await prisma.tenant.findUnique({ where: { id: tenantId } });
+  if (!tenant) return NextResponse.json({ error: 'Tenant not found' }, { status: 404 });
+
+  // Get all cards for this tenant
+  const cards = await prisma.card.findMany({
+    where: { tenantId },
+    select: {
+      id: true,
+      subject: true,
+      fromEmail: true,
+      fromName: true,
+      bodyText: true,
+      bodyHtml: true,
+      columnId: true,
+      column: { select: { title: true, boardId: true } },
+    },
+  });
+
+  let reclassified = 0;
+  let errors = 0;
+  const results: { cardId: string; subject: string; from: string; oldColumn: string; newCategory: string; confidence: number }[] = [];
+
+  for (const card of cards) {
+    try {
+      const body = card.bodyText || card.bodyHtml || '';
+      if (!body.trim()) continue;
+
+      // Only reclassify cards in Unreads or General — skip cards already in workflow columns
+      const workflowColumns = ['Leads', 'Follow up 1', 'Follow up 2', 'Follow up 3', 'Success', 'Fail', 'Pending'];
+      if (workflowColumns.includes(card.column.title)) {
+        console.log(`[RECLASSIFY] Skipping "${card.subject}" — already in ${card.column.title}`);
+        continue;
+      }
+
+      const classification = await classifyEmail({
+        companyContext: tenant.companyInfo || '',
+        fromName: card.fromName || '',
+        fromEmail: card.fromEmail,
+        subject: card.subject,
+        body,
+      });
+
+      // Skip if confidence too low or same column
+      if (classification.confidence < 30) continue;
+
+      const suggestedColumn = classification.suggestedColumn || (classification.isLead ? 'Leads' : 'General');
+
+      // SAFEGUARD: Never move to Fail unless confidence > 90%
+      if (suggestedColumn === 'Fail' && classification.confidence < 90) {
+        console.log(`[RECLASSIFY] SKIP Fail for "${card.subject}" — confidence ${classification.confidence}% < 90% threshold`);
+        continue;
+      }
+
+      const targetColumn = await prisma.column.findFirst({
+        where: { boardId: card.column.boardId, title: suggestedColumn },
+      });
+
+      if (!targetColumn || targetColumn.id === card.columnId) continue;
+
+      // Move card
+      await prisma.card.update({
+        where: { id: card.id },
+        data: {
+          columnId: targetColumn.id,
+          metadata: classification as any,
+          lastActivityAt: new Date(),
+        },
+      });
+
+      // Log activity
+      await prisma.activityLog.create({
+        data: {
+          type: 'ai_reclassified',
+          content: {
+            from: card.column.title,
+            to: suggestedColumn,
+            category: classification.category,
+            confidence: classification.confidence,
+            reason: classification.reason,
+          },
+          cardId: card.id,
+          tenantId,
+        },
+      });
+
+      reclassified++;
+      results.push({
+        cardId: card.id,
+        subject: card.subject,
+        from: card.fromEmail,
+        oldColumn: card.column.title,
+        newCategory: classification.category,
+        confidence: classification.confidence,
+      });
+
+      console.log(`[RECLASSIFY] ${card.subject} → ${suggestedColumn} (${classification.confidence}%)`);
+    } catch (e: any) {
+      errors++;
+      console.error(`[RECLASSIFY] Failed for card ${card.id}: ${e.message}`);
+    }
+  }
+
+  return NextResponse.json({
+    total: cards.length,
+    reclassified,
+    errors,
+    results,
+  });
+}

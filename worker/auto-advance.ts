@@ -1,8 +1,14 @@
 import prisma from '../src/lib/prisma';
-import { aiProcessQueue } from '../queue';
 
 const ADVANCE_DAYS = 7;
 
+/**
+ * AUTO-ADVANCE RULES (UPDATED):
+ * - Cards do NOT auto-advance automatically
+ * - Cards ONLY move when user sends a follow-up email via "Send Now" button
+ * - This function now only marks cards as "stale" (overdue) for UI display
+ * - The actual column move happens in draft.ts sendDraft()
+ */
 export async function processAutoAdvance(data: { tenantId: string; cardId: string }) {
   const { tenantId, cardId } = data;
 
@@ -13,44 +19,17 @@ export async function processAutoAdvance(data: { tenantId: string; cardId: strin
     },
   });
 
-  if (!card || card.highlighted) return;
+  if (!card) return;
 
-  // Find next column
-  const nextColumn = await prisma.column.findFirst({
-    where: {
-      boardId: card.column.boardId,
-      position: card.column.position + 1,
-    },
-    orderBy: { position: 'asc' },
-  });
+  // If card has been replied to (highlighted), it's not stale
+  if (card.highlighted) return;
 
-  if (!nextColumn) return;
+  // Only check cards in "Follow up" columns
+  if (!card.column.title.startsWith('Follow up')) return;
 
-  // Move card
-  await prisma.card.update({
-    where: { id: cardId },
-    data: {
-      columnId: nextColumn.id,
-      lastActivityAt: new Date(),
-      nextFollowUpAt: new Date(Date.now() + ADVANCE_DAYS * 24 * 60 * 60 * 1000),
-    },
-  });
-
-  await prisma.activityLog.create({
-    data: {
-      type: 'system_advanced',
-      content: { fromColumn: card.column.title, toColumn: nextColumn.title },
-      cardId,
-      tenantId,
-    },
-  });
-
-  // Generate follow-up draft for new column
-  const followUpNumber = parseInt(nextColumn.title.replace('Follow up ', '')) || 1;
-  await aiProcessQueue.add('draft_followup', {
-    type: 'draft_followup',
-    tenantId,
-    cardId,
-    followUpNumber,
-  });
+  // Check if nextFollowUpAt has passed — mark as overdue (for UI display)
+  if (card.nextFollowUpAt && card.nextFollowUpAt <= new Date()) {
+    console.log(`[Auto-Advance] Card ${cardId} is overdue in ${card.column.title} — waiting for user to send follow-up`);
+    // Don't auto-advance — just log. User must click "Send Now" to move.
+  }
 }

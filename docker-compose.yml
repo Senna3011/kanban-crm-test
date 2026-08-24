@@ -1,0 +1,21 @@
+services:
+  postgres:
+    image: postgres:16
+    container_name: kanban-postgres
+    environment:
+      POSTGRES_USER: kanban
+      POSTGRES_PASSWORD: kanban123
+      POSTGRES_DB: kanban-crm
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+
+  redis:
+    image: redis:7
+    container_name: kanban-redis
+    ports:
+      - "6379:6379"
+
+volumes:
+  pgdata:

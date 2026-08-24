@@ -16,9 +16,11 @@ export default function KanbanBoard() {
   const [showColumnSettings, setShowColumnSettings] = useState(false);
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);
+  const [reclassifying, setReclassifying] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [boardName, setBoardName] = useState('Board');
   const [totalUnread, setTotalUnread] = useState(0);
+  const [aiStatus, setAiStatus] = useState<{ configured: boolean; valid?: boolean; message: string } | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const isDragging = useRef(false);
   const startX = useRef(0);
@@ -96,6 +98,14 @@ export default function KanbanBoard() {
     fetch('/api/cards?status=unread')
       .then(r => r.json())
       .then((cards: any[]) => setTotalUnread(cards.length))
+      .catch(() => {});
+  }, []);
+
+  // Check AI status
+  useEffect(() => {
+    fetch('/api/ai-status')
+      .then(r => r.json())
+      .then(setAiStatus)
       .catch(() => {});
   }, []);
 
@@ -226,6 +236,22 @@ export default function KanbanBoard() {
     }
   }
 
+  async function handleReclassify() {
+    if (!confirm('Re-run AI classification on all cards? Cards may move between columns.')) return;
+    setReclassifying(true);
+    try {
+      const res = await fetch('/api/reclassify', { method: 'POST' });
+      if (!res.ok) throw new Error('Reclassify failed');
+      const data = await res.json();
+      toast.success(`Reclassified ${data.reclassified} of ${data.total} cards`);
+      fetchColumns();
+    } catch (err: any) {
+      toast.error(err.message || 'Reclassify failed');
+    } finally {
+      setReclassifying(false);
+    }
+  }
+
   if (loading) {
     return (
       <div className="h-full flex items-center justify-center">
@@ -270,6 +296,18 @@ export default function KanbanBoard() {
   return (
     <div className="h-full flex flex-col">
       <Toaster position="top-right" />
+      {aiStatus && !aiStatus.valid && (
+        <div className="mb-3 px-4 py-3 rounded-lg border text-sm flex items-start gap-3 bg-amber-50 border-amber-300 text-amber-800">
+          <span className="text-lg leading-none mt-0.5">⚠️</span>
+          <div>
+            <p className="font-medium">{aiStatus.message}</p>
+            <p className="mt-1 text-xs text-amber-600">
+              Email tetap masuk, tapi <strong>AI classification</strong> dan <strong>auto-draft</strong> tidak jalan sampai token diisi ulang.
+              Semua email akan masuk kolom <strong>Unreads</strong> secara default.
+            </p>
+          </div>
+        </div>
+      )}
       <div className="flex items-center justify-between mb-4">
         <div className="flex items-center gap-3">
           <h1 className="text-2xl font-bold text-gray-900">{boardName}</h1>
@@ -286,6 +324,14 @@ export default function KanbanBoard() {
             className="px-3 py-1.5 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50"
           >
             {syncing ? '⏳ Syncing...' : '🔄 Sync'}
+          </button>
+          <button
+            onClick={handleReclassify}
+            disabled={reclassifying}
+            className="px-3 py-1.5 text-sm font-medium text-amber-700 bg-amber-50 border border-amber-300 rounded-lg hover:bg-amber-100 disabled:opacity-50"
+            title="Re-run AI classification on all existing cards"
+          >
+            {reclassifying ? '⏳ Classifying...' : '🧠 Reclassify'}
           </button>
           <button
             onClick={() => setShowColumnSettings(true)}

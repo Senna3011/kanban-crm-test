@@ -66,17 +66,36 @@ export async function sendDraft(draftId: string, fromAddress?: string) {
     },
   });
 
-  // Move card to next column
+  // Move card to next column + set nextFollowUpAt for auto-advance
+  const ADVANCE_DAYS = 7;
   const currentColumn = await prisma.column.findUnique({ where: { id: draft.card.columnId } });
   if (currentColumn) {
-    const nextColumn = await prisma.column.findFirst({
-      where: { boardId: currentColumn.boardId, position: currentColumn.position + 1 },
-      orderBy: { position: 'asc' },
-    });
-    if (nextColumn) {
+    // Rule: If card is in "Leads" and we send first email, move to "Follow up 1"
+    // Rule: If card is in "Follow up N", move to "Follow up N+1"
+    let targetColumn;
+
+    if (currentColumn.title === 'Leads') {
+      // First email to a lead → move to Follow up 1
+      targetColumn = await prisma.column.findFirst({
+        where: { boardId: currentColumn.boardId, title: 'Follow up 1' },
+      });
+    } else if (currentColumn.title.startsWith('Follow up')) {
+      // In Follow up column → move to next column
+      targetColumn = await prisma.column.findFirst({
+        where: { boardId: currentColumn.boardId, position: currentColumn.position + 1 },
+        orderBy: { position: 'asc' },
+      });
+    }
+
+    if (targetColumn) {
       await prisma.card.update({
         where: { id: draft.cardId },
-        data: { columnId: nextColumn.id, lastActivityAt: new Date() },
+        data: {
+          columnId: targetColumn.id,
+          lastActivityAt: new Date(),
+          nextFollowUpAt: new Date(Date.now() + ADVANCE_DAYS * 24 * 60 * 60 * 1000),
+          highlighted: false, // Reset reply status when we send a new follow-up
+        },
       });
     }
   }

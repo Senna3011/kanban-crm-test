@@ -22,6 +22,12 @@ export default function KanbanCard({ card, onClick, isDragging, onToggleRead, on
   const isUnread = card.status === 'unread';
   const isReply = card.highlighted;
 
+  // Trello-like indicators
+  const threadCount = card.threadCount ?? 1;
+  const hasDescription = (card.descLen ?? 0) > 0;
+  const followUpDate = card.nextFollowUpAt ? new Date(card.nextFollowUpAt) : null;
+  const isOverdue = followUpDate ? followUpDate < new Date() : false;
+
   const style = {
     transform: CSS.Transform.toString(transform),
     transition,
@@ -66,6 +72,38 @@ export default function KanbanCard({ card, onClick, isDragging, onToggleRead, on
         <span className="text-xs text-gray-400">
           {new Date(card.lastActivityAt).toLocaleDateString()}
         </span>
+        {/* Trello-like card indicators */}
+        <div className="flex items-center gap-2">
+          {threadCount > 1 && (
+            <span className="inline-flex items-center gap-0.5 text-xs text-gray-500" title={`${threadCount} messages in thread`}>
+              <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+              </svg>
+              {threadCount}
+            </span>
+          )}
+          {hasDescription && (
+            <span className="text-xs text-gray-400" title="Has description">
+              <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h16M4 18h7" />
+              </svg>
+            </span>
+          )}
+          {followUpDate && (
+            <span
+              className={clsx(
+                'inline-flex items-center gap-0.5 text-xs',
+                isOverdue ? 'text-red-500 font-medium' : 'text-gray-500'
+              )}
+              title={isOverdue ? `Overdue: ${followUpDate.toLocaleDateString()}` : `Follow up: ${followUpDate.toLocaleDateString()}`}
+            >
+              <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+              </svg>
+              {isOverdue ? 'Overdue' : followUpDate.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
+            </span>
+          )}
+        </div>
         {!isDragging && (
           <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
             <button

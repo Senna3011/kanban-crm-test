@@ -33,13 +33,25 @@ export async function classifyEmail(params: {
       messages: [
         {
           role: 'system',
-          content: `You are a CRM AI assistant. Classify inbound emails into exactly one category.
+          content: `You are a CRM AI assistant for a digital marketing agency (Jet Digital Pro). Classify inbound emails into exactly one category.
 Company context: ${params.companyContext}
 
+CRITICAL RULES — Read these FIRST:
+- If someone explicitly wants to PAY, SCHEDULE, or HIRE us → "lead"
+- If someone mentions a PROJECT with budget/timeline → "lead"
+- If it's a forward from a team member about a potential deal → "lead"
+- If someone asks for PRICING or QUOTE → "lead"
+- Meeting requests are ALWAYS leads
+- Emails mentioning clients, SEO, content, writing services are leads
+- If it's an automated notification, receipt, or system email → "general"
+- If it's a forwarded email from a service (order updates, delivery, etc.) → "general"
+- Only classify as "spam" if it's clearly phishing, crypto scams, or completely unrelated junk
+- NEVER classify business emails as spam
+
 Categories:
-- "lead": the sender shows genuine purchase intent, inquiry about services/pricing, or is a prospective client/partner conversation.
-- "general": legitimate email that is NOT a sales lead — internal forwards without a clear external ask, system/service notifications (password reset, login alerts, delivery status), collaboration/document comments, work correspondence unrelated to sales.
-- "spam": unsolicited marketing, phishing, suspicious content, or clearly irrelevant junk.
+- "lead": the sender explicitly wants business with us — wants to pay, buy, schedule a meeting, get a quote, start a project, hire us, or discusses a deal. Meeting requests, pricing inquiries, and client-related emails are ALWAYS leads.
+- "general": automated emails, order notifications, delivery updates, password resets, system alerts, newsletter subscriptions, or forwarded emails without a clear sales ask.
+- "spam": unsolicited junk — phishing, crypto scams, random bulk marketing completely unrelated to our services. Do NOT classify business inquiries as spam.
 
 Respond in JSON format only:
 {
@@ -48,14 +60,15 @@ Respond in JSON format only:
   "reason": "brief reason",
   "extractedCompany": "company name if mentioned",
   "interestLevel": "high|medium|low",
-  "category": "lead|general|spam",
-  "suggestedColumn": "Leads|General|Fail"
+  "category": "lead|general|spam|uncertain",
+  "suggestedColumn": "Leads|General|Fail|General"
 }
 
 Rules:
 - category "lead" -> isLead true, suggestedColumn "Leads"
 - category "general" -> isLead false, suggestedColumn "General"
-- category "spam" -> isLead false, suggestedColumn "Fail"`,
+- category "spam" -> isLead false, suggestedColumn "Fail"
+- category "uncertain" -> isLead false, suggestedColumn "General", add "[UNCERTAIN]" prefix to reason`,
         },
         {
           role: 'user',
@@ -73,8 +86,11 @@ Body: ${params.body}`,
   const content = data.choices?.[0]?.message?.content;
 
   try {
-    return JSON.parse(content);
+    const parsed = JSON.parse(content);
+    console.log(`[AI CLASSIFY] "${params.subject}" → category=${parsed.category}, confidence=${parsed.confidence}, reason=${parsed.reason}`);
+    return parsed;
   } catch {
+    console.log(`[AI CLASSIFY] FAILED TO PARSE for "${params.subject}": ${content}`);
     return {
       isLead: false,
       confidence: 0,
@@ -111,27 +127,26 @@ export async function generateFollowUpDraft(params: {
       messages: [
         {
           role: 'system',
-          content: `You are a sales AI assistant for JetDigitalPro. Write a professional follow-up email.
+          content: `You write reply emails for a salesperson named ${params.senderName} at JetDigitalPro.
+
+The reply goes TO: ${params.contactName} <${params.contactEmail}>
+
+STRICT RULES — violating any = wrong output:
+1. You ARE ${params.senderName}. You are NOT the client.
+2. NEVER use phrases like: "I would like", "I want to", "Please give me", "Can I get", "I need" — these are CLIENT phrases
+3. ALWAYS use phrases like: "I'd be happy to", "Let me", "Here's", "We can", "I can share", "Absolutely" — these are SENDER phrases
+4. The email must offer something, not ask for something
+5. Reference what the CLIENT said in their email, then RESPOND to it
+6. End with a clear next step (schedule call, share info, etc.)
+7. Keep under 120 words
+8. Use "Re:" prefix in subject if this is a follow-up
 
 Company context: ${params.companyContext}
-This is follow-up #${params.followUpNumber}.
+Follow-up number: ${params.followUpNumber}
 
-CRITICAL RULES:
-- The email is FROM: ${params.senderName} (JetDigitalPro)
-- The email is TO: the CLIENT (not to the sender or internal team)
-- If the conversation history shows a forwarded email, extract the ORIGINAL client from the "To:" header
-- Do NOT address the email to the person who forwarded it
-- Keep under 150 words
-- Professional but not pushy
-- Include a clear CTA
-- Reference previous conversation if available
-- Generate subject and body
-
-Respond in JSON:
-{
-  "subject": "email subject",
-  "body": "email body text"
-}`,
+Respond ONLY in this JSON format:
+{"subject": "Re: ...", "body": "..."}
+`,
         },
         {
           role: 'user',
@@ -149,11 +164,37 @@ Company: ${params.extractedCompany || 'Unknown'}${historyText}`,
   const content = data.choices?.[0]?.message?.content;
 
   try {
-    return JSON.parse(content);
+    const parsed = JSON.parse(content);
+
+    // Post-process: replace client phrases with sender-appropriate alternatives
+    if (parsed.body) {
+      parsed.body = parsed.body
+        .replace(/please give me the pricing/gi, "I'd be happy to share our pricing options")
+        .replace(/please give me pricing/gi, "I'd be happy to share our pricing")
+        .replace(/i would like to know/gi, "Let me share")
+        .replace(/i want to know/gi, "Let me explain")
+        .replace(/can i get/gi, "I can provide")
+        .replace(/i need/gi, "I can help with")
+        .replace(/could you provide/gi, "I can share")
+        .replace(/i am interested in/gi, "I'd be happy to discuss")
+        .replace(/i'm interested in/gi, "I'd be happy to discuss")
+        .replace(/would you be able to/gi, "I can")
+        .replace(/can you send me/gi, "I'll send you")
+        .replace(/i was wondering/gi, "Let me share");
+
+      // Validate: if body still contains client phrases, use fallback
+      const stillClient = /please give me|i would like|i want to|can i get|i need|could you provide/i.test(parsed.body);
+      if (stillClient) {
+        console.log(`[AI DRAFT] Post-process failed, using fallback for ${params.contactEmail}`);
+        parsed.body = `Hi ${params.contactName},\n\nThank you for your interest. I'd be happy to share more details about our services and discuss how we can help.\n\nWould you be available for a quick call this week?\n\nBest regards,\n${params.senderName}`;
+      }
+    }
+
+    return parsed;
   } catch {
     return {
-      subject: `Following up - ${params.contactName}`,
-      body: `Hi ${params.contactName},\n\nI wanted to follow up on our previous conversation. Would you be available for a quick call?\n\nBest regards`,
+      subject: `Re: Following up`,
+      body: `Hi ${params.contactName},\n\nThank you for your interest. I'd be happy to share more details about our services and discuss how we can help.\n\nWould you be available for a quick call this week?\n\nBest regards,\n${params.senderName}`,
     };
   }
 }

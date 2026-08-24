@@ -100,32 +100,31 @@ export class EmailAdapter implements ChannelAdapter {
     }
   }
 
-  async syncReadStatus(config: Record<string, string>, folder = 'INBOX'): Promise<Map<string, boolean>> {
-    const statusMap = new Map<string, boolean>();
+  async syncReadStatus(config: Record<string, string>, folder = 'INBOX'): Promise<Map<string, { isRead: boolean; isReplied: boolean }>> {
+    const statusMap = new Map<string, { isRead: boolean; isReplied: boolean }>();
     const imap = createImapConnection(config);
     try {
       await imap.connect();
       await imap.mailboxOpen(folder, { readOnly: true });
       const since = new Date();
       since.setDate(since.getDate() - 30);
-      // Fetch source + flags so we can match by Message-ID (stable across compaction)
       for await (const message of imap.fetch({ since }, { source: true, uid: true, flags: true })) {
         if (!message.source) continue;
         const uid = message.uid;
         if (!uid) continue;
-        const isRead = message.flags instanceof Set && [...message.flags].some(f => f.endsWith('Seen'));
+        const flags = message.flags instanceof Set ? [...message.flags] : [];
+        const isRead = flags.some(f => f.endsWith('Seen'));
+        const isReplied = flags.some(f => f.endsWith('Answered'));
         try {
           const { simpleParser } = await import('mailparser');
           const parsed = await simpleParser(message.source);
           const messageId = parsed.messageId?.trim();
           if (messageId) {
-            statusMap.set(messageId, isRead);
+            statusMap.set(messageId, { isRead, isReplied });
           }
-          // Also map by UID for backward compatibility
-          statusMap.set(`uid:${uid}`, isRead);
+          statusMap.set(`uid:${uid}`, { isRead, isReplied });
         } catch {
-          // Fallback: UID-only mapping
-          statusMap.set(`uid:${uid}`, isRead);
+          statusMap.set(`uid:${uid}`, { isRead, isReplied });
         }
       }
       return statusMap;

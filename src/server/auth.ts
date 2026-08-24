@@ -19,8 +19,8 @@ export const authOptions: NextAuthOptions = {
       async authorize(credentials) {
         if (!credentials?.email || !credentials?.password) return null;
 
-        // Rate limiting: get client IP from headers
-        const headersList = headers();
+        // Rate limiting: get client IP from headers (NextAuth v4 uses old API)
+        const headersList = await headers();
         const forwardedFor = headersList.get('x-forwarded-for');
         const realIp = headersList.get('x-real-ip');
         const clientIp = forwardedFor

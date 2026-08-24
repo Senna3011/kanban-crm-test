@@ -24,11 +24,46 @@ export async function GET(req: NextRequest) {
     include: {
       cards: {
         orderBy: { lastActivityAt: 'desc' },
+        select: {
+          id: true, subject: true, fromEmail: true, fromName: true,
+          bodyText: true, status: true, channel: true, highlighted: true,
+          columnId: true, assignedToId: true, lastActivityAt: true,
+          nextFollowUpAt: true, metadata: true, createdAt: true,
+        },
       },
     },
   });
 
-  return NextResponse.json(columns);
+  // Compute threadCount per card: group cards by normalized subject within this board's cards
+  const allCards = columns.flatMap(c => c.cards);
+  const subjectGroups = new Map<string, string[]>();
+  for (const c of allCards) {
+    const base = (c.subject || '')
+      .replace(/^(re:|fw:|fwd:|re\s*\[\d+\]:)\s*/gi, '')
+      .trim()
+      .toLowerCase();
+    const key = base || c.id;
+    if (!subjectGroups.has(key)) subjectGroups.set(key, []);
+    subjectGroups.get(key)!.push(c.id);
+  }
+  const threadCountMap = new Map<string, number>();
+  for (const [key, ids] of subjectGroups) {
+    for (const id of ids) {
+      threadCountMap.set(id, ids.length);
+    }
+  }
+
+  // Add threadCount and descLen to each card
+  const enriched = columns.map(col => ({
+    ...col,
+    cards: col.cards.map(card => ({
+      ...card,
+      threadCount: threadCountMap.get(card.id) || 1,
+      descLen: card.bodyText ? card.bodyText.length : 0,
+    })),
+  }));
+
+  return NextResponse.json(enriched);
 }
 
 export async function POST(req: NextRequest) {

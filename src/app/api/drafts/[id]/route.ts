@@ -5,20 +5,21 @@ import prisma from '@/lib/prisma';
 import { decrypt } from '@/lib/encryption';
 import { createTransport } from 'nodemailer';
 
-export async function PUT(req: NextRequest, { params }: { params: { id: string } }) {
+export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
   const session = await getServerSession(authOptions);
   if (!session?.user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   const tenantId = (session.user as any).tenantId;
   const body = await req.json();
 
-  const draft = await prisma.draftMessage.findUnique({ where: { id: params.id } });
+  const draft = await prisma.draftMessage.findUnique({ where: { id: id } });
   if (!draft || draft.tenantId !== tenantId) {
     return NextResponse.json({ error: 'Not found' }, { status: 404 });
   }
 
   const updated = await prisma.draftMessage.update({
-    where: { id: params.id },
+    where: { id: id },
     data: {
       body: body.body,
       subject: body.subject,
@@ -30,7 +31,7 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
   await prisma.activityLog.create({
     data: {
       type: 'user_edited',
-      content: { draftId: params.id },
+      content: { draftId: id },
       cardId: draft.cardId,
       tenantId,
     },
@@ -39,14 +40,15 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
   return NextResponse.json(updated);
 }
 
-export async function POST(req: NextRequest, { params }: { params: { id: string } }) {
+export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
   const session = await getServerSession(authOptions);
   if (!session?.user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   const tenantId = (session.user as any).tenantId;
 
   const draft = await prisma.draftMessage.findUnique({
-    where: { id: params.id },
+    where: { id: id },
     include: { card: true },
   });
   if (!draft || draft.tenantId !== tenantId) {
@@ -76,7 +78,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
 
   // Update draft
   await prisma.draftMessage.update({
-    where: { id: params.id },
+    where: { id: id },
     data: { status: 'sent', sentAt: new Date() },
   });
 
@@ -84,7 +86,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
   await prisma.activityLog.create({
     data: {
       type: 'email_sent',
-      content: { draftId: params.id, subject: draft.subject, to: draft.card.fromEmail },
+      content: { draftId: id, subject: draft.subject, to: draft.card.fromEmail },
       cardId: draft.cardId,
       tenantId,
     },

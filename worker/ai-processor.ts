@@ -22,7 +22,12 @@ export async function processAIClassify(data: {
     body,
   });
 
-  console.log(`[AI] Classified card ${cardId}: isLead=${classification.isLead}, confidence=${classification.confidence}`);
+  console.log(`[AI] Classified card ${cardId}: category=${classification.category}, isLead=${classification.isLead}, confidence=${classification.confidence}, reason=${classification.reason}`);
+
+  // Check if AI call actually worked (confidence > 0 means valid response)
+  if (classification.confidence === 0 && classification.reason?.includes('Failed to parse')) {
+    console.log(`[AI] WARNING: Classification failed for card ${cardId} — check DEEPSEEK_API_KEY`);
+  }
 
   // Log AI classification
   await prisma.activityLog.create({

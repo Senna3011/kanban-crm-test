@@ -71,6 +71,32 @@ async function pollFolder(imapConfig: Record<string, string>, folder: string, te
         continue;
       }
 
+      // Skip outbound emails — if fromEmail is from our domain or matches any configured user
+      const senderEmail = msg.fromEmail?.toLowerCase() || '';
+      const isOurDomain = senderEmail.endsWith('@jetdigitalpro.com');
+      const isConfigUser = imapConfig.user && senderEmail === imapConfig.user.toLowerCase();
+      if (isOurDomain || isConfigUser) {
+        console.log(`[IMAP Poller] Skipping outbound email: ${msg.subject} (from ${msg.fromEmail})`);
+        continue;
+      }
+
+      // Skip reply emails — if this is a reply to an existing thread, don't create new card
+      // The reply will be picked up by reply detection (highlighted) on the original card
+      if (msg.inReplyTo) {
+        const parentCard = await prisma.card.findFirst({ where: { messageId: msg.inReplyTo, tenantId } });
+        if (parentCard) {
+          // Mark parent card as replied (highlighted)
+          await prisma.card.update({ where: { id: parentCard.id }, data: { highlighted: true, lastActivityAt: new Date() } });
+          await prisma.activityLog.create({
+            data: { type: 'email_reply_received', content: { messageId: msg.messageId, subject: msg.subject, from: msg.fromEmail, replyTo: msg.inReplyTo }, cardId: parentCard.id, tenantId },
+          });
+          console.log(`[IMAP Poller] Reply detected: "${msg.subject}" → parent card ${parentCard.id} marked as highlighted`);
+          continue;
+        }
+        // If parent not found, might be a new thread — allow creation
+        console.log(`[IMAP Poller] Reply to unknown message ${msg.inReplyTo}, creating new card`);
+      }
+
       const board = await resolveBoard(tenantId, msg.toEmail, folder);
       if (!board) continue;
 
@@ -161,19 +187,33 @@ export async function processEmailPoll(data: { tenantId: string; emailConfigId: 
       let matched = 0;
       for (const card of cards) {
         // Primary: match by Message-ID (stable)
-        let isRead: boolean | undefined;
+        let status: { isRead: boolean; isReplied: boolean } | undefined;
         if (card.messageId) {
-          isRead = statusMap.get(card.messageId);
+          status = statusMap.get(card.messageId);
         }
         // Fallback: match by UID (may be stale after compaction)
-        if (isRead === undefined && card.imapUid) {
-          isRead = statusMap.get(`uid:${card.imapUid}`);
+        if (!status && card.imapUid) {
+          status = statusMap.get(`uid:${card.imapUid}`);
         }
-        if (isRead === undefined) continue;
+        if (!status) continue;
         matched++;
-        const newStatus = isRead ? 'read' : 'unread';
+
+        const updateData: any = {};
+
+        // Sync read/unread status
+        const newStatus = status.isRead ? 'read' : 'unread';
         if (card.status !== newStatus) {
-          await prisma.card.update({ where: { id: card.id }, data: { status: newStatus } });
+          updateData.status = newStatus;
+        }
+
+        // Sync reply detection — if email has \Answered flag, mark card as highlighted (replied)
+        if (status.isReplied) {
+          updateData.highlighted = true;
+          console.log(`[IMAP Poller] Detected reply for card ${card.messageId} — marking as highlighted`);
+        }
+
+        if (Object.keys(updateData).length > 0) {
+          await prisma.card.update({ where: { id: card.id }, data: updateData });
           updated++;
         }
       }

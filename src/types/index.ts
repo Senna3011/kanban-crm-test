@@ -23,6 +23,10 @@ export interface CardData {
   nextFollowUpAt: string | null;
   metadata: any;
   createdAt: string;
+  /** Number of distinct email cards in this conversation thread */
+  threadCount?: number;
+  /** Whether the card has a description/body */
+  descLen?: number;
 }
 
 export interface ActivityLogData {
