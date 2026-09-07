@@ -61,6 +61,9 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   }
 
   // Send via SMTP
+  if (!emailConfig.smtpPass) {
+    return NextResponse.json({ error: 'SMTP password not configured for this email config' }, { status: 400 });
+  }
   const transporter = createTransport({
     host: emailConfig.smtpHost,
     port: emailConfig.smtpPort,

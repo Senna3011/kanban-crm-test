@@ -68,38 +68,46 @@ export default function ColumnSettings({ columns, onChange, onClose }: Props) {
 
   return (
     <Modal open={true} onClose={onClose} title="Manage Columns">
-      <div className="space-y-3 max-h-96 overflow-y-auto">
+      <div className="space-y-2.5 max-h-96 overflow-y-auto pr-1">
         {localCols.map((col) => (
-          <div key={col.id} className="flex items-center gap-2 p-2 bg-gray-50 rounded-lg">
+          <div key={col.id} className="flex items-center gap-2 p-2.5 bg-slate-50 border border-slate-200/70 rounded-xl">
             <div className="flex flex-col gap-0.5">
-              <button onClick={() => moveUp(col.id)} className="text-xs text-gray-400 hover:text-gray-700">&uarr;</button>
-              <button onClick={() => moveDown(col.id)} className="text-xs text-gray-400 hover:text-gray-700">&darr;</button>
+              <button onClick={() => moveUp(col.id)} className="text-xs text-slate-400 hover:text-slate-700 leading-none">&uarr;</button>
+              <button onClick={() => moveDown(col.id)} className="text-xs text-slate-400 hover:text-slate-700 leading-none">&darr;</button>
             </div>
             <input
-              className="flex-1 px-2 py-1 text-sm border border-gray-200 rounded"
+              className="flex-1 px-2.5 py-1 text-xs border border-slate-200 rounded-lg bg-white text-slate-800 focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500 transition-all font-medium disabled:bg-slate-100 disabled:text-slate-400"
               value={col.title}
               onChange={(e) => renameColumn(col.id, e.target.value)}
               disabled={col.isSystem}
             />
-            <div className="flex gap-1">
+            <div className="flex gap-1 items-center">
               {COLORS.map((color) => (
                 <button
                   key={color}
-                  className={`w-4 h-4 rounded-full ${col.color === color ? 'ring-2 ring-offset-1 ring-gray-400' : ''}`}
+                  className={`w-3.5 h-3.5 rounded-full transition-transform ${col.color === color ? 'ring-2 ring-offset-1 ring-primary-500 scale-110' : 'hover:scale-105'}`}
                   style={{ backgroundColor: color }}
                   onClick={() => changeColor(col.id, color)}
                 />
               ))}
             </div>
             {!col.isSystem && (
-              <button onClick={() => deleteColumn(col.id)} className="text-red-400 hover:text-red-600 text-sm">&times;</button>
+              <button
+                onClick={() => deleteColumn(col.id)}
+                className="p-1 rounded hover:bg-rose-50 text-slate-400 hover:text-rose-600 transition-colors"
+                title="Delete column"
+              >
+                <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
             )}
           </div>
         ))}
       </div>
-      <div className="mt-4 flex items-center justify-between">
+      <div className="mt-5 pt-3 border-t border-slate-100 flex items-center justify-between">
         <Button variant="secondary" size="sm" onClick={addColumn}>+ Add Column</Button>
-        <Button size="sm" onClick={save}>Save</Button>
+        <Button size="sm" onClick={save}>Save Changes</Button>
       </div>
     </Modal>
   );

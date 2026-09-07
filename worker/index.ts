@@ -1,3 +1,4 @@
+import './env';
 import { Worker } from 'bullmq';
 import { connection, QueueNames } from '../queue';
 import { processEmailPoll } from './imap-poller';

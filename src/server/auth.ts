@@ -74,9 +74,23 @@ export const authOptions: NextAuthOptions = {
       }
       return session;
     },
+    async redirect({ url, baseUrl }) {
+      if (url.startsWith('/')) return url;
+      try {
+        const parsedUrl = new URL(url);
+        const parsedBase = new URL(baseUrl);
+        if (parsedUrl.origin === parsedBase.origin || parsedUrl.host.endsWith('trycloudflare.com')) {
+          return url;
+        }
+      } catch {
+        // Fallback
+      }
+      return '/login';
+    },
   },
   pages: {
     signIn: '/login',
   },
-  secret: process.env.NEXTAUTH_SECRET,
+  // trustHost: true,
+  secret: process.env.NEXTAUTH_SECRET || 'kanban-crm-default-secret-key-32chars',
 };

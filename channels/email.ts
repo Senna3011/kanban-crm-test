@@ -6,16 +6,22 @@ import type { InboundMessage, SendParams, SendResult } from '../src/types';
 
 function createImapConnection(config: Record<string, string>): ImapFlow {
   const port = parseInt(config.port, 10);
+  const authConfig: any = { user: config.user };
+  if (config.accessToken) {
+    authConfig.accessToken = config.accessToken;
+  } else {
+    authConfig.pass = config.password;
+  }
+
+  const rejectUnauthorized = process.env.NODE_ENV === 'production' && process.env.IMAP_ALLOW_SELF_SIGNED !== 'true';
+
   return new ImapFlow({
     host: config.host,
     port,
     secure: port === 993,
-    auth: {
-      user: config.user,
-      pass: config.password,
-    },
+    auth: authConfig,
     tls: {
-      rejectUnauthorized: false,
+      rejectUnauthorized,
     },
     logger: false,
   });
@@ -71,11 +77,11 @@ export class EmailAdapter implements ChannelAdapter {
     }
   }
 
-  async markAsRead(config: Record<string, string>, uid: number): Promise<boolean> {
+  async markAsRead(config: Record<string, string>, uid: number, folder = 'INBOX'): Promise<boolean> {
     const imap = createImapConnection(config);
     try {
       await imap.connect();
-      await imap.mailboxOpen('INBOX', { readOnly: false });
+      await imap.mailboxOpen(folder || 'INBOX', { readOnly: false });
       await imap.messageFlagsAdd({ uid }, ['\\Seen'], { uid: true });
       return true;
     } catch {
@@ -85,11 +91,11 @@ export class EmailAdapter implements ChannelAdapter {
     }
   }
 
-  async findUidByMessageId(config: Record<string, string>, messageId: string): Promise<number | null> {
+  async findUidByMessageId(config: Record<string, string>, messageId: string, folder = 'INBOX'): Promise<number | null> {
     const imap = createImapConnection(config);
     try {
       await imap.connect();
-      await imap.mailboxOpen('INBOX', { readOnly: true });
+      await imap.mailboxOpen(folder || 'INBOX', { readOnly: true });
       const results = await imap.search({ header: { 'Message-ID': messageId } });
       if (results && results.length > 0) return results[0];
       return null;
@@ -135,13 +141,42 @@ export class EmailAdapter implements ChannelAdapter {
     }
   }
 
-  async moveToFolder(config: Record<string, string>, uid: number, targetFolder: string): Promise<boolean> {
+  async moveToFolder(config: Record<string, string>, uid: number, targetFolder: string, sourceFolder = 'INBOX'): Promise<boolean> {
     const imap = createImapConnection(config);
     try {
       await imap.connect();
-      await imap.mailboxOpen('INBOX', { readOnly: false });
-      await imap.messageMove({ uid }, targetFolder, { uid: true });
-      return true;
+      await imap.mailboxOpen(sourceFolder || 'INBOX', { readOnly: false });
+
+      let destination = targetFolder;
+      try {
+        const mailboxes = await imap.list();
+        if (targetFolder.toLowerCase().includes('trash')) {
+          const trashBox = mailboxes.find(m =>
+            m.specialUse === '\\Trash' ||
+            m.path.toLowerCase().includes('trash') ||
+            m.path.includes('Sampah') ||
+            m.path.includes('Bin')
+          );
+          if (trashBox) destination = trashBox.path;
+        } else if (targetFolder.toLowerCase().includes('archive')) {
+          const archiveBox = mailboxes.find(m =>
+            m.specialUse === '\\Archive' ||
+            m.path.toLowerCase().includes('archive')
+          );
+          if (archiveBox) destination = archiveBox.path;
+        }
+      } catch {
+        // use default targetFolder
+      }
+
+      try {
+        await imap.messageMove({ uid }, destination, { uid: true });
+        return true;
+      } catch {
+        // Fallback: flag message as \Deleted
+        await imap.messageFlagsAdd({ uid }, ['\\Deleted'], { uid: true });
+        return true;
+      }
     } catch {
       return false;
     } finally {
@@ -151,11 +186,20 @@ export class EmailAdapter implements ChannelAdapter {
 
   async sendMessage(params: SendParams, config: Record<string, string>): Promise<SendResult> {
     try {
+      const port = parseInt(config.smtpPort);
+      const authConfig: any = { user: config.smtpUser };
+      if (config.accessToken) {
+        authConfig.type = 'OAuth2';
+        authConfig.accessToken = config.accessToken;
+      } else {
+        authConfig.pass = config.smtpPassword;
+      }
+
       const transporter = nodemailer.createTransport({
         host: config.smtpHost,
-        port: parseInt(config.smtpPort),
-        secure: parseInt(config.smtpPort) === 465,
-        auth: { user: config.smtpUser, pass: config.smtpPassword },
+        port,
+        secure: port === 465,
+        auth: authConfig,
       });
 
       const info = await transporter.sendMail({

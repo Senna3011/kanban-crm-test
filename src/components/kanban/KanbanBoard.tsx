@@ -21,6 +21,9 @@ export default function KanbanBoard() {
   const [boardName, setBoardName] = useState('Board');
   const [totalUnread, setTotalUnread] = useState(0);
   const [aiStatus, setAiStatus] = useState<{ configured: boolean; valid?: boolean; message: string } | null>(null);
+  const [selectionMode, setSelectionMode] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [bulkDeleting, setBulkDeleting] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   const isDragging = useRef(false);
   const startX = useRef(0);
@@ -222,6 +225,36 @@ export default function KanbanBoard() {
     }
   }
 
+  function handleToggleSelect(cardId: string) {
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      if (next.has(cardId)) next.delete(cardId);
+      else next.add(cardId);
+      return next;
+    });
+  }
+
+  async function handleBulkDelete() {
+    if (selectedIds.size === 0) return;
+    if (!confirm(`Delete ${selectedIds.size} selected card(s)? This will also archive the emails.`)) return;
+    setBulkDeleting(true);
+    let failed = 0;
+    for (const cardId of selectedIds) {
+      try {
+        const res = await fetch(`/api/cards/${cardId}`, { method: 'DELETE' });
+        if (!res.ok) failed++;
+      } catch {
+        failed++;
+      }
+    }
+    setBulkDeleting(false);
+    setSelectedIds(new Set());
+    setSelectionMode(false);
+    if (failed > 0) toast.error(`Deleted with ${failed} failure(s)`);
+    else toast.success(`${selectedIds.size} card(s) deleted`);
+    fetchColumns();
+  }
+
   async function handleSync() {
     setSyncing(true);
     try {
@@ -310,34 +343,75 @@ export default function KanbanBoard() {
       )}
       <div className="flex items-center justify-between mb-4">
         <div className="flex items-center gap-3">
-          <h1 className="text-2xl font-bold text-gray-900">{boardName}</h1>
+          <h1 className="text-xl font-bold tracking-tight text-slate-800">{boardName}</h1>
           {totalUnread > 0 && (
-            <span className="text-sm bg-blue-100 text-blue-700 px-2.5 py-1 rounded-full font-medium">
-              🔵 {totalUnread} unread
+            <span className="text-xs bg-primary-50 text-primary-700 border border-primary-200/80 px-2.5 py-0.5 rounded-full font-medium flex items-center gap-1.5">
+              <span className="w-1.5 h-1.5 rounded-full bg-primary-600 animate-pulse" />
+              {totalUnread} unread
             </span>
           )}
         </div>
         <div className="flex items-center gap-2">
+          {selectionMode ? (
+            <>
+              <span className="text-xs font-medium text-slate-500">{selectedIds.size} selected</span>
+              <button
+                onClick={handleBulkDelete}
+                disabled={selectedIds.size === 0 || bulkDeleting}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-white bg-rose-600 border border-rose-600 rounded-lg hover:bg-rose-700 shadow-sm transition-all disabled:opacity-50"
+              >
+                <svg className={`w-3.5 h-3.5 ${bulkDeleting ? 'animate-spin' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                </svg>
+                {bulkDeleting ? 'Deleting...' : `Delete (${selectedIds.size})`}
+              </button>
+              <button
+                onClick={() => { setSelectionMode(false); setSelectedIds(new Set()); }}
+                className="px-3 py-1.5 text-xs font-medium text-slate-600 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 shadow-sm transition-all"
+              >
+                Cancel
+              </button>
+            </>
+          ) : (
+            <button
+              onClick={() => setSelectionMode(true)}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-slate-700 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 hover:border-slate-300 shadow-sm transition-all"
+            >
+              <svg className="w-3.5 h-3.5 text-slate-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              Select
+            </button>
+          )}
           <button
             onClick={handleSync}
             disabled={syncing}
-            className="px-3 py-1.5 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50"
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-slate-700 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 hover:border-slate-300 shadow-sm transition-all disabled:opacity-50"
           >
-            {syncing ? '⏳ Syncing...' : '🔄 Sync'}
+            <svg className={`w-3.5 h-3.5 text-slate-500 ${syncing ? 'animate-spin' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+            </svg>
+            {syncing ? 'Syncing...' : 'Sync'}
           </button>
           <button
             onClick={handleReclassify}
             disabled={reclassifying}
-            className="px-3 py-1.5 text-sm font-medium text-amber-700 bg-amber-50 border border-amber-300 rounded-lg hover:bg-amber-100 disabled:opacity-50"
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-amber-700 bg-amber-50/80 border border-amber-200 rounded-lg hover:bg-amber-100/80 shadow-sm transition-all disabled:opacity-50"
             title="Re-run AI classification on all existing cards"
           >
-            {reclassifying ? '⏳ Classifying...' : '🧠 Reclassify'}
+            <svg className={`w-3.5 h-3.5 text-amber-600 ${reclassifying ? 'animate-spin' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z" />
+            </svg>
+            {reclassifying ? 'Classifying...' : 'Reclassify'}
           </button>
           <button
             onClick={() => setShowColumnSettings(true)}
-            className="px-3 py-1.5 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50"
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-slate-700 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 hover:border-slate-300 shadow-sm transition-all"
           >
-            Manage columns
+            <svg className="w-3.5 h-3.5 text-slate-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M10.5 6h9.75M10.5 6a1.5 1.5 0 11-3 0m3 0a1.5 1.5 0 10-3 0M3.75 6H7.5m3 12h9.75m-9.75 0a1.5 1.5 0 01-3 0m3 0a1.5 1.5 0 00-3 0m-3.75 0H7.5m9-6h3.75m-3.75 0a1.5 1.5 0 01-3 0m3 0a1.5 1.5 0 00-3 0m-9.75 0h9.75" />
+            </svg>
+            Columns
           </button>
         </div>
       </div>
@@ -359,6 +433,9 @@ export default function KanbanBoard() {
               onCardClick={(card) => setSelectedCard(card)}
               onToggleRead={handleToggleRead}
               onDelete={handleDeleteCard}
+              selectionMode={selectionMode}
+              selectedIds={selectedIds}
+              onToggleSelect={handleToggleSelect}
             />
           ))}
         </div>

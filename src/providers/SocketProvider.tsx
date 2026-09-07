@@ -1,10 +1,9 @@
 'use client';
 
 import { createContext, useContext, useEffect, useState, ReactNode } from 'react';
-import { io, Socket } from 'socket.io-client';
 
 interface SocketContextValue {
-  socket: Socket | null;
+  socket: null;
   connected: boolean;
   notificationCount: number;
 }
@@ -20,37 +19,49 @@ export function useSocket() {
 }
 
 export default function SocketProvider({ children, tenantId }: { children: ReactNode; tenantId: string }) {
-  const [socket, setSocket] = useState<Socket | null>(null);
   const [connected, setConnected] = useState(false);
   const [notificationCount, setNotificationCount] = useState(0);
 
   useEffect(() => {
-    // Socket.io connection to the main server
-    const s = io('/', {
-      transports: ['polling', 'websocket'],
-    });
+    // Connect to native Server-Sent Events endpoint to prevent socket.io 404 polling flood
+    if (typeof window === 'undefined') return;
 
-    s.on('connect', () => {
-      setConnected(true);
-      s.emit('join', tenantId);
-    });
+    let eventSource: EventSource | null = null;
+    try {
+      eventSource = new EventSource('/api/events');
 
-    s.on('disconnect', () => setConnected(false));
+      eventSource.onopen = () => {
+        setConnected(true);
+      };
 
-    s.on('notification', (data: { count: number }) => {
-      setNotificationCount(data.count);
-    });
+      eventSource.onmessage = (event) => {
+        try {
+          const data = JSON.parse(event.data);
+          if (data.type === 'notification' && typeof data.count === 'number') {
+            setNotificationCount(data.count);
+          }
+          if (data.type === 'card_updated') {
+            window.dispatchEvent(new CustomEvent('board-refresh'));
+          }
+        } catch {}
+      };
 
-    s.on('card_updated', () => {
-      window.dispatchEvent(new CustomEvent('board-refresh'));
-    });
+      eventSource.onerror = () => {
+        setConnected(false);
+      };
+    } catch {
+      setConnected(false);
+    }
 
-    setSocket(s);
-    return () => { s.close(); };
+    return () => {
+      if (eventSource) {
+        eventSource.close();
+      }
+    };
   }, [tenantId]);
 
   return (
-    <SocketContext.Provider value={{ socket, connected, notificationCount }}>
+    <SocketContext.Provider value={{ socket: null, connected, notificationCount }}>
       {children}
     </SocketContext.Provider>
   );

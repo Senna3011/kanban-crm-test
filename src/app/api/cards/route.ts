@@ -12,7 +12,7 @@ export async function GET(req: NextRequest) {
   const columnId = searchParams.get('columnId');
   const status = searchParams.get('status');
 
-  const where: any = { tenantId };
+  const where: any = { tenantId, NOT: { status: 'deleted' } };
   if (columnId) where.columnId = columnId;
   if (status) where.status = status;
 

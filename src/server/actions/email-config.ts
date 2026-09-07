@@ -7,6 +7,7 @@ import { encrypt, decrypt } from '@/lib/encryption';
 import { validateEmailConfigInput, type EmailConfigInput } from '@/lib/email-config-validation';
 import { ImapFlow } from 'imapflow';
 import nodemailer from 'nodemailer';
+import { getValidZohoAccessToken } from '@/lib/zoho-oauth';
 
 function requireSession() {
   return getServerSession(authOptions).then((session) => {
@@ -50,9 +51,11 @@ export async function getEmailConfigs() {
     company: { name: tenant?.name || companyInfo.name || '', products: companyInfo.products || '' },
     configs: configs.map(c => ({
       id: c.id, name: c.name, boardId: c.boardId || undefined,
+      authType: c.authType,
       imapHost: c.imapHost, imapPort: c.imapPort, imapUser: c.imapUser,
       smtpHost: c.smtpHost, smtpPort: c.smtpPort, smtpUser: c.smtpUser,
       hasImapPassword: Boolean(c.imapPass), hasSmtpPassword: Boolean(c.smtpPass),
+      hasOAuthToken: Boolean(c.accessToken),
       lastPolledAt: c.lastPolledAt?.toISOString() || null,
       isActive: c.isActive,
     })),
@@ -126,19 +129,41 @@ export async function deleteEmailConfig(id: string) {
 }
 
 export async function testImapConnection(data: {
+  configId?: string;
   host: string;
   port: number;
   user: string;
-  pass: string;
+  pass?: string;
 }): Promise<{ success: boolean; error?: string }> {
-  await requireSession();
+  const session = await requireSession();
+  const tenantId = (session.user as any).tenantId;
   try {
-    validateConnectionInput(data);
+    let authConfig: any;
+    if (data.configId) {
+      const config = await prisma.emailConfig.findFirst({
+        where: { id: data.configId, tenantId },
+      });
+      if (config?.authType === 'oauth2') {
+        const accessToken = await getValidZohoAccessToken(config.id);
+        authConfig = { user: data.user || config.imapUser, accessToken };
+      }
+    }
+
+    if (!authConfig) {
+      validateConnectionInput({
+        host: data.host,
+        port: data.port,
+        user: data.user,
+        pass: data.pass || '',
+      });
+      authConfig = { user: data.user, pass: data.pass };
+    }
+
     const imap = new ImapFlow({
       host: data.host,
       port: data.port,
       secure: data.port === 993,
-      auth: { user: data.user, pass: data.pass },
+      auth: authConfig,
       tls: { rejectUnauthorized: false },
       logger: false,
     });
@@ -156,14 +181,36 @@ export async function testImapConnection(data: {
 }
 
 export async function testSmtpConnection(data: {
+  configId?: string;
   host: string;
   port: number;
   user: string;
-  pass: string;
+  pass?: string;
 }): Promise<{ success: boolean; error?: string }> {
-  await requireSession();
+  const session = await requireSession();
+  const tenantId = (session.user as any).tenantId;
   try {
-    validateConnectionInput(data);
+    let authConfig: any;
+    if (data.configId) {
+      const config = await prisma.emailConfig.findFirst({
+        where: { id: data.configId, tenantId },
+      });
+      if (config?.authType === 'oauth2') {
+        const accessToken = await getValidZohoAccessToken(config.id);
+        authConfig = { type: 'OAuth2', user: data.user || config.smtpUser, accessToken };
+      }
+    }
+
+    if (!authConfig) {
+      validateConnectionInput({
+        host: data.host,
+        port: data.port,
+        user: data.user,
+        pass: data.pass || '',
+      });
+      authConfig = { user: data.user, pass: data.pass };
+    }
+
     const transporter = nodemailer.createTransport({
       host: data.host,
       port: data.port,
@@ -172,7 +219,7 @@ export async function testSmtpConnection(data: {
       connectionTimeout: 12000,
       greetingTimeout: 12000,
       socketTimeout: 15000,
-      auth: { user: data.user, pass: data.pass },
+      auth: authConfig,
     });
     await withTimeout(transporter.verify());
     transporter.close();

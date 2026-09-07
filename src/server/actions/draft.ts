@@ -4,6 +4,7 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/server/auth';
 import prisma from '@/lib/prisma';
 import { decrypt } from '@/lib/encryption';
+import { getValidZohoAccessToken } from '@/lib/zoho-oauth';
 import { createTransport } from 'nodemailer';
 
 export async function sendDraft(draftId: string, fromAddress?: string) {
@@ -30,14 +31,19 @@ export async function sendDraft(draftId: string, fromAddress?: string) {
   if (!emailConfig) throw new Error('Email not configured');
 
   // Send via SMTP
+  const authConfig: any = { user: emailConfig.smtpUser };
+  if (emailConfig.authType === 'oauth2') {
+    authConfig.type = 'OAuth2';
+    authConfig.accessToken = await getValidZohoAccessToken(emailConfig.id);
+  } else if (emailConfig.smtpPass) {
+    authConfig.pass = decrypt(emailConfig.smtpPass);
+  }
+
   const transporter = createTransport({
     host: emailConfig.smtpHost,
     port: emailConfig.smtpPort,
     secure: emailConfig.smtpPort === 465,
-    auth: {
-      user: emailConfig.smtpUser,
-      pass: decrypt(emailConfig.smtpPass),
-    },
+    auth: authConfig,
   });
 
   const sendFrom = fromAddress || emailConfig.smtpUser;

@@ -1,4 +1,10 @@
-const DEEPSEEK_API_URL = 'https://api.deepseek.com/v1/chat/completions';
+export function getAIConfig() {
+  const apiKey = process.env.AI_API_KEY || process.env.DEEPSEEK_API_KEY;
+  const baseUrl = process.env.AI_API_BASE || 'https://api.deepseek.com/v1';
+  const model = process.env.AI_MODEL || process.env.DEEPSEEK_MODEL || 'deepseek-chat';
+  const endpoint = baseUrl.endsWith('/chat/completions') ? baseUrl : baseUrl.replace(/\/$/, '') + '/chat/completions';
+  return { apiKey, endpoint, model };
+}
 
 export interface AIClassification {
   isLead: boolean;
@@ -22,14 +28,15 @@ export async function classifyEmail(params: {
   subject: string;
   body: string;
 }): Promise<AIClassification> {
-  const response = await fetch(DEEPSEEK_API_URL, {
+  const { apiKey, endpoint, model } = getAIConfig();
+  const response = await fetch(endpoint, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      'Authorization': `Bearer ${process.env.DEEPSEEK_API_KEY}`,
+      'Authorization': `Bearer ${apiKey}`,
     },
     body: JSON.stringify({
-      model: process.env.DEEPSEEK_MODEL || 'deepseek-chat',
+      model,
       messages: [
         {
           role: 'system',
@@ -116,14 +123,15 @@ export async function generateFollowUpDraft(params: {
     ? `\nConversation history:\n${params.conversationHistory.join('\n---\n')}`
     : '';
 
-  const response = await fetch(DEEPSEEK_API_URL, {
+  const { apiKey, endpoint, model } = getAIConfig();
+  const response = await fetch(endpoint, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      'Authorization': `Bearer ${process.env.DEEPSEEK_API_KEY}`,
+      'Authorization': `Bearer ${apiKey}`,
     },
     body: JSON.stringify({
-      model: process.env.DEEPSEEK_MODEL || 'deepseek-chat',
+      model,
       messages: [
         {
           role: 'system',

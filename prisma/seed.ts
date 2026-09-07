@@ -19,7 +19,7 @@ async function main() {
   });
 
   // Create admin user
-  const passwordHash = await bcrypt.hash(process.env.ADMIN_PASSWORD || 'admin123', 12);
+  const passwordHash = await bcrypt.hash(process.env.ADMIN_PASSWORD || 'jdp123', 12);
   const user = await prisma.user.upsert({
     where: { email: process.env.ADMIN_EMAIL || 'admin@jetdigitalpro.com' },
     update: {},

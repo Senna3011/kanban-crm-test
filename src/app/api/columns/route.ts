@@ -23,6 +23,9 @@ export async function GET(req: NextRequest) {
     orderBy: { position: 'asc' },
     include: {
       cards: {
+        where: {
+          NOT: { status: 'deleted' },
+        },
         orderBy: { lastActivityAt: 'desc' },
         select: {
           id: true, subject: true, fromEmail: true, fromName: true,

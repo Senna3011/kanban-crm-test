@@ -1,7 +1,7 @@
 import prisma from '../src/lib/prisma';
 import { emailPollQueue, autoAdvanceQueue } from '../queue';
 
-const POLL_INTERVAL_MS = 30 * 60 * 1000; // 30 minutes
+const POLL_INTERVAL_MS = parseInt(process.env.IMAP_POLL_INTERVAL_MS || '', 10) || 2 * 60 * 1000; // default 2 minutes
 const ADVANCE_CHECK_INTERVAL_MS = 60 * 60 * 1000; // 1 hour
 
 export function startSchedulers() {

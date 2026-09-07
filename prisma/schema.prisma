@@ -46,14 +46,19 @@ model User {
 model EmailConfig {
   id          String   @id @default(cuid())
   name        String   @default("Default")
-  imapHost    String
+  authType    String   @default("password")
+  imapHost    String   @default("imap.zoho.com")
   imapPort    Int      @default(993)
   imapUser    String
-  imapPass    String
-  smtpHost    String
+  imapPass    String?
+  smtpHost    String   @default("smtp.zoho.com")
   smtpPort    Int      @default(465)
   smtpUser    String
-  smtpPass    String
+  smtpPass    String?
+  accessToken String?
+  refreshToken String?
+  tokenExpiry DateTime?
+  zohoAccountId String?
   lastPolledAt DateTime?
   isActive    Boolean  @default(true)
   createdAt   DateTime @default(now())

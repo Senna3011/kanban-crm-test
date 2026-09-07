@@ -11,12 +11,24 @@ interface Props {
   onClick?: () => void;
   onToggleRead?: (cardId: string, currentStatus: string) => void;
   onDelete?: (cardId: string) => void;
+  selectionMode?: boolean;
+  isSelected?: boolean;
+  onToggleSelect?: (cardId: string) => void;
 }
 
-export default function KanbanCard({ card, onClick, isDragging, onToggleRead, onDelete }: Props) {
+export default function KanbanCard({
+  card,
+  onClick,
+  isDragging,
+  onToggleRead,
+  onDelete,
+  selectionMode,
+  isSelected,
+  onToggleSelect,
+}: Props) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging: isSortableDragging } = useSortable({
     id: card.id,
-    disabled: !!isDragging,
+    disabled: !!isDragging || !!selectionMode,
   });
 
   const isUnread = card.status === 'unread';
@@ -31,59 +43,85 @@ export default function KanbanCard({ card, onClick, isDragging, onToggleRead, on
   const style = {
     transform: CSS.Transform.toString(transform),
     transition,
-    borderLeftWidth: '4px',
-    borderLeftColor: isUnread ? '#3b82f6' : isReply ? '#f97316' : '#e5e7eb',
+    borderLeftWidth: '3px',
+    borderLeftColor: isSelected ? '#3b82f6' : isUnread ? '#4f46e5' : isReply ? '#ea580c' : '#e2e8f0',
   };
+
+  function handleCardClick() {
+    if (selectionMode) {
+      onToggleSelect?.(card.id);
+    } else {
+      onClick?.();
+    }
+  }
 
   return (
     <div
       ref={setNodeRef}
       style={style}
       {...attributes}
-      {...listeners}
-      onClick={onClick}
+      {...(selectionMode ? {} : listeners)}
+      onClick={handleCardClick}
       className={clsx(
-        'bg-white rounded-r-lg border border-l-0 p-3 cursor-pointer shadow-sm hover:shadow-md transition-shadow group',
-        (isDragging || isSortableDragging) && 'opacity-50 shadow-lg',
-        isUnread ? 'border-blue-200' : isReply ? 'border-orange-200' : 'border-gray-200'
+        'bg-white rounded-xl border border-l-0 p-3.5 cursor-pointer shadow-[0_1px_3px_rgba(0,0,0,0.04)] hover:shadow-[0_4px_12px_rgba(0,0,0,0.06)] hover:border-slate-300 transition-all group select-none relative',
+        (isDragging || isSortableDragging) && 'opacity-60 shadow-lg ring-2 ring-primary-400',
+        isSelected && 'ring-2 ring-blue-500 bg-blue-50/20 border-blue-200',
+        !isSelected && (isUnread ? 'border-primary-100 bg-primary-50/10' : isReply ? 'border-amber-100' : 'border-slate-200/80')
       )}
     >
       <div className="flex items-start justify-between gap-2">
+        {selectionMode && (
+          <div className="pt-0.5 flex-shrink-0" onClick={(e) => e.stopPropagation()}>
+            <input
+              type="checkbox"
+              checked={!!isSelected}
+              onChange={() => onToggleSelect?.(card.id)}
+              className="w-4 h-4 text-blue-600 rounded border-slate-300 focus:ring-blue-500 cursor-pointer"
+            />
+          </div>
+        )}
         <div className="min-w-0 flex-1">
-          <p className={clsx('text-sm truncate', isUnread ? 'font-bold text-gray-900' : 'font-medium text-gray-700')}>
-            {card.subject}
+          <p
+            className={clsx(
+              'text-sm leading-snug line-clamp-2 group-hover:text-primary-600 transition-colors',
+              isUnread ? 'font-semibold text-slate-900' : 'font-medium text-slate-700'
+            )}
+          >
+            {card.subject || '(No Subject)'}
           </p>
-          <p className="text-xs text-gray-500 mt-0.5 truncate">{card.fromName || card.fromEmail}</p>
+          <p className="text-xs text-slate-500 mt-1 truncate font-normal">
+            {card.fromName || card.fromEmail}
+          </p>
         </div>
-        <div className="flex flex-col gap-1 items-end">
+        <div className="flex flex-col gap-1 items-end flex-shrink-0">
           {isUnread && (
-            <span className="text-xs bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded-full whitespace-nowrap font-medium">
+            <span className="text-[10px] font-semibold tracking-wide bg-primary-50 text-primary-700 border border-primary-200/60 px-1.5 py-0.5 rounded-full whitespace-nowrap">
               NEW
             </span>
           )}
           {isReply && !isUnread && (
-            <span className="text-xs bg-orange-100 text-orange-700 px-1.5 py-0.5 rounded-full whitespace-nowrap">
+            <span className="text-[10px] font-medium bg-amber-50 text-amber-700 border border-amber-200/60 px-1.5 py-0.5 rounded-full whitespace-nowrap">
               Replied
             </span>
           )}
         </div>
       </div>
-      <div className="flex items-center justify-between mt-2">
-        <span className="text-xs text-gray-400">
-          {new Date(card.lastActivityAt).toLocaleDateString()}
+      <div className="flex items-center justify-between mt-3 pt-2 border-t border-slate-100">
+        <span className="text-[11px] text-slate-400 font-medium">
+          {new Date(card.lastActivityAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
         </span>
         {/* Trello-like card indicators */}
         <div className="flex items-center gap-2">
           {threadCount > 1 && (
-            <span className="inline-flex items-center gap-0.5 text-xs text-gray-500" title={`${threadCount} messages in thread`}>
-              <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <span className="inline-flex items-center gap-1 text-[11px] text-slate-500 font-medium" title={`${threadCount} messages in thread`}>
+              <svg className="w-3 h-3 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
               </svg>
               {threadCount}
             </span>
           )}
           {hasDescription && (
-            <span className="text-xs text-gray-400" title="Has description">
+            <span className="text-slate-400 hover:text-slate-600 transition-colors" title="Has description">
               <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h16M4 18h7" />
               </svg>
@@ -92,8 +130,10 @@ export default function KanbanCard({ card, onClick, isDragging, onToggleRead, on
           {followUpDate && (
             <span
               className={clsx(
-                'inline-flex items-center gap-0.5 text-xs',
-                isOverdue ? 'text-red-500 font-medium' : 'text-gray-500'
+                'inline-flex items-center gap-1 text-[11px] px-1.5 py-0.5 rounded font-medium',
+                isOverdue
+                  ? 'bg-rose-50 text-rose-600 border border-rose-200/60'
+                  : 'bg-slate-100 text-slate-600'
               )}
               title={isOverdue ? `Overdue: ${followUpDate.toLocaleDateString()}` : `Follow up: ${followUpDate.toLocaleDateString()}`}
             >
@@ -108,7 +148,7 @@ export default function KanbanCard({ card, onClick, isDragging, onToggleRead, on
           <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
             <button
               onClick={(e) => { e.stopPropagation(); onToggleRead?.(card.id, card.status); }}
-              className="p-1 rounded hover:bg-gray-100 text-gray-400 hover:text-gray-600"
+              className="p-1 rounded hover:bg-slate-100 text-slate-400 hover:text-slate-600 transition-colors"
               title={isUnread ? 'Mark as read' : 'Mark as unread'}
             >
               {isUnread ? (
@@ -123,7 +163,7 @@ export default function KanbanCard({ card, onClick, isDragging, onToggleRead, on
             </button>
             <button
               onClick={(e) => { e.stopPropagation(); onDelete?.(card.id); }}
-              className="p-1 rounded hover:bg-red-50 text-gray-400 hover:text-red-500"
+              className="p-1 rounded hover:bg-rose-50 text-slate-400 hover:text-rose-600 transition-colors"
               title="Delete"
             >
               <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>

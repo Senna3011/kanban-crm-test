@@ -1,25 +1,27 @@
 import { NextResponse } from 'next/server';
+import { getAIConfig } from '@/lib/ai';
 
 export async function GET() {
-  const apiKey = process.env.DEEPSEEK_API_KEY;
+  const { apiKey, endpoint, model } = getAIConfig();
+  const isDeepSeek = !process.env.AI_API_KEY && !!process.env.DEEPSEEK_API_KEY;
+  const providerName = isDeepSeek ? 'DeepSeek' : 'Custom AI (' + model + ')';
 
   if (!apiKey || apiKey === 'sk-your-deepseek-api-key' || apiKey.startsWith('sk-your')) {
     return NextResponse.json({
       configured: false,
-      message: 'DeepSeek API key belum dikonfigurasi. AI classification & draft generation tidak akan jalan.',
+      message: providerName + ' API key belum dikonfigurasi. AI classification & draft generation tidak akan jalan.',
     });
   }
 
-  // Test the API key with a minimal request
   try {
-    const res = await fetch('https://api.deepseek.com/v1/chat/completions', {
+    const res = await fetch(endpoint, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${apiKey}`,
+        'Authorization': 'Bearer ' + apiKey,
       },
       body: JSON.stringify({
-        model: 'deepseek-chat',
+        model,
         messages: [{ role: 'user', content: 'hi' }],
         max_tokens: 1,
       }),
@@ -29,7 +31,7 @@ export async function GET() {
       return NextResponse.json({
         configured: true,
         valid: false,
-        message: 'DeepSeek API key tidak valid atau sudah expired. Harap update di server .env → DEEPSEEK_API_KEY',
+        message: providerName + ' API key tidak valid atau sudah expired.',
       });
     }
 
@@ -37,7 +39,7 @@ export async function GET() {
       return NextResponse.json({
         configured: true,
         valid: false,
-        message: 'DeepSeek token sudah habis (quota exceeded). Harap top up di deepseek.com',
+        message: providerName + ' token sudah habis (quota exceeded).',
       });
     }
 
@@ -46,20 +48,20 @@ export async function GET() {
       return NextResponse.json({
         configured: true,
         valid: false,
-        message: `DeepSeek API error (${res.status}): ${err.error?.message || 'Unknown error'}`,
+        message: providerName + ' API error (' + res.status + '): ' + (err.error?.message || 'Unknown error'),
       });
     }
 
     return NextResponse.json({
       configured: true,
       valid: true,
-      message: 'DeepSeek API active — AI classification & draft generation running.',
+      message: providerName + ' API active — AI classification & draft generation running.',
     });
   } catch (e: any) {
     return NextResponse.json({
       configured: true,
       valid: false,
-      message: `DeepSeek API unreachable: ${e.message}`,
+      message: providerName + ' API unreachable: ' + e.message,
     });
   }
 }

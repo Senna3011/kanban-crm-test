@@ -12,6 +12,8 @@ type EmailValues = {
   id?: string;
   name?: string;
   boardId?: string;
+  authType?: string;
+  hasOAuthToken?: boolean;
   imapHost: string;
   imapPort: number;
   imapUser: string;
@@ -32,8 +34,10 @@ export default function EmailConfigForm({ initial, boards = [], isNew = false }:
     ...defaults, ...initial,
     name: initial?.name || (isNew ? '' : 'Default'),
     boardId: initial?.boardId || '',
+    authType: initial?.authType || 'password',
     imapPass: '', smtpPass: '',
   });
+  const isOAuth = form.authType === 'oauth2';
   const [hasSavedPasswords] = useState(Boolean(initial?.imapUser));
   const [testing, setTesting] = useState<'imap' | 'smtp' | 'all' | null>(null);
   const [saving, setSaving] = useState(false);
@@ -44,12 +48,24 @@ export default function EmailConfigForm({ initial, boards = [], isNew = false }:
     setStatus({});
     try {
       if (kind === 'imap' || kind === 'all') {
-        const result = await testImapConnection({ host: form.imapHost, port: form.imapPort, user: form.imapUser, pass: form.imapPass || 'test' });
+        const result = await testImapConnection({
+          configId: form.id,
+          host: form.imapHost,
+          port: form.imapPort,
+          user: form.imapUser,
+          pass: form.imapPass || undefined,
+        });
         if (!result.success) { setStatus({ imap: result.error || 'IMAP connection failed.' }); toast.error(`IMAP: ${result.error}`); return; }
         setStatus((current) => ({ ...current, imap: 'Connected' }));
       }
       if (kind === 'smtp' || kind === 'all') {
-        const result = await testSmtpConnection({ host: form.smtpHost, port: form.smtpPort, user: form.smtpUser, pass: form.smtpPass || 'test' });
+        const result = await testSmtpConnection({
+          configId: form.id,
+          host: form.smtpHost,
+          port: form.smtpPort,
+          user: form.smtpUser,
+          pass: form.smtpPass || undefined,
+        });
         if (!result.success) { setStatus((current) => ({ ...current, smtp: result.error || 'SMTP connection failed.' })); toast.error(`SMTP: ${result.error}`); return; }
         setStatus((current) => ({ ...current, smtp: 'Connected' }));
       }
@@ -104,26 +120,56 @@ export default function EmailConfigForm({ initial, boards = [], isNew = false }:
           </div>
         </div>
       )}
+      {isOAuth && (
+        <div className="p-3 bg-blue-50/70 border border-blue-200/80 rounded-xl text-xs text-blue-800 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <span className="w-2 h-2 rounded-full bg-blue-600 animate-pulse" />
+            <span>Connected via <strong>Zoho OAuth</strong>. Authentication is handled automatically via secure tokens.</span>
+          </div>
+          <span className="text-[11px] font-semibold text-blue-700 bg-blue-100 px-2 py-0.5 rounded-full">
+            No Password Required
+          </span>
+        </div>
+      )}
+
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <Input id="imap-host" label="IMAP Host" value={form.imapHost} onChange={(e) => updateField('imapHost', e.target.value)} required />
         <Input id="imap-port" label="IMAP Port" type="number" value={form.imapPort} onChange={(e) => updateField('imapPort', Number(e.target.value))} required />
         <Input id="imap-user" label="IMAP Username" value={form.imapUser} onChange={(e) => updateField('imapUser', e.target.value)} required />
-        <div><Input id="imap-pass" label="IMAP Password" type="password" value={form.imapPass} onChange={(e) => updateField('imapPass', e.target.value)} required={!hasSavedPasswords} /><p className="text-xs text-gray-500 mt-1">{passwordHint}</p></div>
+        {!isOAuth && (
+          <div>
+            <Input id="imap-pass" label="IMAP Password" type="password" value={form.imapPass} onChange={(e) => updateField('imapPass', e.target.value)} required={!hasSavedPasswords} />
+            <p className="text-xs text-gray-500 mt-1">{passwordHint}</p>
+          </div>
+        )}
       </div>
-      {status.imap && <p className="text-sm text-green-700">IMAP: {status.imap}</p>}
+      {status.imap && <p className="text-sm text-green-700 font-medium">IMAP: {status.imap}</p>}
       <hr className="border-gray-200" />
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <Input id="smtp-host" label="SMTP Host" value={form.smtpHost} onChange={(e) => updateField('smtpHost', e.target.value)} required />
         <Input id="smtp-port" label="SMTP Port" type="number" value={form.smtpPort} onChange={(e) => updateField('smtpPort', Number(e.target.value))} required />
         <Input id="smtp-user" label="SMTP Username" value={form.smtpUser} onChange={(e) => updateField('smtpUser', e.target.value)} required />
-        <div><Input id="smtp-pass" label="SMTP Password" type="password" value={form.smtpPass} onChange={(e) => updateField('smtpPass', e.target.value)} required={!hasSavedPasswords} /><p className="text-xs text-gray-500 mt-1">{passwordHint}</p></div>
+        {!isOAuth && (
+          <div>
+            <Input id="smtp-pass" label="SMTP Password" type="password" value={form.smtpPass} onChange={(e) => updateField('smtpPass', e.target.value)} required={!hasSavedPasswords} />
+            <p className="text-xs text-gray-500 mt-1">{passwordHint}</p>
+          </div>
+        )}
       </div>
-      {status.smtp && <p className="text-sm text-green-700">SMTP: {status.smtp}</p>}
-      <div className="flex flex-wrap gap-3">
-        <Button variant="secondary" onClick={() => handleTest('imap')} loading={testing === 'imap'} disabled={Boolean(testing)}>Test IMAP</Button>
-        <Button variant="secondary" onClick={() => handleTest('smtp')} loading={testing === 'smtp'} disabled={Boolean(testing)}>Test SMTP</Button>
-        <Button variant="secondary" onClick={() => handleTest('all')} loading={testing === 'all'} disabled={Boolean(testing)}>Test All</Button>
-        <Button onClick={handleSave} loading={saving} disabled={Boolean(testing)}>{isNew ? 'Add Configuration' : 'Save Configuration'}</Button>
+      {status.smtp && <p className="text-sm text-green-700 font-medium">SMTP: {status.smtp}</p>}
+      <div className="flex flex-wrap gap-3 pt-1">
+        <Button variant="secondary" onClick={() => handleTest('imap')} loading={testing === 'imap'} disabled={Boolean(testing)}>
+          {isOAuth ? 'Test IMAP (OAuth)' : 'Test IMAP'}
+        </Button>
+        <Button variant="secondary" onClick={() => handleTest('smtp')} loading={testing === 'smtp'} disabled={Boolean(testing)}>
+          {isOAuth ? 'Test SMTP (OAuth)' : 'Test SMTP'}
+        </Button>
+        <Button variant="secondary" onClick={() => handleTest('all')} loading={testing === 'all'} disabled={Boolean(testing)}>
+          {isOAuth ? 'Test All (OAuth)' : 'Test All'}
+        </Button>
+        <Button onClick={handleSave} loading={saving} disabled={Boolean(testing)}>
+          {isNew ? 'Add Configuration' : 'Save Configuration'}
+        </Button>
         {form.id && <Button variant="secondary" onClick={handleDelete} className="text-red-600 hover:text-red-700">Delete</Button>}
       </div>
     </div>

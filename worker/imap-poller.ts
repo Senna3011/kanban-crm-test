@@ -1,5 +1,6 @@
 import prisma from '../src/lib/prisma';
 import { decrypt } from '../src/lib/encryption';
+import { getValidZohoAccessToken } from '../src/lib/zoho-oauth';
 import { EmailAdapter } from '../channels/email';
 import { aiProcessQueue } from '../queue';
 
@@ -60,6 +61,11 @@ async function pollFolder(imapConfig: Record<string, string>, folder: string, te
     try {
       const existingCard = await prisma.card.findUnique({ where: { messageId: msg.messageId }, select: { id: true, status: true, imapUid: true } });
       if (existingCard) {
+        // If card was deleted by user, never resurrect it
+        if (existingCard.status === 'deleted') {
+          continue;
+        }
+
         // Update read status and imapUid if changed
         const newStatus = msg.isRead ? 'read' : 'unread';
         const updateData: any = {};
@@ -103,18 +109,7 @@ async function pollFolder(imapConfig: Record<string, string>, folder: string, te
       const general = await prisma.column.findFirst({ where: { boardId: board.id, title: 'General' } });
       if (!general) continue;
 
-      // Check if reply to existing thread
-      let replyCard = null;
-      if (msg.inReplyTo) {
-        replyCard = await prisma.card.findFirst({ where: { messageId: msg.inReplyTo, tenantId } });
-      }
-
-      if (replyCard) {
-        await prisma.card.update({ where: { id: replyCard.id }, data: { highlighted: true, lastActivityAt: new Date() } });
-        await prisma.activityLog.create({
-          data: { type: 'email_received', content: { messageId: msg.messageId, subject: msg.subject, from: msg.fromEmail, to: msg.toEmail }, cardId: replyCard.id, tenantId },
-        });
-      } else {
+      try {
         const card = await prisma.card.create({
           data: {
             subject: msg.subject, fromEmail: msg.fromEmail, fromName: msg.fromName,
@@ -134,6 +129,17 @@ async function pollFolder(imapConfig: Record<string, string>, folder: string, te
           fromName: msg.fromName || '', fromEmail: msg.fromEmail, subject: msg.subject, body: msg.bodyText,
         });
         created++;
+      } catch (createErr: any) {
+        // Handle race condition: another poller worker inserted this messageId concurrently
+        if (createErr?.code === 'P2002') {
+          console.log(`[IMAP Poller] Concurrent insert collision for message ${msg.messageId}, updating existing card.`);
+          const existing = await prisma.card.findUnique({ where: { messageId: msg.messageId } });
+          if (existing && msg.uid && existing.imapUid !== msg.uid) {
+            await prisma.card.update({ where: { id: existing.id }, data: { imapUid: msg.uid, imapFolder: folder } });
+          }
+          continue;
+        }
+        throw createErr;
       }
     } catch (error: any) {
       console.error(`[IMAP Poller] Failed message ${msg.messageId}: ${error?.message}`);
@@ -148,12 +154,26 @@ export async function processEmailPoll(data: { tenantId: string; emailConfigId: 
   const config = await prisma.emailConfig.findUnique({ where: { id: emailConfigId } });
   if (!config || !config.isActive || config.tenantId !== tenantId) return;
 
-  const imapConfig = {
+  let accessToken: string | undefined;
+  let password = '';
+  if (config.authType === 'oauth2') {
+    try {
+      accessToken = await getValidZohoAccessToken(config.id);
+    } catch (err: any) {
+      console.error(`[IMAP Poller] Failed to get valid OAuth token for ${config.imapUser}: ${err.message}`);
+      return;
+    }
+  } else if (config.imapPass) {
+    password = decrypt(config.imapPass);
+  }
+
+  const imapConfig: Record<string, string> = {
     host: config.imapHost,
     port: String(config.imapPort),
     user: config.imapUser,
-    password: decrypt(config.imapPass),
   };
+  if (accessToken) imapConfig.accessToken = accessToken;
+  if (password) imapConfig.password = password;
 
   console.log(`[IMAP Poller] Polling ${config.imapUser}...`);
 
