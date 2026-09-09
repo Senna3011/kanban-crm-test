@@ -4,26 +4,41 @@ import { authOptions } from '@/server/auth';
 import prisma from '@/lib/prisma';
 import { syncArchiveEmail } from '@/lib/imap-sync';
 
-export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  const { id } = await params;
-  const session = await getServerSession(authOptions);
-  if (!session?.user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> | { id: string } }) {
+  try {
+    const resolvedParams = params instanceof Promise ? await params : params;
+    const id = resolvedParams?.id;
+    if (!id) {
+      return NextResponse.json({ error: 'Card ID is required' }, { status: 400 });
+    }
 
-  const card = await prisma.card.findUnique({
-    where: { id: id },
-    include: {
-      activityLogs: { orderBy: { createdAt: 'desc' } },
-      drafts: { orderBy: { editedAt: 'desc' } },
-      assignedTo: { select: { id: true, name: true } },
-      column: { select: { id: true, title: true, boardId: true } },
-    },
-  });
+    const session = await getServerSession(authOptions);
+    if (!session?.user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
-  if (!card || card.tenantId !== (session.user as any).tenantId) {
-    return NextResponse.json({ error: 'Not found' }, { status: 404 });
+    const tenantId = (session.user as any).tenantId;
+
+    const card = await prisma.card.findUnique({
+      where: { id: id },
+      include: {
+        activityLogs: { orderBy: { createdAt: 'desc' } },
+        drafts: { orderBy: { editedAt: 'desc' } },
+        assignedTo: { select: { id: true, name: true } },
+        column: { select: { id: true, title: true, boardId: true } },
+      },
+    });
+
+    if (!card || card.tenantId !== tenantId) {
+      return NextResponse.json({ error: 'Not found' }, { status: 404 });
+    }
+
+    return NextResponse.json(card);
+  } catch (error: any) {
+    console.error(`[API /api/cards/[id]] GET error:`, error);
+    return NextResponse.json(
+      { error: error?.message || 'Internal server error' },
+      { status: 500 }
+    );
   }
-
-  return NextResponse.json(card);
 }
 
 export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {

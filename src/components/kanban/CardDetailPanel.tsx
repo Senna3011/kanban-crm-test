@@ -246,7 +246,10 @@ export default function CardDetailPanel({ card, onClose }: Props) {
           fetch(`/api/cards/${card.id}`),
           fetch(`/api/email-configs`),
         ]);
-        if (!cardRes.ok) throw new Error('Failed to load card');
+        if (!cardRes.ok) {
+          const errBody = await cardRes.json().catch(() => ({}));
+          throw new Error(errBody.error || `Failed to load card (HTTP ${cardRes.status})`);
+        }
         const data = await cardRes.json();
 
         setActivityLogs(data.activityLogs || []);
