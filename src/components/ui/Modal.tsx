@@ -21,18 +21,20 @@ export default function Modal({ open, onClose, title, children }: Props) {
   if (!open) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4">
       <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-xs transition-opacity" onClick={onClose} />
-      <div className="relative bg-white rounded-2xl shadow-2xl border border-slate-200/80 max-w-md w-full p-6 transition-all">
-        <div className="flex items-center justify-between mb-4 pb-3 border-b border-slate-100">
+      <div className="relative bg-white rounded-2xl shadow-2xl border border-slate-200/80 max-w-md w-full p-4 sm:p-6 transition-all max-h-[90vh] flex flex-col overflow-hidden">
+        <div className="flex items-center justify-between mb-3 pb-3 border-b border-slate-100 flex-shrink-0">
           <h3 className="font-bold text-base text-slate-800 tracking-tight">{title}</h3>
-          <button onClick={onClose} className="p-1 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-slate-600 transition-colors">
+          <button onClick={onClose} className="p-1 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-slate-600 transition-colors" title="Close">
             <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
             </svg>
           </button>
         </div>
-        {children}
+        <div className="flex-1 overflow-y-auto min-h-0">
+          {children}
+        </div>
       </div>
     </div>
   );

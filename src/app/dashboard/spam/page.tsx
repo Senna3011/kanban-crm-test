@@ -65,40 +65,49 @@ export default function SpamBoxPage() {
     <div className="max-w-4xl space-y-6">
       <Toaster />
       <div className="flex items-start justify-between gap-4">
-        <div><h1 className="text-2xl font-bold text-gray-900">Spam Box</h1><p className="text-gray-500 mt-1">Skipped emails. Recover to any board if needed.</p></div>
-        <Link href="/dashboard" className="text-sm text-primary-700 hover:underline">← Back to board</Link>
+        <div>
+          <h1 className="text-xl sm:text-2xl font-bold text-slate-900">Spam Box</h1>
+          <p className="text-xs sm:text-sm text-slate-500 mt-1">Skipped emails. Recover to any board if needed.</p>
+        </div>
+        <Link href="/dashboard" className="text-xs sm:text-sm text-primary-700 hover:underline font-medium shrink-0">
+          ← Back to board
+        </Link>
       </div>
 
       {spamLogs.length === 0 ? (
-        <div className="bg-white rounded-xl border border-gray-200 p-12 text-center text-gray-500">
+        <div className="bg-white rounded-xl border border-slate-200 p-12 text-center text-slate-500 shadow-sm">
           <div className="text-4xl mb-3">🛡️</div>
           <p>No spam emails logged yet.</p>
         </div>
       ) : (
         <div className="space-y-3">
           {spamLogs.map(log => (
-            <div key={log.id} className="bg-white rounded-xl border border-gray-200 p-4">
-              <div className="flex items-start justify-between gap-4">
+            <div key={log.id} className="bg-white rounded-xl border border-slate-200/80 p-4 shadow-sm">
+              <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3">
                 <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 mb-1">
-                    <span className="font-medium text-gray-900 truncate">{log.subject}</span>
-                    {log.recoveredToId && <span className="px-2 py-0.5 text-xs bg-green-100 text-green-700 rounded-full">Recovered</span>}
+                  <div className="flex items-center gap-2 mb-1 flex-wrap">
+                    <span className="font-semibold text-slate-900 text-sm sm:text-base truncate">{log.subject}</span>
+                    {log.recoveredToId && (
+                      <span className="px-2 py-0.5 text-xs bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-full font-medium">
+                        Recovered
+                      </span>
+                    )}
                   </div>
-                  <p className="text-sm text-gray-500">From: {log.fromName ? `${log.fromName} <${log.fromEmail}>` : log.fromEmail}</p>
-                  <p className="text-sm text-gray-400 mt-1">via {log.emailConfig.name} • {new Date(log.receivedAt).toLocaleString()}</p>
-                  {log.bodyPreview && <p className="text-sm text-gray-500 mt-2 line-clamp-2">{log.bodyPreview}</p>}
+                  <p className="text-xs sm:text-sm text-slate-600">From: {log.fromName ? `${log.fromName} <${log.fromEmail}>` : log.fromEmail}</p>
+                  <p className="text-xs text-slate-400 mt-1">via {log.emailConfig.name} • {new Date(log.receivedAt).toLocaleString()}</p>
+                  {log.bodyPreview && <p className="text-xs sm:text-sm text-slate-500 mt-2 line-clamp-2 bg-slate-50 p-2.5 rounded-lg">{log.bodyPreview}</p>}
                 </div>
                 {!log.recoveredToId && (
-                  <div className="flex items-center gap-2 shrink-0">
+                  <div className="flex flex-wrap sm:flex-nowrap items-center gap-2 w-full sm:w-auto pt-2 sm:pt-0 border-t sm:border-t-0 border-slate-100">
                     <select
-                      className="text-sm border border-gray-300 rounded-lg px-2 py-1"
+                      className="flex-1 sm:flex-none text-xs sm:text-sm border border-slate-300 rounded-lg px-2.5 py-1.5 bg-white text-slate-700 focus:outline-none focus:ring-2 focus:ring-primary-500"
                       value={selectedBoard}
                       onChange={(e) => setSelectedBoard(e.target.value)}
                     >
                       {boards.map(b => <option key={b.id} value={b.id}>{b.title}</option>)}
                     </select>
                     <select
-                      className="text-sm border border-gray-300 rounded-lg px-2 py-1"
+                      className="flex-1 sm:flex-none text-xs sm:text-sm border border-slate-300 rounded-lg px-2.5 py-1.5 bg-white text-slate-700 focus:outline-none focus:ring-2 focus:ring-primary-500"
                       id={`col-${log.id}`}
                     >
                       {columns.map(c => <option key={c.id} value={c.id}>{c.title}</option>)}
@@ -109,7 +118,7 @@ export default function SpamBoxPage() {
                         if (sel) recover(log, sel.value);
                       }}
                       disabled={recovering === log.id}
-                      className="px-3 py-1 text-sm bg-primary-600 text-white rounded-lg hover:bg-primary-700 disabled:opacity-50"
+                      className="w-full sm:w-auto px-3.5 py-1.5 text-xs sm:text-sm bg-primary-600 text-white rounded-lg hover:bg-primary-700 active:scale-[0.98] disabled:opacity-50 font-medium transition-all"
                     >
                       {recovering === log.id ? '...' : 'Recover'}
                     </button>

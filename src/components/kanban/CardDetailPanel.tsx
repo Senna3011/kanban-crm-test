@@ -535,19 +535,19 @@ export default function CardDetailPanel({ card, onClose }: Props) {
 
         {/* ---- Draft Reply Composer (sticky bottom) ---- */}
         {!loading && !error && (
-          <div className="border-t border-slate-200 bg-slate-50/70 px-6 py-4">
+          <div className="border-t border-slate-200 bg-slate-50/70 px-4 sm:px-6 py-3 sm:py-4 flex-shrink-0">
             <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Reply</h3>
             <textarea
-              className="w-full h-28 px-3.5 py-2.5 border border-slate-200 rounded-xl text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500 resize-none bg-white shadow-xs transition-all leading-relaxed"
+              className="w-full h-24 sm:h-28 px-3.5 py-2.5 border border-slate-200 rounded-xl text-xs sm:text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500 resize-none bg-white shadow-xs transition-all leading-relaxed"
               value={draftBody}
               onChange={(e) => setDraftBody(e.target.value)}
               placeholder="Write a reply..."
             />
-            <div className="flex items-center justify-between mt-3">
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2.5 mt-3">
               <div className="flex items-center gap-2">
                 {fromAddresses.length > 1 && (
                   <select
-                    className="px-2.5 py-1 border border-slate-200 rounded-lg text-xs text-slate-600 focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500 bg-white"
+                    className="w-full sm:w-auto px-2.5 py-1.5 border border-slate-200 rounded-lg text-xs text-slate-600 focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500 bg-white"
                     value={selectedFrom}
                     onChange={(e) => setSelectedFrom(e.target.value)}
                   >
@@ -557,7 +557,7 @@ export default function CardDetailPanel({ card, onClose }: Props) {
                   </select>
                 )}
               </div>
-              <Button size="sm" onClick={handleSend} loading={sending}>
+              <Button size="sm" onClick={handleSend} loading={sending} className="w-full sm:w-auto">
                 Send Reply
               </Button>
             </div>

@@ -35,8 +35,8 @@ export default function Navbar() {
             JD
           </span>
           <div className="leading-tight min-w-0">
-            <p className="text-sm font-semibold text-slate-900 truncate">Jet Digital Pro</p>
-            <p className="text-[11px] text-slate-400 truncate">{user?.tenantName || 'Kanban CRM'}</p>
+            <p className="text-sm font-semibold text-slate-900 truncate max-w-[120px] sm:max-w-none">Jet Digital Pro</p>
+            <p className="text-[11px] text-slate-400 truncate max-w-[120px] sm:max-w-none">{user?.tenantName || 'Kanban CRM'}</p>
           </div>
         </div>
       </div>

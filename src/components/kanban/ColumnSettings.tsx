@@ -68,20 +68,20 @@ export default function ColumnSettings({ columns, onChange, onClose }: Props) {
 
   return (
     <Modal open={true} onClose={onClose} title="Manage Columns">
-      <div className="space-y-2.5 max-h-96 overflow-y-auto pr-1">
+      <div className="space-y-2.5 max-h-80 sm:max-h-96 overflow-y-auto pr-1">
         {localCols.map((col) => (
-          <div key={col.id} className="flex items-center gap-2 p-2.5 bg-slate-50 border border-slate-200/70 rounded-xl">
+          <div key={col.id} className="flex items-center gap-1.5 sm:gap-2 p-2 sm:p-2.5 bg-slate-50 border border-slate-200/70 rounded-xl">
             <div className="flex flex-col gap-0.5">
-              <button onClick={() => moveUp(col.id)} className="text-xs text-slate-400 hover:text-slate-700 leading-none">&uarr;</button>
-              <button onClick={() => moveDown(col.id)} className="text-xs text-slate-400 hover:text-slate-700 leading-none">&darr;</button>
+              <button onClick={() => moveUp(col.id)} className="p-0.5 text-xs text-slate-400 hover:text-slate-700 leading-none">&uarr;</button>
+              <button onClick={() => moveDown(col.id)} className="p-0.5 text-xs text-slate-400 hover:text-slate-700 leading-none">&darr;</button>
             </div>
             <input
-              className="flex-1 px-2.5 py-1 text-xs border border-slate-200 rounded-lg bg-white text-slate-800 focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500 transition-all font-medium disabled:bg-slate-100 disabled:text-slate-400"
+              className="flex-1 min-w-0 px-2 sm:px-2.5 py-1 text-xs border border-slate-200 rounded-lg bg-white text-slate-800 focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500 transition-all font-medium disabled:bg-slate-100 disabled:text-slate-400"
               value={col.title}
               onChange={(e) => renameColumn(col.id, e.target.value)}
               disabled={col.isSystem}
             />
-            <div className="flex gap-1 items-center">
+            <div className="flex gap-1 items-center flex-wrap max-w-[84px] sm:max-w-none">
               {COLORS.map((color) => (
                 <button
                   key={color}
@@ -94,7 +94,7 @@ export default function ColumnSettings({ columns, onChange, onClose }: Props) {
             {!col.isSystem && (
               <button
                 onClick={() => deleteColumn(col.id)}
-                className="p-1 rounded hover:bg-rose-50 text-slate-400 hover:text-rose-600 transition-colors"
+                className="p-1 rounded hover:bg-rose-50 text-slate-400 hover:text-rose-600 transition-colors flex-shrink-0"
                 title="Delete column"
               >
                 <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -105,7 +105,7 @@ export default function ColumnSettings({ columns, onChange, onClose }: Props) {
           </div>
         ))}
       </div>
-      <div className="mt-5 pt-3 border-t border-slate-100 flex items-center justify-between">
+      <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between gap-2">
         <Button variant="secondary" size="sm" onClick={addColumn}>+ Add Column</Button>
         <Button size="sm" onClick={save}>Save Changes</Button>
       </div>

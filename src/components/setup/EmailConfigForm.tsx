@@ -157,20 +157,20 @@ export default function EmailConfigForm({ initial, boards = [], isNew = false }:
         )}
       </div>
       {status.smtp && <p className="text-sm text-green-700 font-medium">SMTP: {status.smtp}</p>}
-      <div className="flex flex-wrap gap-3 pt-1">
-        <Button variant="secondary" onClick={() => handleTest('imap')} loading={testing === 'imap'} disabled={Boolean(testing)}>
+      <div className="grid grid-cols-2 sm:flex sm:flex-wrap gap-2.5 pt-1">
+        <Button variant="secondary" onClick={() => handleTest('imap')} loading={testing === 'imap'} disabled={Boolean(testing)} className="w-full sm:w-auto text-xs sm:text-sm">
           {isOAuth ? 'Test IMAP (OAuth)' : 'Test IMAP'}
         </Button>
-        <Button variant="secondary" onClick={() => handleTest('smtp')} loading={testing === 'smtp'} disabled={Boolean(testing)}>
+        <Button variant="secondary" onClick={() => handleTest('smtp')} loading={testing === 'smtp'} disabled={Boolean(testing)} className="w-full sm:w-auto text-xs sm:text-sm">
           {isOAuth ? 'Test SMTP (OAuth)' : 'Test SMTP'}
         </Button>
-        <Button variant="secondary" onClick={() => handleTest('all')} loading={testing === 'all'} disabled={Boolean(testing)}>
+        <Button variant="secondary" onClick={() => handleTest('all')} loading={testing === 'all'} disabled={Boolean(testing)} className="w-full sm:w-auto text-xs sm:text-sm">
           {isOAuth ? 'Test All (OAuth)' : 'Test All'}
         </Button>
-        <Button onClick={handleSave} loading={saving} disabled={Boolean(testing)}>
+        <Button onClick={handleSave} loading={saving} disabled={Boolean(testing)} className="w-full sm:w-auto col-span-2 sm:col-span-1 text-xs sm:text-sm">
           {isNew ? 'Add Configuration' : 'Save Configuration'}
         </Button>
-        {form.id && <Button variant="secondary" onClick={handleDelete} className="text-red-600 hover:text-red-700">Delete</Button>}
+        {form.id && <Button variant="secondary" onClick={handleDelete} className="w-full sm:w-auto col-span-2 sm:col-span-1 text-red-600 hover:text-red-700 text-xs sm:text-sm">Delete</Button>}
       </div>
     </div>
   );

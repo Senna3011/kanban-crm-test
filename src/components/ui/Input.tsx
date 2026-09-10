@@ -22,7 +22,7 @@ const Input = forwardRef<HTMLInputElement, InputProps>(
             ref={ref}
             type={inputType}
             className={clsx(
-              'w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500',
+              'w-full px-3 py-2 text-base sm:text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 transition-colors',
               isPassword && 'pr-10',
               error ? 'border-red-500' : 'border-gray-300',
               className
