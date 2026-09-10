@@ -27,7 +27,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
       },
     });
 
-    if (!card || card.tenantId !== tenantId) {
+    if (!card || card.tenantId !== tenantId || card.status === 'deleted') {
       return NextResponse.json({ error: 'Not found' }, { status: 404 });
     }
 
@@ -75,6 +75,11 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
       assignedToId: body.assignedToId,
     },
   });
+
+  try {
+    const { broadcastAppEvent } = await import('@/lib/events');
+    broadcastAppEvent({ type: 'card_updated', tenantId });
+  } catch {}
 
   return NextResponse.json(updated);
 }
@@ -192,6 +197,11 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
     prisma.draftMessage.deleteMany({ where: { cardId: id } }),
     prisma.card.update({ where: { id: id }, data: { status: 'deleted' } }),
   ]);
+
+  try {
+    const { broadcastAppEvent } = await import('@/lib/events');
+    broadcastAppEvent({ type: 'card_updated', tenantId });
+  } catch {}
 
   return NextResponse.json({ success: true });
 }

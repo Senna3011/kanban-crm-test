@@ -28,7 +28,8 @@ export default function SocketProvider({ children, tenantId }: { children: React
 
     let eventSource: EventSource | null = null;
     try {
-      eventSource = new EventSource('/api/events');
+      const url = tenantId ? `/api/events?tenantId=${encodeURIComponent(tenantId)}` : '/api/events';
+      eventSource = new EventSource(url);
 
       eventSource.onopen = () => {
         setConnected(true);
@@ -40,7 +41,7 @@ export default function SocketProvider({ children, tenantId }: { children: React
           if (data.type === 'notification' && typeof data.count === 'number') {
             setNotificationCount(data.count);
           }
-          if (data.type === 'card_updated') {
+          if (data.type === 'card_updated' || data.type === 'refresh') {
             window.dispatchEvent(new CustomEvent('board-refresh'));
           }
         } catch {}

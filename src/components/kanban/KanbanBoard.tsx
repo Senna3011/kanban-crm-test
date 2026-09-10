@@ -234,6 +234,24 @@ export default function KanbanBoard() {
     });
   }
 
+  async function handleBulkMarkRead(read: boolean) {
+    if (selectedIds.size === 0) return;
+    const newStatus = read ? 'read' : 'unread';
+    for (const cardId of selectedIds) {
+      try {
+        await fetch(`/api/cards/${cardId}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ status: newStatus }),
+        });
+      } catch {}
+    }
+    toast.success(`Marked ${selectedIds.size} cards as ${newStatus}`);
+    setSelectedIds(new Set());
+    setSelectionMode(false);
+    fetchColumns();
+  }
+
   async function handleBulkDelete() {
     if (selectedIds.size === 0) return;
     if (!confirm(`Delete ${selectedIds.size} selected card(s)? This will also archive the emails.`)) return;
@@ -355,6 +373,20 @@ export default function KanbanBoard() {
           {selectionMode ? (
             <>
               <span className="text-xs font-medium text-slate-500">{selectedIds.size} selected</span>
+              <button
+                onClick={() => handleBulkMarkRead(true)}
+                disabled={selectedIds.size === 0}
+                className="px-2.5 py-1.5 text-xs font-medium text-slate-700 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 shadow-sm transition-all disabled:opacity-50"
+              >
+                Mark Read
+              </button>
+              <button
+                onClick={() => handleBulkMarkRead(false)}
+                disabled={selectedIds.size === 0}
+                className="px-2.5 py-1.5 text-xs font-medium text-slate-700 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 shadow-sm transition-all disabled:opacity-50"
+              >
+                Mark Unread
+              </button>
               <button
                 onClick={handleBulkDelete}
                 disabled={selectedIds.size === 0 || bulkDeleting}

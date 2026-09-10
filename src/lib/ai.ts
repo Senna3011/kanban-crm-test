@@ -29,6 +29,8 @@ export async function classifyEmail(params: {
   body: string;
 }): Promise<AIClassification> {
   const { apiKey, endpoint, model } = getAIConfig();
+  const truncatedBody = (params.body || '').slice(0, 2000);
+  const companyDesc = params.companyContext || 'Sales & Support Team';
   const response = await fetch(endpoint, {
     method: 'POST',
     headers: {
@@ -40,8 +42,8 @@ export async function classifyEmail(params: {
       messages: [
         {
           role: 'system',
-          content: `You are a CRM AI assistant for a digital marketing agency (Jet Digital Pro). Classify inbound emails into exactly one category.
-Company context: ${params.companyContext}
+          content: `You are a CRM AI assistant for: ${companyDesc}. Classify inbound emails into exactly one category.
+Company context: ${companyDesc}
 
 CRITICAL RULES — Read these FIRST:
 - If someone explicitly wants to PAY, SCHEDULE, or HIRE us → "lead"
@@ -49,7 +51,7 @@ CRITICAL RULES — Read these FIRST:
 - If it's a forward from a team member about a potential deal → "lead"
 - If someone asks for PRICING or QUOTE → "lead"
 - Meeting requests are ALWAYS leads
-- Emails mentioning clients, SEO, content, writing services are leads
+- Emails inquiring about products/services are leads
 - If it's an automated notification, receipt, or system email → "general"
 - If it's a forwarded email from a service (order updates, delivery, etc.) → "general"
 - Only classify as "spam" if it's clearly phishing, crypto scams, or completely unrelated junk
@@ -81,7 +83,7 @@ Rules:
           role: 'user',
           content: `From: ${params.fromName} <${params.fromEmail}>
 Subject: ${params.subject}
-Body: ${params.body}`,
+Body: ${truncatedBody}`,
         },
       ],
       temperature: 0.3,
@@ -93,7 +95,8 @@ Body: ${params.body}`,
   const content = data.choices?.[0]?.message?.content;
 
   try {
-    const parsed = JSON.parse(content);
+    const cleaned = (content || '').replace(/^```json\s*/i, '').replace(/^```\s*/i, '').replace(/\s*```$/i, '').trim();
+    const parsed = JSON.parse(cleaned);
     console.log(`[AI CLASSIFY] "${params.subject}" → category=${parsed.category}, confidence=${parsed.confidence}, reason=${parsed.reason}`);
     return parsed;
   } catch {
@@ -120,10 +123,11 @@ export async function generateFollowUpDraft(params: {
   followUpNumber: number;
 }): Promise<FollowUpDraft> {
   const historyText = params.conversationHistory.length > 0
-    ? `\nConversation history:\n${params.conversationHistory.join('\n---\n')}`
+    ? `\nConversation history:\n${params.conversationHistory.slice(-5).join('\n---\n').slice(0, 3000)}`
     : '';
 
   const { apiKey, endpoint, model } = getAIConfig();
+  const companyDesc = params.companyContext || 'our company';
   const response = await fetch(endpoint, {
     method: 'POST',
     headers: {
@@ -135,7 +139,7 @@ export async function generateFollowUpDraft(params: {
       messages: [
         {
           role: 'system',
-          content: `You write reply emails for a salesperson named ${params.senderName} at JetDigitalPro.
+          content: `You write reply emails for a representative named ${params.senderName} at ${companyDesc}.
 
 The reply goes TO: ${params.contactName} <${params.contactEmail}>
 
@@ -149,7 +153,7 @@ STRICT RULES — violating any = wrong output:
 7. Keep under 120 words
 8. Use "Re:" prefix in subject if this is a follow-up
 
-Company context: ${params.companyContext}
+Company context: ${companyDesc}
 Follow-up number: ${params.followUpNumber}
 
 Respond ONLY in this JSON format:
@@ -172,7 +176,8 @@ Company: ${params.extractedCompany || 'Unknown'}${historyText}`,
   const content = data.choices?.[0]?.message?.content;
 
   try {
-    const parsed = JSON.parse(content);
+    const cleaned = (content || '').replace(/^```json\s*/i, '').replace(/^```\s*/i, '').replace(/\s*```$/i, '').trim();
+    const parsed = JSON.parse(cleaned);
 
     // Post-process: replace client phrases with sender-appropriate alternatives
     if (parsed.body) {

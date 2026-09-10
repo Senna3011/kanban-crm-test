@@ -81,6 +81,8 @@ export async function fetchZohoUserInfo(accessToken: string): Promise<{ email: s
   throw new Error('NO_MAILBOX_API');
 }
 
+const refreshLocks = new Map<string, Promise<string>>();
+
 export async function getValidZohoAccessToken(configId: string): Promise<string> {
   const config = await prisma.emailConfig.findUnique({ where: { id: configId } });
   if (!config) throw new Error('Email configuration not found.');
@@ -93,40 +95,53 @@ export async function getValidZohoAccessToken(configId: string): Promise<string>
     return decrypt(config.accessToken);
   }
 
-  // Refresh token
-  const { clientId, clientSecret, accountsUrl } = getZohoOAuthConfig();
-  const rawRefreshToken = decrypt(config.refreshToken);
-
-  const url = `${accountsUrl.replace(/\/$/, '')}/oauth/v2/token`;
-  const params = new URLSearchParams({
-    grant_type: 'refresh_token',
-    client_id: clientId,
-    client_secret: clientSecret,
-    refresh_token: rawRefreshToken,
-  });
-
-  const res = await fetch(url, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    body: params.toString(),
-  });
-
-  const data = await res.json();
-  if (data.error) {
-    throw new Error(`Failed to refresh Zoho token: ${data.error_description || data.error}`);
+  // Mutex lock / in-flight deduplication per configId
+  if (refreshLocks.has(configId)) {
+    return refreshLocks.get(configId)!;
   }
 
-  const newAccessToken = data.access_token;
-  const expiresIn = Number(data.expires_in) || 3600;
-  const newExpiry = new Date(Date.now() + expiresIn * 1000);
+  const refreshPromise = (async () => {
+    try {
+      const { clientId, clientSecret, accountsUrl } = getZohoOAuthConfig();
+      const rawRefreshToken = decrypt(config.refreshToken!);
 
-  await prisma.emailConfig.update({
-    where: { id: configId },
-    data: {
-      accessToken: encrypt(newAccessToken),
-      tokenExpiry: newExpiry,
-    },
-  });
+      const url = `${accountsUrl.replace(/\/$/, '')}/oauth/v2/token`;
+      const params = new URLSearchParams({
+        grant_type: 'refresh_token',
+        client_id: clientId,
+        client_secret: clientSecret,
+        refresh_token: rawRefreshToken,
+      });
 
-  return newAccessToken;
+      const res = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: params.toString(),
+      });
+
+      const data = await res.json();
+      if (data.error) {
+        throw new Error(`Failed to refresh Zoho token: ${data.error_description || data.error}`);
+      }
+
+      const newAccessToken = data.access_token;
+      const expiresIn = Number(data.expires_in) || 3600;
+      const newExpiry = new Date(Date.now() + expiresIn * 1000);
+
+      await prisma.emailConfig.update({
+        where: { id: configId },
+        data: {
+          accessToken: encrypt(newAccessToken),
+          tokenExpiry: newExpiry,
+        },
+      });
+
+      return newAccessToken;
+    } finally {
+      refreshLocks.delete(configId);
+    }
+  })();
+
+  refreshLocks.set(configId, refreshPromise);
+  return refreshPromise;
 }

@@ -19,7 +19,7 @@ export async function GET(
     return NextResponse.json({ error: 'Not found' }, { status: 404 });
   }
 
-  // Find all cards in the same thread using Message-ID chain + subject similarity
+  // Find all cards in the same thread using RFC Message-ID chain
   const threadMessageIds = new Set<string>();
   const threadCardIds = new Set<string>();
 
@@ -27,23 +27,20 @@ export async function GET(
   if (card.inReplyTo) threadMessageIds.add(card.inReplyTo);
   threadCardIds.add(card.id);
 
-  const baseSubject = card.subject?.replace(/^(re:|fw:|fwd:|re\s*\[\d+\]:)\s*/gi, '').trim();
-
-  // Recursive thread discovery
+  // Recursive thread discovery via RFC inReplyTo / messageId chains
   let found = true;
   while (found) {
     found = false;
-    const orConditions: any[] = [
-      { messageId: { in: [...threadMessageIds] } },
-      { inReplyTo: { in: [...threadMessageIds] } },
-    ];
-    if (baseSubject) {
-      orConditions.push({ subject: { contains: baseSubject, mode: 'insensitive' } });
-    }
-
     const related = await prisma.card.findMany({
-      where: { tenantId, OR: orConditions },
-      select: { id: true, messageId: true, inReplyTo: true, subject: true },
+      where: {
+        tenantId,
+        status: { not: 'deleted' },
+        OR: [
+          { messageId: { in: [...threadMessageIds] } },
+          { inReplyTo: { in: [...threadMessageIds] } },
+        ],
+      },
+      select: { id: true, messageId: true, inReplyTo: true },
     });
 
     for (const r of related) {
@@ -126,7 +123,7 @@ export async function GET(
       id: s.id,
       type: 'sent' as const,
       subject: s.subject || '',
-      from: s.fromAddress || 'Nell VH',
+      from: s.fromAddress || session.user?.name || 'Support Team',
       body: s.body,
       timestamp: s.sentAt || new Date(),
     })),

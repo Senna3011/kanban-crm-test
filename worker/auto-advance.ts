@@ -1,14 +1,5 @@
 import prisma from '../src/lib/prisma';
 
-const ADVANCE_DAYS = 7;
-
-/**
- * AUTO-ADVANCE RULES (UPDATED):
- * - Cards do NOT auto-advance automatically
- * - Cards ONLY move when user sends a follow-up email via "Send Now" button
- * - This function now only marks cards as "stale" (overdue) for UI display
- * - The actual column move happens in draft.ts sendDraft()
- */
 export async function processAutoAdvance(data: { tenantId: string; cardId: string }) {
   const { tenantId, cardId } = data;
 
@@ -19,17 +10,20 @@ export async function processAutoAdvance(data: { tenantId: string; cardId: strin
     },
   });
 
-  if (!card) return;
+  if (!card || card.tenantId !== tenantId) return;
 
-  // If card has been replied to (highlighted), it's not stale
+  // If card has been replied to (highlighted), it's not overdue
   if (card.highlighted) return;
 
   // Only check cards in "Follow up" columns
   if (!card.column.title.startsWith('Follow up')) return;
 
-  // Check if nextFollowUpAt has passed — mark as overdue (for UI display)
+  // Check if nextFollowUpAt has passed — flag as overdue
   if (card.nextFollowUpAt && card.nextFollowUpAt <= new Date()) {
-    console.log(`[Auto-Advance] Card ${cardId} is overdue in ${card.column.title} — waiting for user to send follow-up`);
-    // Don't auto-advance — just log. User must click "Send Now" to move.
+    console.log(`[Auto-Advance] Card ${cardId} is overdue in ${card.column.title}`);
+    await prisma.card.update({
+      where: { id: cardId },
+      data: { highlighted: true },
+    });
   }
 }

@@ -73,23 +73,31 @@ export async function sendDraft(draftId: string, fromAddress?: string) {
   });
 
   // Move card to next column + set nextFollowUpAt for auto-advance
-  const ADVANCE_DAYS = 7;
+  let advanceDays = 7;
+  try {
+    const tenantRecord = await prisma.tenant.findUnique({ where: { id: tenantId }, select: { companyInfo: true } });
+    if (tenantRecord?.companyInfo) {
+      const info = JSON.parse(tenantRecord.companyInfo);
+      if (typeof info.followUpIntervalDays === 'number' && info.followUpIntervalDays > 0) {
+        advanceDays = info.followUpIntervalDays;
+      }
+    }
+  } catch {}
+
   const currentColumn = await prisma.column.findUnique({ where: { id: draft.card.columnId } });
   if (currentColumn) {
-    // Rule: If card is in "Leads" and we send first email, move to "Follow up 1"
-    // Rule: If card is in "Follow up N", move to "Follow up N+1"
-    let targetColumn;
+    const nextStageMap: Record<string, string> = {
+      'Leads': 'Follow up 1',
+      'Follow up 1': 'Follow up 2',
+      'Follow up 2': 'Follow up 3',
+    };
 
-    if (currentColumn.title === 'Leads') {
-      // First email to a lead → move to Follow up 1
+    const targetTitle = nextStageMap[currentColumn.title];
+    let targetColumn = null;
+
+    if (targetTitle) {
       targetColumn = await prisma.column.findFirst({
-        where: { boardId: currentColumn.boardId, title: 'Follow up 1' },
-      });
-    } else if (currentColumn.title.startsWith('Follow up')) {
-      // In Follow up column → move to next column
-      targetColumn = await prisma.column.findFirst({
-        where: { boardId: currentColumn.boardId, position: currentColumn.position + 1 },
-        orderBy: { position: 'asc' },
+        where: { boardId: currentColumn.boardId, title: targetTitle },
       });
     }
 
@@ -99,12 +107,27 @@ export async function sendDraft(draftId: string, fromAddress?: string) {
         data: {
           columnId: targetColumn.id,
           lastActivityAt: new Date(),
-          nextFollowUpAt: new Date(Date.now() + ADVANCE_DAYS * 24 * 60 * 60 * 1000),
+          nextFollowUpAt: new Date(Date.now() + advanceDays * 24 * 60 * 60 * 1000),
           highlighted: false, // Reset reply status when we send a new follow-up
+        },
+      });
+    } else {
+      // Just update activity timestamp and clear highlight
+      await prisma.card.update({
+        where: { id: draft.cardId },
+        data: {
+          lastActivityAt: new Date(),
+          highlighted: false,
         },
       });
     }
   }
+
+  // Trigger real-time UI refresh
+  try {
+    const { broadcastAppEvent } = await import('@/lib/events');
+    broadcastAppEvent({ type: 'card_updated', tenantId });
+  } catch {}
 
   return { success: true };
 }

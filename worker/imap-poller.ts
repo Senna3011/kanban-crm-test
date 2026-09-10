@@ -6,8 +6,8 @@ import { aiProcessQueue } from '../queue';
 
 const emailAdapter = new EmailAdapter();
 
-// Map IMAP folder names to board titles
-const FOLDER_TO_BOARD: Record<string, string> = {
+// Dynamic folder to board resolution with optional fallback mapping
+const DEFAULT_FOLDER_MAPPING: Record<string, string> = {
   'INBOX': 'JetDigitaPro',
   'Elite': 'Elite Team',
   'Gold': 'Gold Team',
@@ -16,30 +16,44 @@ const FOLDER_TO_BOARD: Record<string, string> = {
 };
 
 async function resolveBoard(tenantId: string, toEmail?: string, folder?: string) {
-  // First try recipient-based routing (more specific)
   const tenant = await prisma.tenant.findUnique({ where: { id: tenantId }, select: { companyInfo: true } });
   let routing: Record<string, string> = {};
+  let folderRouting: Record<string, string> = {};
   try {
     if (tenant?.companyInfo) {
       const info = JSON.parse(tenant.companyInfo);
       routing = info.emailRouting || {};
+      folderRouting = info.folderRouting || {};
     }
   } catch {}
 
+  // 1. Try recipient-based routing
   if (toEmail && routing[toEmail]) {
     const board = await prisma.board.findFirst({ where: { tenantId, title: routing[toEmail] } });
     if (board) return board;
   }
 
-  // Then try folder-based routing
-  if (folder && FOLDER_TO_BOARD[folder]) {
-    const board = await prisma.board.findFirst({ where: { tenantId, title: FOLDER_TO_BOARD[folder] } });
+  // 2. Try tenant custom folder-based routing
+  if (folder && folderRouting[folder]) {
+    const board = await prisma.board.findFirst({ where: { tenantId, title: folderRouting[folder] } });
     if (board) return board;
   }
 
-  // Fallback: JetDigitaPro board or first board
-  const general = await prisma.board.findFirst({ where: { tenantId, title: 'JetDigitaPro' } });
-  if (general) return general;
+  // 3. Try matching folder name directly to board title
+  if (folder) {
+    const directMatch = await prisma.board.findFirst({
+      where: { tenantId, title: { equals: folder, mode: 'insensitive' } },
+    });
+    if (directMatch) return directMatch;
+  }
+
+  // 4. Try default mapping
+  if (folder && DEFAULT_FOLDER_MAPPING[folder]) {
+    const board = await prisma.board.findFirst({ where: { tenantId, title: DEFAULT_FOLDER_MAPPING[folder] } });
+    if (board) return board;
+  }
+
+  // 5. Fallback: First board of the tenant
   return prisma.board.findFirst({ where: { tenantId } });
 }
 
@@ -77,10 +91,12 @@ async function pollFolder(imapConfig: Record<string, string>, folder: string, te
         continue;
       }
 
-      // Skip outbound emails — if fromEmail is from our domain or matches any configured user
+      // Skip outbound emails — if fromEmail is from configured mailbox domain or matches configured user
       const senderEmail = msg.fromEmail?.toLowerCase() || '';
-      const isOurDomain = senderEmail.endsWith('@jetdigitalpro.com');
-      const isConfigUser = imapConfig.user && senderEmail === imapConfig.user.toLowerCase();
+      const configUser = imapConfig.user?.toLowerCase() || '';
+      const configDomain = configUser.includes('@') ? configUser.split('@')[1] : '';
+      const isOurDomain = configDomain ? senderEmail.endsWith(`@${configDomain}`) : false;
+      const isConfigUser = configUser && senderEmail === configUser;
       if (isOurDomain || isConfigUser) {
         console.log(`[IMAP Poller] Skipping outbound email: ${msg.subject} (from ${msg.fromEmail})`);
         continue;
@@ -178,8 +194,17 @@ export async function processEmailPoll(data: { tenantId: string; emailConfigId: 
   console.log(`[IMAP Poller] Polling ${config.imapUser}...`);
 
   let totalCreated = 0;
-  // Poll INBOX + all shared mailbox folders
-  const folders = ['INBOX', 'Elite', 'Gold', 'Premiere', 'Nell'];
+  // Poll INBOX + tenant-configured shared mailbox folders
+  let folders = ['INBOX', 'Elite', 'Gold', 'Premiere', 'Nell'];
+  try {
+    const tenantRecord = await prisma.tenant.findUnique({ where: { id: tenantId }, select: { companyInfo: true } });
+    if (tenantRecord?.companyInfo) {
+      const info = JSON.parse(tenantRecord.companyInfo);
+      if (Array.isArray(info.pollFolders) && info.pollFolders.length > 0) {
+        folders = Array.from(new Set(['INBOX', ...info.pollFolders]));
+      }
+    }
+  } catch {}
   for (const folder of folders) {
     const created = await pollFolder(imapConfig, folder, tenantId, emailConfigId);
     totalCreated += created;
