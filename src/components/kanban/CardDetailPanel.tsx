@@ -396,15 +396,15 @@ export default function CardDetailPanel({ card, onClose }: Props) {
   const isOverdue = followUpDate ? followUpDate < new Date() : false;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-start justify-center pt-6 sm:pt-12 p-4">
+    <div className="fixed inset-0 z-50 flex items-start justify-center pt-2 sm:pt-12 p-2 sm:p-4">
       <Toaster position="top-right" />
       {/* Backdrop with blur */}
       <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-xs transition-opacity" onClick={onClose} />
 
       {/* Modal panel */}
-      <div className="relative w-full max-w-2xl bg-white rounded-2xl shadow-2xl border border-slate-200/80 flex flex-col max-h-[88vh] overflow-hidden">
+      <div className="relative w-full max-w-2xl bg-white rounded-2xl shadow-2xl border border-slate-200/80 flex flex-col max-h-[94vh] sm:max-h-[88vh] overflow-hidden">
         {/* ---- Header ---- */}
-        <div className="px-6 py-4 border-b border-slate-100 bg-slate-50/50 flex items-start justify-between gap-4">
+        <div className="px-4 sm:px-6 py-3 sm:py-4 border-b border-slate-100 bg-slate-50/50 flex items-start justify-between gap-2 sm:gap-4">
           <div className="min-w-0 flex-1">
             <h2 className="text-base font-bold text-slate-800 leading-snug">{card.subject || '(No Subject)'}</h2>
             <div className="flex items-center gap-2 mt-2 flex-wrap">

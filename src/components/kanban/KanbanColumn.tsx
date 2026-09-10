@@ -42,7 +42,7 @@ export default function KanbanColumn({
   return (
     <div
       ref={setNodeRef}
-      className={`flex-shrink-0 w-72 bg-slate-100/80 border border-slate-200/80 rounded-2xl flex flex-col max-h-full transition-all overflow-hidden ${
+      className={`flex-shrink-0 w-[80vw] max-w-[288px] sm:w-72 bg-slate-100/80 border border-slate-200/80 rounded-2xl flex flex-col max-h-full transition-all overflow-hidden ${
         isOver ? 'bg-primary-50/80 ring-2 ring-primary-300' : ''
       }`}
     >

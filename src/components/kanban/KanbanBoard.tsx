@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { DndContext, DragEndEvent, DragOverlay, DragStartEvent, PointerSensor, useSensor, useSensors } from '@dnd-kit/core';
+import { DndContext, DragEndEvent, DragOverlay, DragStartEvent, MouseSensor, TouchSensor, useSensor, useSensors } from '@dnd-kit/core';
 import KanbanColumn from './KanbanColumn';
 import KanbanCard from './KanbanCard';
 import CardDetailPanel from './CardDetailPanel';
@@ -55,7 +55,8 @@ export default function KanbanBoard() {
   }, []);
 
   const sensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 8 } })
+    useSensor(MouseSensor, { activationConstraint: { distance: 8 } }),
+    useSensor(TouchSensor, { activationConstraint: { delay: 250, tolerance: 8 } })
   );
 
   const fetchColumns = useCallback(async () => {
@@ -359,9 +360,9 @@ export default function KanbanBoard() {
           </div>
         </div>
       )}
-      <div className="flex items-center justify-between mb-4">
-        <div className="flex items-center gap-3">
-          <h1 className="text-xl font-bold tracking-tight text-slate-800">{boardName}</h1>
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-3 sm:mb-4">
+        <div className="flex items-center gap-2 sm:gap-3">
+          <h1 className="text-lg sm:text-xl font-bold tracking-tight text-slate-800">{boardName}</h1>
           {totalUnread > 0 && (
             <span className="text-xs bg-primary-50 text-primary-700 border border-primary-200/80 px-2.5 py-0.5 rounded-full font-medium flex items-center gap-1.5">
               <span className="w-1.5 h-1.5 rounded-full bg-primary-600 animate-pulse" />
@@ -369,7 +370,7 @@ export default function KanbanBoard() {
             </span>
           )}
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap sm:flex-nowrap">
           {selectionMode ? (
             <>
               <span className="text-xs font-medium text-slate-500">{selectedIds.size} selected</span>
@@ -451,8 +452,8 @@ export default function KanbanBoard() {
       <DndContext sensors={sensors} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
         <div
           ref={scrollRef}
-          className="flex-1 flex gap-4 overflow-x-auto pb-4"
-          style={{ cursor: 'grab' }}
+          className="flex-1 flex gap-3 sm:gap-4 overflow-x-auto pb-4 touch-pan-x select-none"
+          style={{ cursor: 'grab', WebkitOverflowScrolling: 'touch' }}
           onMouseDown={handleMouseDown}
           onMouseMove={handleMouseMove}
           onMouseUp={handleMouseUp}
