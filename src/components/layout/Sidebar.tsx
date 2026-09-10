@@ -7,6 +7,7 @@ import clsx from 'clsx';
 
 const navItems = [
   { href: '/dashboard', label: 'Board', icon: '📋' },
+  { href: '/dashboard/guide', label: 'Panduan', icon: '📖' },
   { href: '/dashboard/settings', label: 'Settings', icon: '⚙️' },
   { href: '/dashboard/spam', label: 'Spam Box', icon: '🛡️' },
 ];

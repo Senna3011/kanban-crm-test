@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import { useSession, signOut } from 'next-auth/react';
 import Button from '@/components/ui/Button';
 
@@ -40,7 +41,14 @@ export default function Navbar() {
           </div>
         </div>
       </div>
-      <div className="flex items-center gap-2 sm:gap-4 flex-shrink-0">
+      <div className="flex items-center gap-2 sm:gap-3 flex-shrink-0">
+        <Link
+          href="/dashboard/guide"
+          className="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium text-slate-700 bg-slate-50 border border-slate-200 rounded-lg hover:bg-slate-100 hover:border-slate-300 transition-all shadow-xs"
+        >
+          <span>📖</span>
+          <span className="hidden sm:inline">Panduan</span>
+        </Link>
         <div className="hidden sm:flex items-center gap-2.5">
           <span className="w-7 h-7 rounded-full bg-slate-100 border border-slate-200 text-slate-600 text-xs font-semibold flex items-center justify-center">
             {initial}
