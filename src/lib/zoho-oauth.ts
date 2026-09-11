@@ -6,6 +6,7 @@ export interface ZohoOAuthState {
   tenantId: string;
   boardId?: string;
   loginEmail?: string;
+  redirectUri?: string;
   timestamp: number;
 }
 
@@ -51,33 +52,35 @@ export function getZohoOAuthConfig() {
   return { clientId, clientSecret, redirectUri, accountsUrl, mailApiUrl };
 }
 
-export function buildZohoAuthUrl(state: string): string {
+export function buildZohoAuthUrl(state: string, customRedirectUri?: string): string {
   const { clientId, redirectUri, accountsUrl } = getZohoOAuthConfig();
+  const effectiveRedirectUri = customRedirectUri || redirectUri;
   const params = new URLSearchParams({
-    scope: 'ZohoMail.messages.ALL,email',
+    scope: 'ZohoMail.messages.ALL,ZohoMail.accounts.READ,email',
     client_id: clientId,
     response_type: 'code',
     access_type: 'offline',
     prompt: 'consent',
-    redirect_uri: redirectUri,
+    redirect_uri: effectiveRedirectUri,
     state,
   });
   return `${accountsUrl.replace(/\/$/, '')}/oauth/v2/auth?${params.toString()}`;
 }
 
-export async function exchangeZohoCode(code: string): Promise<{
+export async function exchangeZohoCode(code: string, customRedirectUri?: string): Promise<{
   accessToken: string;
   refreshToken?: string;
   expiresIn: number;
 }> {
   const { clientId, clientSecret, redirectUri, accountsUrl } = getZohoOAuthConfig();
+  const effectiveRedirectUri = customRedirectUri || redirectUri;
   const url = `${accountsUrl.replace(/\/$/, '')}/oauth/v2/token`;
 
   const params = new URLSearchParams({
     grant_type: 'authorization_code',
     client_id: clientId,
     client_secret: clientSecret,
-    redirect_uri: redirectUri,
+    redirect_uri: effectiveRedirectUri,
     code,
   });
 
