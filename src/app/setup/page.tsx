@@ -25,6 +25,12 @@ export default function SetupPage() {
     return null;
   }
 
+  const role = (session?.user as any)?.role || 'member';
+  if (role !== 'admin') {
+    router.push('/dashboard');
+    return null;
+  }
+
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-50 p-8">
       <Toaster />

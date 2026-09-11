@@ -20,9 +20,9 @@ npm run dev:all
 
 1. Buka peramban (browser) dan buka tautan:
    **[http://localhost:3099](http://localhost:3099)**
-2. Masukkan akun admin default:
-   - **Email**: `admin@jetdigitalpro.com`
-   - **Password**: `jdp123`
+2. Masukkan akun administrator yang telah dikonfigurasi di environment atau akun yang dibuat via invitation:
+   - **Email**: `admin@jetdigitalpro.com` (atau email akun Anda)
+   - **Password**: *(Password akun yang dikonfigurasi saat setup)*
 3. Klik tombol **Sign In**. Anda akan langsung diarahkan ke halaman utama **Kanban Board**.
 
 ---

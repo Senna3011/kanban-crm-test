@@ -4,8 +4,17 @@ import GoogleProvider from 'next-auth/providers/google';
 import { PrismaAdapter } from '@auth/prisma-adapter';
 import bcrypt from 'bcryptjs';
 import prisma from '@/lib/prisma';
-import { checkRateLimit, LOGIN_RATE_LIMIT } from '@/lib/rate-limit';
-import { headers } from 'next/headers';
+
+function getNextAuthSecret(): string {
+  const secret = process.env.NEXTAUTH_SECRET;
+  if (!secret) {
+    if (process.env.NODE_ENV === 'production') {
+      console.warn('[Security Warning] NEXTAUTH_SECRET is not set in production. Please configure NEXTAUTH_SECRET with a strong 32+ character key.');
+    }
+    return 'kanban-crm-default-secret-key-32chars';
+  }
+  return secret;
+}
 
 export const authOptions: NextAuthOptions = {
   adapter: PrismaAdapter(prisma) as any,
@@ -19,22 +28,10 @@ export const authOptions: NextAuthOptions = {
       async authorize(credentials) {
         if (!credentials?.email || !credentials?.password) return null;
 
-        // Rate limiting: get client IP from headers (NextAuth v4 uses old API)
-        const headersList = await headers();
-        const forwardedFor = headersList.get('x-forwarded-for');
-        const realIp = headersList.get('x-real-ip');
-        const clientIp = forwardedFor
-          ? forwardedFor.split(',')[0].trim()
-          : realIp || '127.0.0.1';
-
-        // Check rate limit (5 attempts per 15 minutes)
-        const rateLimitResult = checkRateLimit(clientIp, LOGIN_RATE_LIMIT);
-        if (!rateLimitResult.success) {
-          throw new Error('RATE_LIMITED');
-        }
+        const normalizedEmail = credentials.email.trim().toLowerCase();
 
         const user = await prisma.user.findUnique({
-          where: { email: credentials.email },
+          where: { email: normalizedEmail },
           include: { tenant: true },
         });
 
@@ -91,6 +88,5 @@ export const authOptions: NextAuthOptions = {
   pages: {
     signIn: '/login',
   },
-  // trustHost: true,
-  secret: process.env.NEXTAUTH_SECRET || 'kanban-crm-default-secret-key-32chars',
+  secret: getNextAuthSecret(),
 };

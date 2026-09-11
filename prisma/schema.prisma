@@ -24,6 +24,7 @@ model Tenant {
   notifications Notification[]
   contacts     Contact[]
   spamLogs     SpamLog[]
+  invitations  Invitation[]
 }
 
 model User {
@@ -225,3 +226,22 @@ model SpamLog {
   recoveredToId  String?
   recoveredTo    Card?        @relation(fields: [recoveredToId], references: [id])
 }
+
+model Invitation {
+  id          String   @id @default(cuid())
+  email       String
+  role        String   @default("member")
+  token       String   @unique
+  expiresAt   DateTime
+  createdAt   DateTime @default(now())
+
+  tenantId    String
+  tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  invitedById String?
+
+  @@index([token])
+  @@index([tenantId])
+  @@unique([tenantId, email])
+}
+

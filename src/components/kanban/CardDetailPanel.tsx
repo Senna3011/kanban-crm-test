@@ -301,6 +301,17 @@ export default function CardDetailPanel({ card, onClose }: Props) {
     loadCardDetails();
   }, [card.id, card.fromName, card.fromEmail]);
 
+  // Global Escape key handler to close panel
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        onClose();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [onClose]);
+
   const timeline = useMemo(() => buildTimeline(threadCards, activityLogs, card.id), [threadCards, activityLogs, card.id]);
 
   function copyToClipboard(text: string) {

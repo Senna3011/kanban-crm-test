@@ -31,12 +31,8 @@ export default function GuidePage() {
         </div>
         <div className="pl-11 space-y-2 text-xs sm:text-sm text-slate-600 leading-relaxed">
           <p>
-            Buka tautan website pada browser handphone atau desktop.
+            Buka tautan website pada browser handphone atau desktop. Masuk menggunakan email dan password akun Anda yang telah didaftarkan oleh Administrator atau dibuat melalui link undangan (invitation).
           </p>
-          <div className="bg-slate-50 border border-slate-200 rounded-xl p-3 font-mono text-xs space-y-1">
-            <p><strong className="text-slate-700">Akun Default:</strong> admin@jetdigitalpro.com</p>
-            <p><strong className="text-slate-700">Password:</strong> jdp123</p>
-          </div>
           <p>
             Setelah klik <strong>Sign in</strong>, Anda akan langsung diarahkan ke tampilan <strong>Main Board</strong>.
           </p>

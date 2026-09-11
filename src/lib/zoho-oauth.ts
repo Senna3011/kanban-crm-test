@@ -1,5 +1,45 @@
+import crypto from 'crypto';
 import prisma from './prisma';
 import { encrypt, decrypt } from './encryption';
+
+export interface ZohoOAuthState {
+  tenantId: string;
+  boardId?: string;
+  loginEmail?: string;
+  timestamp: number;
+}
+
+function getOAuthSecret(): string {
+  return process.env.ENCRYPTION_KEY || process.env.NEXTAUTH_SECRET || 'kanban-crm-oauth-secret-signing-key';
+}
+
+export function signOAuthState(payload: ZohoOAuthState): string {
+  const data = Buffer.from(JSON.stringify(payload)).toString('base64url');
+  const signature = crypto.createHmac('sha256', getOAuthSecret()).update(data).digest('base64url');
+  return `${data}.${signature}`;
+}
+
+export function verifyOAuthState(state: string): ZohoOAuthState | null {
+  try {
+    const [data, signature] = state.split('.');
+    if (!data || !signature) return null;
+
+    const expectedSig = crypto.createHmac('sha256', getOAuthSecret()).update(data).digest('base64url');
+    if (signature.length !== expectedSig.length) return null;
+    if (!crypto.timingSafeEqual(Buffer.from(signature), Buffer.from(expectedSig))) {
+      return null;
+    }
+
+    const payload: ZohoOAuthState = JSON.parse(Buffer.from(data, 'base64url').toString('utf8'));
+    // State expires in 15 minutes to prevent replay attacks
+    if (!payload.timestamp || Date.now() - payload.timestamp > 15 * 60 * 1000) {
+      return null;
+    }
+    return payload;
+  } catch {
+    return null;
+  }
+}
 
 export function getZohoOAuthConfig() {
   const clientId = process.env.ZOHO_CLIENT_ID || '';

@@ -1,20 +1,12 @@
 'use server';
 
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/server/auth';
+import { requireAuth, requireAdmin } from '@/lib/auth-guards';
 import prisma from '@/lib/prisma';
 import { encrypt, decrypt } from '@/lib/encryption';
 import { validateEmailConfigInput, type EmailConfigInput } from '@/lib/email-config-validation';
 import { ImapFlow } from 'imapflow';
 import nodemailer from 'nodemailer';
 import { getValidZohoAccessToken } from '@/lib/zoho-oauth';
-
-function requireSession() {
-  return getServerSession(authOptions).then((session) => {
-    if (!session?.user) throw new Error('Please sign in again.');
-    return session;
-  });
-}
 
 function validateConnectionInput(data: { host: string; port: number; user: string; pass: string }) {
   const result = validateEmailConfigInput({
@@ -38,8 +30,8 @@ function withTimeout<T>(promise: Promise<T>, ms = 15000): Promise<T> {
 }
 
 export async function getEmailConfigs() {
-  const session = await requireSession();
-  const tenantId = (session.user as any).tenantId;
+  const user = await requireAuth();
+  const tenantId = user.tenantId;
   const [tenant, configs, boards] = await Promise.all([
     prisma.tenant.findUnique({ where: { id: tenantId }, select: { name: true, companyInfo: true } }),
     prisma.emailConfig.findMany({ where: { tenantId }, orderBy: { createdAt: 'asc' } }),
@@ -84,8 +76,8 @@ export async function saveEmailConfig(data: {
   smtpUser: string;
   smtpPass: string;
 }) {
-  const session = await requireSession();
-  const tenantId = (session.user as any).tenantId;
+  const user = await requireAdmin();
+  const tenantId = user.tenantId;
   const configName = (data.name || 'Default').trim();
   const existing = data.id
     ? await prisma.emailConfig.findFirst({ where: { id: data.id, tenantId } })
@@ -120,8 +112,8 @@ export async function saveEmailConfig(data: {
 }
 
 export async function deleteEmailConfig(id: string) {
-  const session = await requireSession();
-  const tenantId = (session.user as any).tenantId;
+  const user = await requireAdmin();
+  const tenantId = user.tenantId;
   const config = await prisma.emailConfig.findFirst({ where: { id, tenantId } });
   if (!config) throw new Error('Configuration not found.');
   await prisma.emailConfig.delete({ where: { id } });
@@ -135,8 +127,8 @@ export async function testImapConnection(data: {
   user: string;
   pass?: string;
 }): Promise<{ success: boolean; error?: string }> {
-  const session = await requireSession();
-  const tenantId = (session.user as any).tenantId;
+  const user = await requireAdmin();
+  const tenantId = user.tenantId;
   try {
     let authConfig: any;
     if (data.configId) {
@@ -187,8 +179,8 @@ export async function testSmtpConnection(data: {
   user: string;
   pass?: string;
 }): Promise<{ success: boolean; error?: string }> {
-  const session = await requireSession();
-  const tenantId = (session.user as any).tenantId;
+  const user = await requireAdmin();
+  const tenantId = user.tenantId;
   try {
     let authConfig: any;
     if (data.configId) {
@@ -233,10 +225,8 @@ export async function updateCompanyInfo(data: {
   name: string;
   companyInfo: string;
 }) {
-  const session = await getServerSession(authOptions);
-  if (!session?.user) throw new Error('Unauthorized');
-
-  const tenantId = (session.user as any).tenantId;
+  const user = await requireAdmin();
+  const tenantId = user.tenantId;
 
   await prisma.tenant.update({
     where: { id: tenantId },

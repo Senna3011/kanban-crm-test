@@ -1,12 +1,17 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/server/auth';
-import { buildZohoAuthUrl, getZohoOAuthConfig } from '@/lib/zoho-oauth';
+import { buildZohoAuthUrl, getZohoOAuthConfig, signOAuthState } from '@/lib/zoho-oauth';
 
 export async function GET(req: NextRequest) {
   const session = await getServerSession(authOptions);
   if (!session?.user) {
     return NextResponse.redirect(new URL('/login', req.url));
+  }
+
+  const role = (session.user as any).role;
+  if (role !== 'admin') {
+    return NextResponse.json({ error: 'Forbidden: Admin access required.' }, { status: 403 });
   }
 
   const { clientId, clientSecret, redirectUri } = getZohoOAuthConfig();
@@ -22,13 +27,12 @@ export async function GET(req: NextRequest) {
   const loginEmail = searchParams.get('loginEmail') || '';
   const tenantId = (session.user as any).tenantId;
 
-  const statePayload = JSON.stringify({
+  const state = signOAuthState({
     tenantId,
     boardId,
     loginEmail,
     timestamp: Date.now(),
   });
-  const state = Buffer.from(statePayload).toString('base64url');
 
   const authUrl = buildZohoAuthUrl(state);
   return NextResponse.redirect(authUrl);
