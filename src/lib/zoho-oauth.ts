@@ -100,9 +100,9 @@ export async function exchangeZohoCode(code: string): Promise<{
 }
 
 export async function fetchZohoUserInfo(accessToken: string): Promise<{ email: string; accountId?: string }> {
-  const { mailApiUrl } = getZohoOAuthConfig();
+  const { mailApiUrl, accountsUrl } = getZohoOAuthConfig();
 
-  // Try Zoho Mail Accounts API
+  // 1. Try Zoho Mail Accounts API
   try {
     const mailRes = await fetch(`${mailApiUrl.replace(/\/$/, '')}/api/accounts`, {
       headers: { Authorization: `Zoho-oauthtoken ${accessToken}` },
@@ -112,10 +112,26 @@ export async function fetchZohoUserInfo(accessToken: string): Promise<{ email: s
       const firstAccount = json.data?.[0];
       const email = firstAccount?.primaryEmailAddress || firstAccount?.incomingAddress;
       const accountId = firstAccount?.accountId ? String(firstAccount.accountId) : undefined;
-      if (email) return { email: email.trim(), accountId };
+      if (email) return { email: email.trim().toLowerCase(), accountId };
     }
   } catch {
-    // Expected to fail for Gmail-registered Zoho accounts without dedicated mailbox
+    // Expected to fail if Zoho Mail API is not available
+  }
+
+  // 2. Try Zoho User Info endpoint
+  try {
+    const userRes = await fetch(`${accountsUrl.replace(/\/$/, '')}/oauth/user/info`, {
+      headers: { Authorization: `Zoho-oauthtoken ${accessToken}` },
+    });
+    if (userRes.ok) {
+      const json = await userRes.json();
+      const email = json.Email || json.email || json.user_email || json.ZUID;
+      if (email && String(email).includes('@')) {
+        return { email: String(email).trim().toLowerCase() };
+      }
+    }
+  } catch {
+    // Fallback
   }
 
   throw new Error('NO_MAILBOX_API');

@@ -2,6 +2,9 @@ import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
 import { exchangeZohoCode, fetchZohoUserInfo, verifyOAuthState } from '@/lib/zoho-oauth';
 import { encrypt } from '@/lib/encryption';
+import { revalidatePath } from 'next/cache';
+
+export const dynamic = 'force-dynamic';
 
 export async function GET(req: NextRequest) {
   const searchParams = req.nextUrl.searchParams;
@@ -35,11 +38,11 @@ export async function GET(req: NextRequest) {
     let zohoAccountId: string | null = null;
     try {
       const userInfo = await fetchZohoUserInfo(tokenResult.accessToken);
-      email = userInfo.email;
+      email = userInfo.email.trim().toLowerCase();
       zohoAccountId = userInfo.accountId || null;
     } catch {
       if (loginEmail && loginEmail.includes('@')) {
-        email = loginEmail;
+        email = loginEmail.trim().toLowerCase();
       } else {
         return NextResponse.redirect(`${settingsUrl}?error=could_not_determine_email`);
       }
@@ -47,13 +50,31 @@ export async function GET(req: NextRequest) {
 
     const expiry = new Date(Date.now() + tokenResult.expiresIn * 1000);
 
-    // Upsert EmailConfig for this tenant
+    // If boardId is provided, unlink any other config that is currently occupying this boardId (since boardId is @unique)
+    if (boardId) {
+      const targetBoard = await prisma.board.findFirst({ where: { id: boardId, tenantId } });
+      if (targetBoard) {
+        await prisma.emailConfig.updateMany({
+          where: { tenantId, boardId },
+          data: { boardId: null },
+        });
+      }
+    }
+
+    // Find existing config by email or matching name in this tenant
+    const configName = `Zoho (${email})`;
     const existing = await prisma.emailConfig.findFirst({
-      where: { tenantId, imapUser: email },
+      where: {
+        tenantId,
+        OR: [
+          { imapUser: { equals: email, mode: 'insensitive' } },
+          { name: configName },
+        ],
+      },
     });
 
     const updateData: any = {
-      name: `Zoho (${email})`,
+      name: configName,
       authType: 'oauth2',
       imapHost: 'imap.zoho.com',
       imapPort: 993,
@@ -65,7 +86,7 @@ export async function GET(req: NextRequest) {
       tokenExpiry: expiry,
       zohoAccountId,
       isActive: true,
-      boardId: boardId || undefined,
+      boardId: boardId || null,
     };
 
     if (tokenResult.refreshToken) {
@@ -85,6 +106,11 @@ export async function GET(req: NextRequest) {
         },
       });
     }
+
+    // Revalidate settings path
+    try {
+      revalidatePath('/dashboard/settings');
+    } catch {}
 
     return NextResponse.redirect(`${settingsUrl}?status=zoho_connected&email=${encodeURIComponent(email)}`);
   } catch (err: any) {

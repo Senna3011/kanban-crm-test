@@ -9,6 +9,9 @@ import ZohoStatusBanner from '@/components/setup/ZohoStatusBanner';
 import Link from 'next/link';
 import AiStatusBanner from '@/components/AiStatusBanner';
 
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
+
 export default async function SettingsPage() {
   const session = await getServerSession(authOptions);
   const userRole = (session?.user as any)?.role || 'member';
