@@ -164,12 +164,19 @@ export async function testImapConnection(data: {
       try {
         await imap.connect();
       } finally {
-        await imap.logout();
+        try {
+          await imap.logout();
+        } catch {}
       }
     })());
     return { success: true };
   } catch (err: any) {
-    return { success: false, error: err?.message || 'IMAP connection failed.' };
+    console.error('[IMAP Test Error Details]', err);
+    let errMsg = err?.response || err?.responseText || err?.message || 'IMAP connection failed.';
+    if (errMsg === 'Command failed') {
+      errMsg = 'Command failed. Pastikan "IMAP Access" sudah diaktifkan (Centang Enable) di Settings Zoho Mail (mail.zoho.com).';
+    }
+    return { success: false, error: errMsg };
   }
 }
 
@@ -218,7 +225,8 @@ export async function testSmtpConnection(data: {
     transporter.close();
     return { success: true };
   } catch (err: any) {
-    return { success: false, error: err?.message || 'SMTP connection failed.' };
+    console.error('[SMTP Test Error Details]', err);
+    return { success: false, error: err?.response || err?.message || 'SMTP connection failed.' };
   }
 }
 

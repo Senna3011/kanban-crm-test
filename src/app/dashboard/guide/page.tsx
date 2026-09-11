@@ -45,34 +45,43 @@ export default function GuidePage() {
           <span className="w-8 h-8 rounded-xl bg-primary-100 text-primary-700 font-bold text-sm flex items-center justify-center shrink-0">
             2
           </span>
-          <h2 className="text-base sm:text-lg font-bold text-slate-800">Menghubungkan Akun Zoho Mail</h2>
+          <h2 className="text-base sm:text-lg font-bold text-slate-800">Menghubungkan Akun Email (Zoho / Gmail / Outlook)</h2>
         </div>
         <div className="pl-11 space-y-3 text-xs sm:text-sm text-slate-600 leading-relaxed">
           <p>
             Masuk ke menu <Link href="/dashboard/settings" className="text-primary-600 underline font-medium">Settings (⚙️)</Link> melalui sidebar atau menu hamburger di HP.
           </p>
-          
+
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-1">
-            <div className="p-4 rounded-xl border border-blue-200 bg-blue-50/50 space-y-2">
-              <span className="inline-block px-2 py-0.5 text-[11px] font-semibold bg-blue-100 text-blue-800 rounded-full">
-                Opsi A — Disarankan
+            <div className="p-4 rounded-xl border border-primary-200 bg-primary-50/40 space-y-2">
+              <span className="inline-block px-2 py-0.5 text-[11px] font-semibold bg-primary-100 text-primary-800 rounded-full">
+                Zoho Mail Setup
               </span>
-              <h3 className="font-semibold text-slate-900 text-sm">Zoho One-Click OAuth</h3>
-              <p className="text-xs text-slate-600">
-                Pilih papan target (misal: <em>Main Board</em>), klik tombol <strong>Connect with Zoho Mail</strong>, lalu setujui izin akses akun Zoho Anda.
-              </p>
+              <h3 className="font-semibold text-slate-900 text-sm">Zoho Mail IMAP & SMTP</h3>
+              <ul className="text-xs text-slate-600 space-y-1 list-disc list-inside">
+                <li><strong>IMAP:</strong> imap.zoho.com (Port: 993)</li>
+                <li><strong>SMTP:</strong> smtp.zoho.com (Port: 465)</li>
+                <li><strong>User:</strong> alamat email Zoho Anda</li>
+                <li><strong>Password:</strong> App Password / Password Akun Zoho</li>
+              </ul>
             </div>
 
             <div className="p-4 rounded-xl border border-slate-200 bg-slate-50 space-y-2">
               <span className="inline-block px-2 py-0.5 text-[11px] font-semibold bg-slate-200 text-slate-700 rounded-full">
-                Opsi B
+                Gmail / Custom Domain
               </span>
-              <h3 className="font-semibold text-slate-900 text-sm">Manual IMAP / SMTP</h3>
-              <p className="text-xs text-slate-600">
-                Isi IMAP/SMTP User dengan email Zoho dan Password akun / App Password Zoho. Klik <strong>Test All</strong> lalu <strong>Save Configuration</strong>.
-              </p>
+              <h3 className="font-semibold text-slate-900 text-sm">Universal IMAP & SMTP</h3>
+              <ul className="text-xs text-slate-600 space-y-1 list-disc list-inside">
+                <li><strong>Gmail:</strong> imap.gmail.com (993) / smtp.gmail.com (465)</li>
+                <li><strong>Outlook:</strong> outlook.office365.com (993) / smtp.office365.com (587)</li>
+                <li>Gunakan <em>App Password</em> jika akun memiliki verifikasi 2 langkah (2FA).</li>
+              </ul>
             </div>
           </div>
+
+          <p className="text-xs text-slate-500 pt-1">
+            Klik tombol <strong>Test All</strong> untuk memastikan status berubah hijau <em>Connected</em>, lalu klik <strong>Save Configuration</strong>.
+          </p>
         </div>
       </div>
 
