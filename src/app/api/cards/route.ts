@@ -38,13 +38,26 @@ export async function POST(req: NextRequest) {
   const tenantId = (session.user as any).tenantId;
   const body = await req.json();
 
+  if (!body.columnId) {
+    return NextResponse.json({ error: 'Column ID is required' }, { status: 400 });
+  }
+
+  // Verify column belongs to this tenant's board
+  const targetCol = await prisma.column.findFirst({
+    where: { id: body.columnId, board: { tenantId } },
+  });
+
+  if (!targetCol) {
+    return NextResponse.json({ error: 'Target column not found or unauthorized' }, { status: 403 });
+  }
+
   const card = await prisma.card.create({
     data: {
       subject: body.subject,
       fromEmail: body.fromEmail,
       fromName: body.fromName,
       bodyText: body.bodyText,
-      columnId: body.columnId,
+      columnId: targetCol.id,
       tenantId,
       channel: body.channel || 'email',
     },

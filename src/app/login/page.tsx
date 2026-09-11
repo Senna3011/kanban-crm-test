@@ -98,6 +98,13 @@ function LoginForm() {
         >
           {loading ? 'Memproses...' : 'Sign In'}
         </button>
+
+        <div className="pt-2 text-center text-xs text-slate-500">
+          Startup/Perusahaan baru?{' '}
+          <a href="/register" className="font-semibold text-primary-600 hover:underline">
+            Daftarkan Workspace di sini
+          </a>
+        </div>
       </form>
     </div>
   );

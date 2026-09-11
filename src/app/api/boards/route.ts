@@ -8,11 +8,48 @@ export async function GET() {
   if (!session?.user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   const tenantId = (session.user as any).tenantId;
-  const boards = await prisma.board.findMany({
-    where: { tenantId },
-    orderBy: { createdAt: 'asc' },
-    select: { id: true, title: true },
-  });
+  const userId = (session.user as any).id;
+  const role = (session.user as any).role;
+
+  let boards;
+  if (role === 'admin') {
+    boards = await prisma.board.findMany({
+      where: { tenantId },
+      orderBy: { createdAt: 'asc' },
+      select: { id: true, title: true },
+    });
+  } else {
+    // Check if user has specific assigned boards inside tenant companyInfo or default to all
+    const tenant = await prisma.tenant.findUnique({
+      where: { id: tenantId },
+      select: { companyInfo: true },
+    });
+
+    let userBoardMap: Record<string, string[]> = {};
+    try {
+      if (tenant?.companyInfo) {
+        const parsed = JSON.parse(tenant.companyInfo);
+        userBoardMap = parsed.userBoardMap || {};
+      }
+    } catch {}
+
+    const allowedIds = userBoardMap[userId];
+
+    if (Array.isArray(allowedIds) && allowedIds.length > 0) {
+      boards = await prisma.board.findMany({
+        where: { tenantId, id: { in: allowedIds } },
+        orderBy: { createdAt: 'asc' },
+        select: { id: true, title: true },
+      });
+    } else {
+      // Default: see all boards in tenant
+      boards = await prisma.board.findMany({
+        where: { tenantId },
+        orderBy: { createdAt: 'asc' },
+        select: { id: true, title: true },
+      });
+    }
+  }
 
   return NextResponse.json(boards);
 }
@@ -20,6 +57,11 @@ export async function GET() {
 export async function POST(req: NextRequest) {
   const session = await getServerSession(authOptions);
   if (!session?.user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+
+  const role = (session.user as any).role;
+  if (role !== 'admin') {
+    return NextResponse.json({ error: 'Forbidden: Hanya Admin yang dapat membuat Board baru.' }, { status: 403 });
+  }
 
   const tenantId = (session.user as any).tenantId;
   const body = await req.json();
@@ -31,14 +73,15 @@ export async function POST(req: NextRequest) {
   });
 
   const defaultColumns = [
-    { title: 'General', position: 0, color: '#64748b', isSystem: false },
+    { title: 'Unreads', position: 0, color: '#6b7280', isSystem: true },
     { title: 'Leads', position: 1, color: '#3b82f6', isSystem: false },
-    { title: 'Follow up 1', position: 2, color: '#f59e0b', isSystem: false },
-    { title: 'Follow up 2', position: 3, color: '#f59e0b', isSystem: false },
-    { title: 'Follow up 3', position: 4, color: '#f59e0b', isSystem: false },
-    { title: 'Fail', position: 5, color: '#ef4444', isSystem: false },
-    { title: 'Pending', position: 6, color: '#8b5cf6', isSystem: false },
-    { title: 'Success', position: 7, color: '#22c55e', isSystem: false },
+    { title: 'General', position: 2, color: '#64748b', isSystem: false },
+    { title: 'Follow up 1', position: 3, color: '#f59e0b', isSystem: false },
+    { title: 'Follow up 2', position: 4, color: '#f59e0b', isSystem: false },
+    { title: 'Follow up 3', position: 5, color: '#f59e0b', isSystem: false },
+    { title: 'Fail', position: 6, color: '#ef4444', isSystem: false },
+    { title: 'Pending', position: 7, color: '#8b5cf6', isSystem: false },
+    { title: 'Success', position: 8, color: '#22c55e', isSystem: false },
   ];
 
   for (const col of defaultColumns) {

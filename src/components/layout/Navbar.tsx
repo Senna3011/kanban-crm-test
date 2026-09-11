@@ -10,7 +10,23 @@ export default function Navbar() {
   const { data: session } = useSession();
   const { connected } = useSocket();
   const [isOffline, setIsOffline] = useState(false);
-  const user = session?.user as any;
+  const [profileMeta, setProfileMeta] = useState<{
+    user?: { name?: string | null; email?: string; avatar?: string | null; role?: string };
+    tenant?: { name?: string; logoUrl?: string };
+  }>({});
+
+  const sessionUser = session?.user as any;
+
+  useEffect(() => {
+    fetch('/api/profile-meta')
+      .then((r) => (r.ok ? r.json() : {}))
+      .then((data: any) => {
+        if (data && (data.user || data.tenant)) {
+          setProfileMeta(data);
+        }
+      })
+      .catch(() => {});
+  }, [sessionUser?.id]);
 
   useEffect(() => {
     const handleOnline = () => setIsOffline(false);
@@ -37,7 +53,14 @@ export default function Navbar() {
     window.dispatchEvent(new Event('toggle-mobile-sidebar'));
   }
 
-  const initial = (user?.email || '?').charAt(0).toUpperCase();
+  const currentUserEmail = profileMeta.user?.email || sessionUser?.email || '';
+  const currentUserName = profileMeta.user?.name || sessionUser?.name || '';
+  const currentUserAvatar = profileMeta.user?.avatar || sessionUser?.avatar || '';
+  const currentRole = profileMeta.user?.role || sessionUser?.role || 'member';
+  const tenantName = profileMeta.tenant?.name || sessionUser?.tenantName || 'Workspace';
+  const tenantLogo = profileMeta.tenant?.logoUrl || '';
+
+  const initial = (currentUserName || currentUserEmail || '?').charAt(0).toUpperCase();
 
   return (
     <>
@@ -60,12 +83,20 @@ export default function Navbar() {
             </svg>
           </button>
           <div className="flex items-center gap-2 sm:gap-2.5 min-w-0">
-            <span className="w-8 h-8 rounded-xl bg-gradient-to-br from-primary-600 to-indigo-700 text-white text-xs font-bold flex items-center justify-center tracking-tight flex-shrink-0 shadow-2xs">
-              JD
+            <span className="w-8 h-8 rounded-xl bg-gradient-to-br from-primary-600 to-indigo-700 text-white text-xs font-bold flex items-center justify-center tracking-tight flex-shrink-0 shadow-2xs overflow-hidden border border-slate-200/80">
+              {tenantLogo ? (
+                <img src={tenantLogo} alt="Logo" className="w-full h-full object-cover" onError={(e) => { (e.target as any).style.display = 'none'; }} />
+              ) : (
+                (tenantName || 'CR').substring(0, 2).toUpperCase()
+              )}
             </span>
             <div className="leading-tight min-w-0">
-              <p className="text-sm font-bold text-slate-900 truncate max-w-[120px] sm:max-w-none">Jet Digital Pro</p>
-              <p className="text-[11px] text-slate-400 truncate max-w-[120px] sm:max-w-none">{user?.tenantName || 'Kanban CRM'}</p>
+              <p className="text-sm font-bold text-slate-900 truncate max-w-[140px] sm:max-w-xs">
+                {tenantName}
+              </p>
+              <p className="text-[11px] text-slate-400 truncate max-w-[140px] sm:max-w-xs">
+                {currentRole === 'admin' ? 'Administrator' : 'Team Member'}
+              </p>
             </div>
           </div>
         </div>
@@ -106,13 +137,21 @@ export default function Navbar() {
             <span className="hidden sm:inline">Panduan</span>
           </Link>
 
-          {/* User Avatar */}
-          <div className="hidden sm:flex items-center gap-2">
-            <span className="w-7 h-7 rounded-full bg-gradient-to-br from-primary-600 to-indigo-600 text-white text-xs font-bold flex items-center justify-center shadow-2xs">
-              {initial}
+          {/* User Avatar & Profile Link */}
+          <Link
+            href="/dashboard/profile"
+            className="hidden sm:flex items-center gap-2 p-1 rounded-xl hover:bg-slate-100 transition"
+            title="Buka Profil Saya"
+          >
+            <span className="w-7 h-7 rounded-full bg-gradient-to-br from-primary-600 to-indigo-600 text-white text-xs font-bold flex items-center justify-center shadow-2xs overflow-hidden border border-slate-200">
+              {currentUserAvatar ? (
+                <img src={currentUserAvatar} alt="Avatar" className="w-full h-full object-cover" onError={(e) => { (e.target as any).style.display = 'none'; }} />
+              ) : (
+                initial
+              )}
             </span>
-            <span className="text-xs font-medium text-slate-600 max-w-[140px] truncate">{user?.email}</span>
-          </div>
+            <span className="text-xs font-medium text-slate-700 max-w-[130px] truncate">{currentUserName || currentUserEmail}</span>
+          </Link>
 
           <Button variant="ghost" size="sm" onClick={handleSignOut} className="text-xs font-medium">
             Sign out

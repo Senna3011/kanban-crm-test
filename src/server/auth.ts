@@ -44,6 +44,7 @@ export const authOptions: NextAuthOptions = {
           id: user.id,
           email: user.email,
           name: user.name,
+          avatar: user.avatar,
           role: user.role,
           tenantId: user.tenantId,
           tenantName: user.tenant.name,
@@ -53,12 +54,17 @@ export const authOptions: NextAuthOptions = {
   ],
   session: { strategy: 'jwt' },
   callbacks: {
-    async jwt({ token, user }) {
+    async jwt({ token, user, trigger, session }) {
       if (user) {
         token.id = user.id;
         token.role = (user as any).role;
+        token.avatar = (user as any).avatar;
         token.tenantId = (user as any).tenantId;
         token.tenantName = (user as any).tenantName;
+      }
+      if (trigger === 'update' && session?.user) {
+        if (session.user.name) token.name = session.user.name;
+        if (session.user.avatar !== undefined) token.avatar = session.user.avatar;
       }
       return token;
     },
@@ -66,6 +72,7 @@ export const authOptions: NextAuthOptions = {
       if (session.user) {
         (session.user as any).id = token.id;
         (session.user as any).role = token.role;
+        (session.user as any).avatar = (token as any).avatar;
         (session.user as any).tenantId = token.tenantId;
         (session.user as any).tenantName = token.tenantName;
       }

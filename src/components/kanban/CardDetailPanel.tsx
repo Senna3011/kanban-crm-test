@@ -251,6 +251,38 @@ export default function CardDetailPanel({ card, onClose }: Props) {
   const [cardHtml, setCardHtml] = useState('');
   const [activeTab, setActiveTab] = useState<'message' | 'activity'>('message');
   const [copiedEmail, setCopiedEmail] = useState(false);
+  const [tenantUsers, setTenantUsers] = useState<any[]>([]);
+  const [assignedUserId, setAssignedUserId] = useState<string>(card.assignedToId || '');
+  const [updatingAssignee, setUpdatingAssignee] = useState(false);
+
+  useEffect(() => {
+    fetch('/api/users')
+      .then((r) => r.json())
+      .then((users) => {
+        if (Array.isArray(users)) setTenantUsers(users);
+      })
+      .catch(() => {});
+  }, []);
+
+  async function handleAssignUser(newUserId: string) {
+    setUpdatingAssignee(true);
+    try {
+      const res = await fetch(`/api/cards/${card.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ assignedToId: newUserId || null }),
+      });
+      if (res.ok) {
+        setAssignedUserId(newUserId);
+        toast.success(newUserId ? 'Penanggung jawab diperbarui' : 'Penugasan dihapus');
+        window.dispatchEvent(new Event('board-refresh'));
+      }
+    } catch {
+      toast.error('Gagal memperbarui penugasan');
+    } finally {
+      setUpdatingAssignee(false);
+    }
+  }
 
   useEffect(() => {
     async function loadCardDetails() {
@@ -500,6 +532,24 @@ export default function CardDetailPanel({ card, onClose }: Props) {
                     {isOverdue ? 'Overdue' : `Follow-up: ${followUpDate.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}`}
                   </span>
                 )}
+
+                {/* Assign User Dropdown */}
+                <div className="inline-flex items-center gap-1.5 bg-indigo-50/80 border border-indigo-200/80 px-2 py-0.5 rounded-lg text-xs">
+                  <span className="text-[11px] font-semibold text-indigo-900">👤 Penugasan:</span>
+                  <select
+                    value={assignedUserId}
+                    disabled={updatingAssignee}
+                    onChange={(e) => handleAssignUser(e.target.value)}
+                    className="bg-transparent text-indigo-800 font-medium text-[11px] focus:outline-none cursor-pointer"
+                  >
+                    <option value="">Belum Ditugaskan</option>
+                    {tenantUsers.map((u) => (
+                      <option key={u.id} value={u.id}>
+                        {u.name || u.email} ({u.role})
+                      </option>
+                    ))}
+                  </select>
+                </div>
               </div>
             </div>
           </div>

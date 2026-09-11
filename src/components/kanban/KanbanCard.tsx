@@ -195,6 +195,23 @@ export default function KanbanCard({
               {isOverdue ? 'Overdue' : followUpDate.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
             </span>
           )}
+
+          {/* Assigned User Avatar */}
+          {card.assignedTo && (
+            <span
+              className="inline-flex items-center gap-1 text-[10px] font-medium px-1.5 py-0.5 rounded-md bg-indigo-50 text-indigo-700 border border-indigo-200/80"
+              title={`Ditugaskan ke: ${card.assignedTo.name || card.assignedTo.email}`}
+            >
+              <span className="w-3.5 h-3.5 rounded-full bg-indigo-600 text-white flex items-center justify-center text-[9px] font-bold overflow-hidden">
+                {card.assignedTo.avatar ? (
+                  <img src={card.assignedTo.avatar} alt="Avatar" className="w-full h-full object-cover" onError={(e) => { (e.target as any).style.display = 'none'; }} />
+                ) : (
+                  (card.assignedTo.name || 'U').charAt(0).toUpperCase()
+                )}
+              </span>
+              <span className="truncate max-w-[65px]">{card.assignedTo.name || 'User'}</span>
+            </span>
+          )}
         </div>
 
         {/* Hover Quick Actions */}

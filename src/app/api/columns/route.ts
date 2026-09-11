@@ -8,14 +8,61 @@ export async function GET(req: NextRequest) {
   if (!session?.user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   const tenantId = (session.user as any).tenantId;
+  const userId = (session.user as any).id;
+  const role = (session.user as any).role;
   const boardId = req.nextUrl.searchParams.get('boardId');
+
+  // Check member board access restrictions if not admin
+  if (role !== 'admin') {
+    const tenant = await prisma.tenant.findUnique({
+      where: { id: tenantId },
+      select: { companyInfo: true },
+    });
+
+    let userBoardMap: Record<string, string[]> = {};
+    try {
+      if (tenant?.companyInfo) {
+        const parsed = JSON.parse(tenant.companyInfo);
+        userBoardMap = parsed.userBoardMap || {};
+      }
+    } catch {}
+
+    const allowedBoardIds = userBoardMap[userId];
+    if (Array.isArray(allowedBoardIds) && allowedBoardIds.length > 0) {
+      if (boardId && !allowedBoardIds.includes(boardId)) {
+        return NextResponse.json({ error: 'Forbidden: Akses board ini tidak diizinkan untuk akun Anda.' }, { status: 403 });
+      }
+    }
+  }
 
   let board;
   if (boardId) {
     board = await prisma.board.findFirst({ where: { id: boardId, tenantId } });
   } else {
-    board = await prisma.board.findFirst({ where: { tenantId } });
+    // If no boardId specified, default to first accessible board
+    if (role !== 'admin') {
+      const tenant = await prisma.tenant.findUnique({
+        where: { id: tenantId },
+        select: { companyInfo: true },
+      });
+      let userBoardMap: Record<string, string[]> = {};
+      try {
+        if (tenant?.companyInfo) {
+          const parsed = JSON.parse(tenant.companyInfo);
+          userBoardMap = parsed.userBoardMap || {};
+        }
+      } catch {}
+      const allowedBoardIds = userBoardMap[userId];
+      if (Array.isArray(allowedBoardIds) && allowedBoardIds.length > 0) {
+        board = await prisma.board.findFirst({ where: { id: { in: allowedBoardIds }, tenantId } });
+      } else {
+        board = await prisma.board.findFirst({ where: { tenantId } });
+      }
+    } else {
+      board = await prisma.board.findFirst({ where: { tenantId } });
+    }
   }
+
   if (!board) return NextResponse.json([]);
 
   const columns = await prisma.column.findMany({
@@ -73,6 +120,11 @@ export async function POST(req: NextRequest) {
   const session = await getServerSession(authOptions);
   if (!session?.user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
+  const role = (session.user as any).role;
+  if (role !== 'admin') {
+    return NextResponse.json({ error: 'Forbidden: Hanya Admin yang dapat menambah kolom.' }, { status: 403 });
+  }
+
   const tenantId = (session.user as any).tenantId;
   const body = await req.json();
 
@@ -96,6 +148,11 @@ export async function POST(req: NextRequest) {
 export async function PUT(req: NextRequest) {
   const session = await getServerSession(authOptions);
   if (!session?.user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+
+  const role = (session.user as any).role;
+  if (role !== 'admin') {
+    return NextResponse.json({ error: 'Forbidden: Hanya Admin yang dapat mengubah pengaturan kolom.' }, { status: 403 });
+  }
 
   const body = await req.json();
 

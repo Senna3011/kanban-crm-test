@@ -19,6 +19,12 @@ export interface CardData {
   highlighted: boolean;
   columnId: string;
   assignedToId: string | null;
+  assignedTo?: {
+    id: string;
+    name: string | null;
+    avatar: string | null;
+    email?: string;
+  } | null;
   lastActivityAt: string;
   nextFollowUpAt: string | null;
   metadata: any;

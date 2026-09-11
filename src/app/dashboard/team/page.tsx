@@ -3,8 +3,19 @@
 import { useState, useEffect } from 'react';
 import { useSession } from 'next-auth/react';
 import { toast, Toaster } from 'react-hot-toast';
-import { getTenantUsers, createTenantUser, deleteTenantUser, updateTenantUserRole } from '@/server/actions/user';
+import {
+  getTenantUsers,
+  createTenantUser,
+  deleteTenantUser,
+  updateTenantUserRole,
+  updateUserBoardAccess,
+} from '@/server/actions/user';
 import { getTenantInvitations, createInvitation, revokeInvitation } from '@/server/actions/invitation';
+
+interface BoardRef {
+  id: string;
+  title: string;
+}
 
 interface UserItem {
   id: string;
@@ -12,6 +23,7 @@ interface UserItem {
   name: string | null;
   role: string;
   avatar?: string | null;
+  assignedBoardIds?: string | null;
   createdAt: Date | string;
 }
 
@@ -35,12 +47,14 @@ export default function TeamPage() {
   const [loading, setLoading] = useState(true);
   const [users, setUsers] = useState<UserItem[]>([]);
   const [invitations, setInvitations] = useState<InvitationItem[]>([]);
+  const [allBoards, setAllBoards] = useState<BoardRef[]>([]);
 
   // Direct create state
   const [directName, setDirectName] = useState('');
   const [directEmail, setDirectEmail] = useState('');
   const [directPassword, setDirectPassword] = useState('');
   const [directRole, setDirectRole] = useState<'member' | 'admin'>('member');
+  const [directBoardIds, setDirectBoardIds] = useState<string[]>([]);
   const [submittingDirect, setSubmittingDirect] = useState(false);
 
   // Invite state
@@ -49,15 +63,22 @@ export default function TeamPage() {
   const [submittingInvite, setSubmittingInvite] = useState(false);
   const [generatedLink, setGeneratedLink] = useState<string | null>(null);
 
+  // Edit Board Access Modal
+  const [editingUser, setEditingUser] = useState<UserItem | null>(null);
+  const [selectedBoardIds, setSelectedBoardIds] = useState<string[]>([]);
+  const [savingBoards, setSavingBoards] = useState(false);
+
   async function loadData() {
     setLoading(true);
     try {
-      const [usersData, invsData] = await Promise.all([
+      const [usersData, invsData, boardsRes] = await Promise.all([
         getTenantUsers(),
         isAdmin ? getTenantInvitations() : Promise.resolve([]),
+        fetch('/api/boards').then((r) => (r.ok ? r.json() : [])),
       ]);
       setUsers(usersData as any);
       setInvitations(invsData as any);
+      setAllBoards(Array.isArray(boardsRes) ? boardsRes : []);
     } catch (err: any) {
       toast.error(err?.message || 'Gagal memuat data tim');
     } finally {
@@ -82,12 +103,14 @@ export default function TeamPage() {
         email: directEmail,
         password: directPassword,
         role: directRole,
+        boardIds: directBoardIds,
       });
       toast.success('Pengguna baru berhasil dibuat!');
       setDirectName('');
       setDirectEmail('');
       setDirectPassword('');
       setDirectRole('member');
+      setDirectBoardIds([]);
       setModalMode('none');
       loadData();
     } catch (err: any) {
@@ -153,6 +176,21 @@ export default function TeamPage() {
     }
   };
 
+  const handleSaveBoardAccess = async () => {
+    if (!editingUser) return;
+    setSavingBoards(true);
+    try {
+      await updateUserBoardAccess(editingUser.id, selectedBoardIds);
+      toast.success('Penugasan papan kerja berhasil diperbarui.');
+      setEditingUser(null);
+      loadData();
+    } catch (err: any) {
+      toast.error(err?.message || 'Gagal memperbarui penugasan.');
+    } finally {
+      setSavingBoards(false);
+    }
+  };
+
   const copyToClipboard = (text: string) => {
     navigator.clipboard.writeText(text);
     toast.success('Link undangan disalin ke clipboard!');
@@ -167,14 +205,17 @@ export default function TeamPage() {
         <div>
           <h1 className="text-xl sm:text-2xl font-bold text-slate-900">Manajemen Pengguna & Tim</h1>
           <p className="text-xs sm:text-sm text-slate-500 mt-1">
-            Kelola akses anggota tim, tambah pengguna secara langsung, atau kirim tautan undangan.
+            Kelola akses anggota tim, atur penugasan papan kerja (board), atau kirim tautan undangan.
           </p>
         </div>
 
         {isAdmin && (
           <div className="flex items-center gap-2">
             <button
-              onClick={() => setModalMode('direct')}
+              onClick={() => {
+                setDirectBoardIds([]);
+                setModalMode('direct');
+              }}
               className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-primary-600 hover:bg-primary-700 text-white text-xs font-semibold rounded-xl shadow-xs transition"
             >
               <span>➕</span>
@@ -235,6 +276,7 @@ export default function TeamPage() {
                 <tr>
                   <th className="py-3 px-4">Pengguna</th>
                   <th className="py-3 px-4">Peran (Role)</th>
+                  <th className="py-3 px-4">Akses Papan (Board)</th>
                   <th className="py-3 px-4">Terdaftar</th>
                   {isAdmin && <th className="py-3 px-4 text-right">Aksi</th>}
                 </tr>
@@ -242,12 +284,25 @@ export default function TeamPage() {
               <tbody className="divide-y divide-slate-100">
                 {users.map((u) => {
                   const isSelf = u.id === currentUserId;
+                  let parsedBoardIds: string[] = [];
+                  try {
+                    if (u.assignedBoardIds) parsedBoardIds = JSON.parse(u.assignedBoardIds);
+                  } catch {}
+
+                  const assignedBoardTitles = allBoards
+                    .filter((b) => parsedBoardIds.includes(b.id))
+                    .map((b) => b.title);
+
                   return (
                     <tr key={u.id} className="hover:bg-slate-50/60 transition">
                       <td className="py-3.5 px-4">
                         <div className="flex items-center gap-3">
-                          <div className="w-8 h-8 rounded-full bg-gradient-to-br from-primary-500 to-indigo-600 text-white font-bold flex items-center justify-center text-xs shrink-0">
-                            {u.name ? u.name.charAt(0).toUpperCase() : u.email.charAt(0).toUpperCase()}
+                          <div className="w-8 h-8 rounded-full bg-gradient-to-br from-primary-500 to-indigo-600 text-white font-bold flex items-center justify-center text-xs shrink-0 overflow-hidden">
+                            {u.avatar ? (
+                              <img src={u.avatar} alt="Avatar" className="w-full h-full object-cover" onError={(e) => { (e.target as any).style.display = 'none'; }} />
+                            ) : (
+                              u.name ? u.name.charAt(0).toUpperCase() : u.email.charAt(0).toUpperCase()
+                            )}
                           </div>
                           <div>
                             <p className="font-semibold text-slate-900 flex items-center gap-1.5">
@@ -282,6 +337,38 @@ export default function TeamPage() {
                           >
                             {u.role}
                           </span>
+                        )}
+                      </td>
+                      <td className="py-3.5 px-4">
+                        {u.role === 'admin' ? (
+                          <span className="text-xs font-medium text-slate-400 italic">Semua Papan (Akses Penuh)</span>
+                        ) : (
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            {assignedBoardTitles.length === 0 ? (
+                              <span className="text-xs text-slate-400">Semua Papan (Default)</span>
+                            ) : (
+                              assignedBoardTitles.map((title, idx) => (
+                                <span
+                                  key={idx}
+                                  className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-semibold bg-blue-50 text-blue-700 border border-blue-200"
+                                >
+                                  <span>📌</span>
+                                  <span>{title}</span>
+                                </span>
+                              ))
+                            )}
+                            {isAdmin && !isSelf && (
+                              <button
+                                onClick={() => {
+                                  setEditingUser(u);
+                                  setSelectedBoardIds(parsedBoardIds);
+                                }}
+                                className="text-[11px] text-primary-600 hover:text-primary-800 underline font-semibold ml-1"
+                              >
+                                Atur Board
+                              </button>
+                            )}
+                          </div>
                         )}
                       </td>
                       <td className="py-3.5 px-4 text-xs text-slate-500">
@@ -386,7 +473,7 @@ export default function TeamPage() {
       {/* Modal: Direct User Creation */}
       {modalMode === 'direct' && (
         <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-xl border border-slate-200 space-y-4">
+          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-xl border border-slate-200 space-y-4 max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between">
               <h2 className="text-base font-bold text-slate-900">Buat Akun Pengguna Langsung</h2>
               <button
@@ -397,7 +484,7 @@ export default function TeamPage() {
               </button>
             </div>
             <p className="text-xs text-slate-500">
-              Admin membuatkan akun langsung dengan password sementara. User dapat langsung login di web.
+              Admin membuatkan akun langsung dengan password sementara dan menentukan penempatan papan kerja (board).
             </p>
 
             <form onSubmit={handleDirectCreate} className="space-y-3">
@@ -423,7 +510,7 @@ export default function TeamPage() {
                   required
                   value={directEmail}
                   onChange={(e) => setDirectEmail(e.target.value)}
-                  placeholder="user@jetdigitalpro.com"
+                  placeholder="user@startupanda.com"
                   className="w-full px-3 py-2 text-xs border border-slate-200 rounded-xl focus:ring-2 focus:ring-primary-500 focus:outline-none"
                 />
               </div>
@@ -456,6 +543,34 @@ export default function TeamPage() {
                 </select>
               </div>
 
+              {directRole === 'member' && allBoards.length > 1 && (
+                <div>
+                  <label className="block text-[11px] font-bold text-slate-600 uppercase mb-1">
+                    Penugasan Papan Kerja (Pilih Board)
+                  </label>
+                  <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl space-y-1.5 max-h-32 overflow-y-auto">
+                    {allBoards.map((b) => (
+                      <label key={b.id} className="flex items-center gap-2 text-xs text-slate-700 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={directBoardIds.includes(b.id)}
+                          onChange={(e) => {
+                            if (e.target.checked) {
+                              setDirectBoardIds((prev) => [...prev, b.id]);
+                            } else {
+                              setDirectBoardIds((prev) => prev.filter((id) => id !== b.id));
+                            }
+                          }}
+                          className="rounded text-primary-600 focus:ring-primary-500"
+                        />
+                        <span>{b.title}</span>
+                      </label>
+                    ))}
+                  </div>
+                  <p className="text-[10px] text-slate-400 mt-1">Kosongkan centang jika user boleh mengakses semua papan.</p>
+                </div>
+              )}
+
               <div className="flex items-center justify-end gap-2 pt-3">
                 <button
                   type="button"
@@ -473,6 +588,67 @@ export default function TeamPage() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Modal: Edit Board Access for Member */}
+      {editingUser && (
+        <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-2xl max-w-sm w-full p-6 shadow-xl border border-slate-200 space-y-4">
+            <div className="flex items-center justify-between">
+              <h2 className="text-base font-bold text-slate-900">Atur Akses Papan Kerja</h2>
+              <button
+                onClick={() => setEditingUser(null)}
+                className="text-slate-400 hover:text-slate-600 text-lg leading-none"
+              >
+                ✕
+              </button>
+            </div>
+            <p className="text-xs text-slate-500">
+              Pilih papan kerja (board) yang dapat diakses dan dilihat oleh <strong>{editingUser.name || editingUser.email}</strong>.
+            </p>
+
+            <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl space-y-2 max-h-48 overflow-y-auto">
+              {allBoards.map((b) => (
+                <label key={b.id} className="flex items-center gap-2 text-xs text-slate-700 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={selectedBoardIds.includes(b.id)}
+                    onChange={(e) => {
+                      if (e.target.checked) {
+                        setSelectedBoardIds((prev) => [...prev, b.id]);
+                      } else {
+                        setSelectedBoardIds((prev) => prev.filter((id) => id !== b.id));
+                      }
+                    }}
+                    className="rounded text-primary-600 focus:ring-primary-500"
+                  />
+                  <span className="font-medium">{b.title}</span>
+                </label>
+              ))}
+            </div>
+            <p className="text-[10px] text-slate-400">
+              Jika tidak ada yang dicentang, anggota tim otomatis dapat melihat seluruh papan kerja di workspace ini.
+            </p>
+
+            <div className="flex items-center justify-end gap-2 pt-2">
+              <button
+                type="button"
+                onClick={() => setEditingUser(null)}
+                className="px-4 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-100 rounded-xl transition"
+              >
+                Batal
+              </button>
+              <button
+                type="button"
+                disabled={savingBoards}
+                onClick={handleSaveBoardAccess}
+                className="px-4 py-2 text-xs font-semibold bg-primary-600 hover:bg-primary-700 disabled:opacity-50 text-white rounded-xl shadow-xs transition"
+              >
+                {savingBoards ? 'Menyimpan...' : 'Simpan Penugasan'}
+              </button>
+            </div>
           </div>
         </div>
       )}

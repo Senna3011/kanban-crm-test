@@ -6,18 +6,37 @@ import { requireAuth, requireAdmin } from '@/lib/auth-guards';
 
 export async function getTenantUsers() {
   const user = await requireAuth();
-  return prisma.user.findMany({
-    where: { tenantId: user.tenantId },
-    select: {
-      id: true,
-      email: true,
-      name: true,
-      role: true,
-      avatar: true,
-      createdAt: true,
-    },
-    orderBy: { createdAt: 'asc' },
-  });
+  const [users, tenant] = await Promise.all([
+    prisma.user.findMany({
+      where: { tenantId: user.tenantId },
+      select: {
+        id: true,
+        email: true,
+        name: true,
+        role: true,
+        avatar: true,
+        createdAt: true,
+      },
+      orderBy: { createdAt: 'asc' },
+    }),
+    prisma.tenant.findUnique({
+      where: { id: user.tenantId },
+      select: { companyInfo: true },
+    }),
+  ]);
+
+  let userBoardMap: Record<string, string[]> = {};
+  try {
+    if (tenant?.companyInfo) {
+      const parsed = JSON.parse(tenant.companyInfo);
+      userBoardMap = parsed.userBoardMap || {};
+    }
+  } catch {}
+
+  return users.map((u) => ({
+    ...u,
+    assignedBoardIds: JSON.stringify(userBoardMap[u.id] || []),
+  }));
 }
 
 export async function createTenantUser(data: {
@@ -25,6 +44,7 @@ export async function createTenantUser(data: {
   name?: string;
   password: string;
   role?: 'admin' | 'member';
+  boardIds?: string[];
 }) {
   const admin = await requireAdmin();
 
@@ -66,7 +86,41 @@ export async function createTenantUser(data: {
     },
   });
 
+  if (data.boardIds && data.boardIds.length > 0) {
+    await updateUserBoardAccess(newUser.id, data.boardIds);
+  }
+
   return { success: true, user: newUser };
+}
+
+export async function updateUserBoardAccess(userId: string, boardIds: string[]) {
+  const admin = await requireAdmin();
+
+  const tenant = await prisma.tenant.findUnique({
+    where: { id: admin.tenantId },
+    select: { companyInfo: true, name: true },
+  });
+
+  let currentInfo: any = {};
+  try {
+    if (tenant?.companyInfo) currentInfo = JSON.parse(tenant.companyInfo);
+  } catch {}
+
+  const currentMap = currentInfo.userBoardMap || {};
+  if (boardIds.length > 0) {
+    currentMap[userId] = boardIds;
+  } else {
+    delete currentMap[userId];
+  }
+
+  currentInfo.userBoardMap = currentMap;
+
+  await prisma.tenant.update({
+    where: { id: admin.tenantId },
+    data: { companyInfo: JSON.stringify(currentInfo) },
+  });
+
+  return { success: true };
 }
 
 export async function deleteTenantUser(userId: string) {

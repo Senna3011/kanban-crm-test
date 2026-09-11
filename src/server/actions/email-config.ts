@@ -4,6 +4,7 @@ import { requireAuth, requireAdmin } from '@/lib/auth-guards';
 import prisma from '@/lib/prisma';
 import { encrypt, decrypt } from '@/lib/encryption';
 import { validateEmailConfigInput, type EmailConfigInput } from '@/lib/email-config-validation';
+import { validateImageInput } from '@/lib/image-validation';
 import { ImapFlow } from 'imapflow';
 import nodemailer from 'nodemailer';
 import { getValidZohoAccessToken } from '@/lib/zoho-oauth';
@@ -37,10 +38,10 @@ export async function getEmailConfigs() {
     prisma.emailConfig.findMany({ where: { tenantId }, orderBy: { createdAt: 'asc' } }),
     prisma.board.findMany({ where: { tenantId }, select: { id: true, title: true } }),
   ]);
-  let companyInfo: { name?: string; products?: string } = {};
+  let companyInfo: { name?: string; products?: string; logoUrl?: string } = {};
   try { if (tenant?.companyInfo) companyInfo = JSON.parse(tenant.companyInfo); } catch {}
   return {
-    company: { name: tenant?.name || companyInfo.name || '', products: companyInfo.products || '' },
+    company: { name: tenant?.name || companyInfo.name || '', products: companyInfo.products || '', logoUrl: companyInfo.logoUrl || '' },
     configs: configs.map(c => ({
       id: c.id, name: c.name, boardId: c.boardId || undefined,
       authType: c.authType,
@@ -224,13 +225,44 @@ export async function testSmtpConnection(data: {
 export async function updateCompanyInfo(data: {
   name: string;
   companyInfo: string;
+  logoUrl?: string;
 }) {
   const user = await requireAdmin();
   const tenantId = user.tenantId;
 
+  let currentCompanyInfo: any = {};
+  try {
+    const t = await prisma.tenant.findUnique({ where: { id: tenantId } });
+    if (t?.companyInfo) currentCompanyInfo = JSON.parse(t.companyInfo);
+  } catch {}
+
+  let parsedNewInfo: any = {};
+  try {
+    parsedNewInfo = JSON.parse(data.companyInfo);
+  } catch {
+    parsedNewInfo = { products: data.companyInfo };
+  }
+
+  const validatedLogo = data.logoUrl !== undefined ? validateImageInput(data.logoUrl, 'Logo Perusahaan') : currentCompanyInfo.logoUrl;
+
+  const finalCompanyInfo = JSON.stringify({
+    ...currentCompanyInfo,
+    ...parsedNewInfo,
+    name: data.name,
+    logoUrl: validatedLogo || undefined,
+  });
+
+  const updateData: any = {
+    name: data.name,
+    companyInfo: finalCompanyInfo,
+  };
+  if (validatedLogo !== undefined) {
+    updateData.logoUrl = validatedLogo;
+  }
+
   await prisma.tenant.update({
     where: { id: tenantId },
-    data: { name: data.name, companyInfo: data.companyInfo },
+    data: updateData,
   });
 
   return { success: true };
