@@ -194,17 +194,28 @@ export async function processEmailPoll(data: { tenantId: string; emailConfigId: 
   console.log(`[IMAP Poller] Polling ${config.imapUser}...`);
 
   let totalCreated = 0;
-  // Poll INBOX + tenant-configured shared mailbox folders
-  let folders = ['INBOX', 'Elite', 'Gold', 'Premiere', 'Nell'];
+  // Determine candidate folders (INBOX + tenant folders or default agency folders)
+  let candidateFolders = ['INBOX', 'Elite', 'Gold', 'Premiere', 'Nell'];
   try {
     const tenantRecord = await prisma.tenant.findUnique({ where: { id: tenantId }, select: { companyInfo: true } });
     if (tenantRecord?.companyInfo) {
       const info = JSON.parse(tenantRecord.companyInfo);
       if (Array.isArray(info.pollFolders) && info.pollFolders.length > 0) {
-        folders = Array.from(new Set(['INBOX', ...info.pollFolders]));
+        candidateFolders = Array.from(new Set(['INBOX', ...info.pollFolders]));
       }
     }
   } catch {}
+
+  // Filter to only folders that actually exist on the mail server to prevent Command Failed errors
+  let folders = ['INBOX'];
+  try {
+    const available = await emailAdapter.getAvailableFolders(imapConfig);
+    const availableLower = new Set(available.map((f) => f.toLowerCase()));
+    folders = candidateFolders.filter((f) => f.toUpperCase() === 'INBOX' || availableLower.has(f.toLowerCase()));
+  } catch {
+    folders = ['INBOX'];
+  }
+
   for (const folder of folders) {
     const created = await pollFolder(imapConfig, folder, tenantId, emailConfigId);
     totalCreated += created;

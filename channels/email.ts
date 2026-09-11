@@ -77,6 +77,21 @@ export class EmailAdapter implements ChannelAdapter {
     }
   }
 
+  async getAvailableFolders(config: Record<string, string>): Promise<string[]> {
+    const imap = createImapConnection(config);
+    try {
+      await imap.connect();
+      const mailboxes = await imap.list();
+      return mailboxes.map((m) => m.path);
+    } catch {
+      return ['INBOX'];
+    } finally {
+      try {
+        await imap.logout();
+      } catch {}
+    }
+  }
+
   async markAsRead(config: Record<string, string>, uid: number, folder = 'INBOX'): Promise<boolean> {
     const imap = createImapConnection(config);
     try {
