@@ -35,7 +35,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
   } catch (error: any) {
     console.error(`[API /api/cards/[id]] GET error:`, error);
     return NextResponse.json(
-      { error: error?.message || 'Internal server error' },
+      { error: 'Failed to retrieve card details.' },
       { status: 500 }
     );
   }
