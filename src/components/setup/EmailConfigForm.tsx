@@ -24,7 +24,7 @@ type EmailValues = {
   smtpPass: string;
 };
 
-const PRESETS: Record<string, { name: string; icon: string; imapHost: string; imapPort: number; smtpHost: string; smtpPort: number }> = {
+const PRESETS: Record<string, { name: string; icon: string; imapHost: string; imapPort: number; smtpHost: string; smtpPort: number; hint: string }> = {
   zoho: {
     name: 'Zoho Mail',
     icon: '📫',
@@ -32,6 +32,7 @@ const PRESETS: Record<string, { name: string; icon: string; imapHost: string; im
     imapPort: 993,
     smtpHost: 'smtp.zoho.com',
     smtpPort: 465,
+    hint: 'Gunakan Password Akun Zoho atau App Password jika akun mengaktifkan 2FA/OTP.',
   },
   zoho_in: {
     name: 'Zoho (India)',
@@ -40,6 +41,7 @@ const PRESETS: Record<string, { name: string; icon: string; imapHost: string; im
     imapPort: 993,
     smtpHost: 'smtp.zoho.in',
     smtpPort: 465,
+    hint: 'Khusus akun Zoho datacenter India (.in).',
   },
   gmail: {
     name: 'Google Gmail',
@@ -48,6 +50,7 @@ const PRESETS: Record<string, { name: string; icon: string; imapHost: string; im
     imapPort: 993,
     smtpHost: 'smtp.gmail.com',
     smtpPort: 465,
+    hint: 'Wajib gunakan 16 digit Google App Password (bukan password login biasa).',
   },
   outlook: {
     name: 'Outlook / Office 365',
@@ -56,6 +59,7 @@ const PRESETS: Record<string, { name: string; icon: string; imapHost: string; im
     imapPort: 993,
     smtpHost: 'smtp.office365.com',
     smtpPort: 587,
+    hint: 'Gunakan password akun Microsoft atau App Password.',
   },
 };
 
@@ -88,7 +92,7 @@ export default function EmailConfigForm({ initial, boards = [], isNew = false }:
   const [saving, setSaving] = useState(false);
   const [status, setStatus] = useState<{ imap?: string; smtp?: string }>({});
 
-  function applyPreset(presetKey: string) {
+  function applyPreset(presetKey: string, silent = false) {
     setSelectedPreset(presetKey);
     const p = PRESETS[presetKey];
     if (p) {
@@ -100,11 +104,27 @@ export default function EmailConfigForm({ initial, boards = [], isNew = false }:
         smtpHost: p.smtpHost,
         smtpPort: p.smtpPort,
       }));
-      toast.success(`Preset ${p.name} diterapkan! Host & port otomatis terisi.`);
+      if (!silent) {
+        toast.success(`Preset ${p.name} aktif! Host & port otomatis disesuaikan.`);
+      }
     }
   }
 
-  function handleEmailChange(email: string) {
+  function handleEmailChange(rawEmail: string) {
+    const email = rawEmail.trim();
+    const emailLower = email.toLowerCase();
+
+    // Auto-detection of provider preset based on email domain
+    if (emailLower.endsWith('@gmail.com') && selectedPreset !== 'gmail') {
+      applyPreset('gmail', true);
+    } else if (emailLower.endsWith('.in') && emailLower.includes('zoho') && selectedPreset !== 'zoho_in') {
+      applyPreset('zoho_in', true);
+    } else if ((emailLower.endsWith('@zoho.com') || emailLower.endsWith('@zohomail.com')) && selectedPreset !== 'zoho') {
+      applyPreset('zoho', true);
+    } else if ((emailLower.endsWith('@outlook.com') || emailLower.endsWith('@hotmail.com')) && selectedPreset !== 'outlook') {
+      applyPreset('outlook', true);
+    }
+
     setForm((prev) => ({
       ...prev,
       imapUser: email,
@@ -121,14 +141,14 @@ export default function EmailConfigForm({ initial, boards = [], isNew = false }:
     }));
   }
 
-  async function handleTest(kind: 'imap' | 'smtp' | 'all') {
+  async function handleTest(kind: 'imap' | 'smtp' | 'all'): Promise<boolean> {
     if (!form.imapUser.trim()) {
-      toast.error('Silakan isi Email Username terlebih dahulu.');
-      return;
+      toast.error('Silakan isi Alamat Email terlebih dahulu.');
+      return false;
     }
     if (!hasSavedPasswords && !singlePassword && !form.imapPass) {
       toast.error('Silakan isi Password akun / App Password terlebih dahulu.');
-      return;
+      return false;
     }
 
     setTesting(kind);
@@ -145,7 +165,7 @@ export default function EmailConfigForm({ initial, boards = [], isNew = false }:
         if (!result.success) {
           setStatus({ imap: result.error || 'IMAP connection failed.' });
           toast.error(`IMAP: ${result.error}`);
-          return;
+          return false;
         }
         setStatus((current) => ({ ...current, imap: 'Connected' }));
       }
@@ -160,13 +180,15 @@ export default function EmailConfigForm({ initial, boards = [], isNew = false }:
         if (!result.success) {
           setStatus((current) => ({ ...current, smtp: result.error || 'SMTP connection failed.' }));
           toast.error(`SMTP: ${result.error}`);
-          return;
+          return false;
         }
         setStatus((current) => ({ ...current, smtp: 'Connected' }));
       }
       toast.success(kind === 'all' ? '✅ IMAP dan SMTP berhasil terhubung!' : `✅ ${kind.toUpperCase()} berhasil terhubung!`);
+      return true;
     } catch (error: any) {
       toast.error(error?.message || 'Uji coba koneksi gagal.');
+      return false;
     } finally {
       setTesting(null);
     }
@@ -174,9 +196,19 @@ export default function EmailConfigForm({ initial, boards = [], isNew = false }:
 
   async function handleSave() {
     if (!form.imapUser.trim()) {
-      toast.error('Email Username wajib diisi.');
+      toast.error('Alamat Email wajib diisi.');
       return;
     }
+
+    // Auto-verify connection before saving if new password entered
+    if (singlePassword || !hasSavedPasswords) {
+      const isValid = await handleTest('all');
+      if (!isValid) {
+        toast.error('Koneksi email gagal. Periksa kembali email dan password Anda sebelum menyimpan.');
+        return;
+      }
+    }
+
     setSaving(true);
     try {
       await saveEmailConfig({
@@ -207,11 +239,11 @@ export default function EmailConfigForm({ initial, boards = [], isNew = false }:
   }
 
   const updateField = (field: keyof EmailValues, value: string | number) => setForm((prev) => ({ ...prev, [field]: value }));
-  const passwordHint = hasSavedPasswords ? 'Kosongkan jika tidak ingin mengubah password yang tersimpan.' : 'Masukkan password akun atau App Password Zoho/Gmail.';
+  const activePresetInfo = PRESETS[selectedPreset] || PRESETS.zoho;
 
   return (
     <div className="space-y-4">
-      {/* 1-Click Provider Presets Banner */}
+      {/* 1-Click Provider Presets Selector */}
       <div className="p-3.5 bg-slate-50 border border-slate-200/90 rounded-xl space-y-2">
         <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider">
           Pilih Provider Email (Otomatis Mengisi Host & Port):
@@ -224,7 +256,7 @@ export default function EmailConfigForm({ initial, boards = [], isNew = false }:
               onClick={() => applyPreset(key)}
               className={`px-3 py-2 rounded-xl text-xs font-semibold flex items-center justify-center gap-1.5 border transition-all ${
                 selectedPreset === key
-                  ? 'bg-primary-600 text-white border-primary-600 shadow-xs'
+                  ? 'bg-primary-600 text-white border-primary-600 shadow-xs ring-2 ring-primary-500/30'
                   : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-100 hover:border-slate-300'
               }`}
             >
@@ -235,7 +267,7 @@ export default function EmailConfigForm({ initial, boards = [], isNew = false }:
         </div>
       </div>
 
-      {/* Basic Info */}
+      {/* Label & Board Selector */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <Input
           id={`name-${form.id || 'new'}`}
@@ -275,7 +307,7 @@ export default function EmailConfigForm({ initial, boards = [], isNew = false }:
               placeholder="e.g., nama@zoho.com atau nama@zohomail.com"
               required
             />
-            <p className="text-[11px] text-slate-500 mt-1">Otomatis digunakan untuk login IMAP & pengiriman SMTP.</p>
+            <p className="text-[11px] text-slate-500 mt-1">Otomatis digunakan untuk penerimaan (IMAP) & pengiriman (SMTP).</p>
           </div>
           <div>
             <Input
@@ -287,14 +319,14 @@ export default function EmailConfigForm({ initial, boards = [], isNew = false }:
               placeholder={hasSavedPasswords ? '••••••••' : 'Password Akun / App Password'}
               required={!hasSavedPasswords}
             />
-            <p className="text-[11px] text-slate-500 mt-1">{passwordHint}</p>
+            <p className="text-[11px] text-primary-700 font-medium mt-1">💡 {activePresetInfo.hint}</p>
           </div>
         </div>
       </div>
 
       {/* Advanced Server Ports & Hosts Details */}
       <details className="group border border-slate-200 rounded-xl p-3 bg-white text-xs">
-        <summary className="font-semibold text-slate-700 cursor-pointer flex items-center justify-between">
+        <summary className="font-semibold text-slate-700 cursor-pointer flex items-center justify-between select-none">
           <span>⚙️ Pengaturan Teknis Server (Host & Port IMAP/SMTP)</span>
           <span className="text-slate-400 group-open:rotate-180 transition-transform">▼</span>
         </summary>
@@ -329,7 +361,7 @@ export default function EmailConfigForm({ initial, boards = [], isNew = false }:
           variant="secondary"
           onClick={() => handleTest('all')}
           loading={testing === 'all'}
-          disabled={Boolean(testing)}
+          disabled={Boolean(testing) || saving}
           className="text-xs sm:text-sm font-semibold"
         >
           🔍 Test Koneksi (Test All)
