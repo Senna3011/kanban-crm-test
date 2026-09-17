@@ -22,12 +22,12 @@ export default function RegisterPage() {
     setError('');
 
     if (password.length < 6) {
-      setError('Password minimal 6 karakter.');
+      setError('Password must be at least 6 characters.');
       return;
     }
 
     if (password !== confirmPassword) {
-      setError('Konfirmasi password tidak cocok.');
+      setError('Password confirmation does not match.');
       return;
     }
 
@@ -55,7 +55,7 @@ export default function RegisterPage() {
         router.refresh();
       }
     } catch (err: any) {
-      setError(err?.message || 'Gagal mendaftarkan organisasi baru.');
+      setError(err?.message || 'Failed to register new workspace.');
       setLoading(false);
     }
   }
@@ -69,9 +69,9 @@ export default function RegisterPage() {
               CRM
             </span>
             <div>
-              <h1 className="text-xl sm:text-2xl font-bold text-slate-900">Daftarkan Startup / Tim Baru</h1>
+              <h1 className="text-xl sm:text-2xl font-bold text-slate-900">Register New Workspace</h1>
               <p className="mt-1 text-xs sm:text-sm text-slate-500">
-                Buat workspace baru dengan board, tim, dan AI terisolasi mandiri.
+                Create an isolated CRM workspace with pipeline boards and AI automation.
               </p>
             </div>
           </div>
@@ -85,11 +85,11 @@ export default function RegisterPage() {
           <form className="mt-6 space-y-4" onSubmit={handleSubmit}>
             <div>
               <label className="block text-xs font-semibold text-slate-700 uppercase mb-1">
-                Nama Startup / Perusahaan *
+                Company / Organization Name *
               </label>
               <input
                 type="text"
-                placeholder="Contoh: Kopi Tech Indonesia"
+                placeholder="e.g., Jet Digital Pro"
                 value={companyName}
                 onChange={(e) => setCompanyName(e.target.value)}
                 required
@@ -100,11 +100,11 @@ export default function RegisterPage() {
 
             <div>
               <label className="block text-xs font-semibold text-slate-700 uppercase mb-1">
-                Nama Lengkap Admin *
+                Admin Full Name *
               </label>
               <input
                 type="text"
-                placeholder="Contoh: Alexander Pratama"
+                placeholder="e.g., Alex Johnson"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 required
@@ -114,11 +114,11 @@ export default function RegisterPage() {
 
             <div>
               <label className="block text-xs font-semibold text-slate-700 uppercase mb-1">
-                Email Akun Admin *
+                Admin Email Address *
               </label>
               <input
                 type="email"
-                placeholder="admin@startupanda.com"
+                placeholder="admin@yourcompany.com"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 required
@@ -133,7 +133,7 @@ export default function RegisterPage() {
               </label>
               <input
                 type="password"
-                placeholder="Minimal 6 karakter"
+                placeholder="Minimum 6 characters"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 required
@@ -144,11 +144,11 @@ export default function RegisterPage() {
 
             <div>
               <label className="block text-xs font-semibold text-slate-700 uppercase mb-1">
-                Konfirmasi Password *
+                Confirm Password *
               </label>
               <input
                 type="password"
-                placeholder="Ulangi password"
+                placeholder="Repeat password"
                 value={confirmPassword}
                 onChange={(e) => setConfirmPassword(e.target.value)}
                 required
@@ -162,14 +162,14 @@ export default function RegisterPage() {
               disabled={loading}
               className="w-full mt-2 py-2.5 px-4 bg-primary-600 hover:bg-primary-700 active:scale-[0.99] disabled:opacity-50 text-white rounded-xl font-medium transition-all text-sm shadow-xs"
             >
-              {loading ? 'Membuat Workspace...' : 'Daftarkan Workspace Baru'}
+              {loading ? 'Creating Workspace...' : 'Register Workspace'}
             </button>
           </form>
 
           <div className="pt-2 text-center text-xs text-slate-500">
-            Sudah memiliki akun?{' '}
+            Already have an account?{' '}
             <Link href="/login" className="font-semibold text-primary-600 hover:underline">
-              Masuk di sini
+              Sign in here
             </Link>
           </div>
         </div>

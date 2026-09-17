@@ -7,55 +7,73 @@ import { sendDraft } from '@/server/actions/draft';
 import toast, { Toaster } from 'react-hot-toast';
 
 /* ------------------------------------------------------------------ */
-/*  Helpers                                                           */
+/*  Helpers & Types                                                   */
 /* ------------------------------------------------------------------ */
 
-interface TimelineItem {
+interface TimelineMessage {
   id: string;
-  type: 'email_received' | 'email_sent' | 'activity' | 'draft';
+  type: 'received' | 'sent' | 'activity' | 'draft';
   title: string;
-  summary: string;
-  detail?: string;
+  sender: string;
+  senderEmail?: string;
+  body: string;
   timestamp: Date;
   meta?: Record<string, unknown>;
   isCurrent?: boolean;
 }
 
-function buildTimeline(
+function buildTimelineMessages(
   threadCards: any[],
   activityLogs: ActivityLogData[],
-  currentCardId: string
-): TimelineItem[] {
-  const items: TimelineItem[] = [];
+  currentCard: CardData
+): TimelineMessage[] {
+  const items: TimelineMessage[] = [];
   const shownCardIds = new Set<string>();
   const shownDraftIds = new Set<string>();
 
+  // Add all thread cards
   for (const tc of threadCards) {
-    if (tc.id === currentCardId) continue;
     shownCardIds.add(tc.id);
 
     if (tc.type === 'sent') {
       shownDraftIds.add(tc.id);
       items.push({
         id: `thread-${tc.id}`,
-        type: 'email_sent',
-        title: 'Email Sent',
-        summary: tc.subject || '(No subject)',
-        detail: tc.body,
-        timestamp: new Date(tc.timestamp),
+        type: 'sent',
+        title: 'Outgoing Reply',
+        sender: tc.from || 'Team',
+        body: tc.body || '',
+        timestamp: new Date(tc.timestamp || Date.now()),
       });
     } else {
       items.push({
         id: `thread-${tc.id}`,
-        type: 'email_received',
-        title: 'Email Received',
-        summary: `From ${tc.from} — ${tc.subject || '(No subject)'}`,
-        detail: tc.body,
-        timestamp: new Date(tc.timestamp),
+        type: 'received',
+        title: 'Client Email',
+        sender: tc.from || 'Client',
+        senderEmail: tc.fromEmail,
+        body: tc.body || '',
+        timestamp: new Date(tc.timestamp || Date.now()),
+        isCurrent: tc.id === currentCard.id,
       });
     }
   }
 
+  // If threadCards is empty or did not include current card, add current card
+  if (!shownCardIds.has(currentCard.id)) {
+    items.push({
+      id: `current-${currentCard.id}`,
+      type: 'received',
+      title: 'Client Email',
+      sender: currentCard.fromName || currentCard.fromEmail.split('@')[0],
+      senderEmail: currentCard.fromEmail,
+      body: currentCard.bodyText || '',
+      timestamp: new Date(currentCard.lastActivityAt || Date.now()),
+      isCurrent: true,
+    });
+  }
+
+  // Add system activities (skip redundant email received/sent events already captured as bubbles)
   const emailLogTypes = new Set(['email_received', 'email_sent', 'email_reply_received']);
   for (const log of activityLogs) {
     const c = log.content as any;
@@ -65,37 +83,27 @@ function buildTimeline(
       if (c?.draftId && shownDraftIds.has(c.draftId)) continue;
     }
 
-    let type: TimelineItem['type'] = 'activity';
+    let type: TimelineMessage['type'] = 'activity';
     let title = log.type.replace(/_/g, ' ');
     let summary = '';
-    let detail: string | undefined;
 
     switch (log.type) {
-      case 'email_received':
-        title = 'Email Received';
-        summary = `From: ${c?.from || 'Unknown'} — ${c?.subject || ''}`;
-        detail = c?.bodyText || c?.preview;
-        break;
-      case 'email_sent':
-        title = 'Email Sent';
-        summary = `To: ${c?.to || 'Unknown'} — ${c?.subject || ''}`;
-        break;
-      case 'email_reply_received':
-        title = 'Reply Received';
-        summary = `From: ${c?.from || 'Unknown'} — ${c?.subject || ''}`;
-        break;
       case 'ai_reclassified':
-        title = 'AI Reclassified';
-        summary = `${c?.from} moved to ${c?.to} (${c?.confidence}% confidence)`;
+        title = 'AI Auto-Classified';
+        summary = `Moved from "${c?.from || 'Unreads'}" to "${c?.to || 'Leads'}" (${c?.confidence || 0}% confidence)`;
         break;
       case 'draft_created':
         type = 'draft';
         title = 'Draft Created';
-        summary = 'Reply draft saved';
+        summary = 'AI reply draft generated';
         break;
       case 'card_moved':
         title = 'Card Moved';
-        summary = c?.from ? `From "${c.from}" to "${c.to}"` : `Moved to "${c?.to || 'column'}"`;
+        summary = c?.from ? `Moved from "${c.from}" to "${c.to}"` : `Moved to "${c?.to || 'column'}"`;
+        break;
+      case 'user_edited':
+        title = 'Draft Edited';
+        summary = 'Reply draft customized by team';
         break;
       default:
         summary = typeof c === 'object' ? JSON.stringify(c) : String(c || log.type);
@@ -105,28 +113,30 @@ function buildTimeline(
       id: `log-${log.id}`,
       type,
       title,
-      summary,
-      detail,
+      sender: 'System',
+      body: summary,
       timestamp: new Date(log.createdAt),
       meta: c,
     });
   }
 
-  items.sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime());
+  // Sort chronological (oldest to newest for natural chat reading flow)
+  items.sort((a, b) => a.timestamp.getTime() - b.timestamp.getTime());
   return items;
 }
 
-function relativeTime(date: Date): string {
+function formatChatTime(date: Date): string {
   const now = Date.now();
   const diffMs = now - date.getTime();
   const diffMin = Math.floor(diffMs / 60000);
-  if (diffMin < 1) return 'just now';
+  if (diffMin < 1) return 'Just now';
   if (diffMin < 60) return `${diffMin}m ago`;
   const diffHr = Math.floor(diffMin / 60);
   if (diffHr < 24) return `${diffHr}h ago`;
   const diffDay = Math.floor(diffHr / 24);
+  if (diffDay === 1) return 'Yesterday ' + date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
   if (diffDay < 7) return `${diffDay}d ago`;
-  return date.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+  return date.toLocaleDateString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
 }
 
 function getAvatarColor(str: string) {
@@ -145,88 +155,92 @@ function getAvatarColor(str: string) {
 }
 
 /* ------------------------------------------------------------------ */
-/*  Activity Timeline Item                                            */
+/*  WhatsApp / Trello Style Chat Bubble Component                     */
 /* ------------------------------------------------------------------ */
 
-function ActivityItem({ item }: { item: TimelineItem }) {
+function ChatBubble({ message }: { message: TimelineMessage }) {
   const [expanded, setExpanded] = useState(false);
-  const hasDetail = !!item.detail && item.detail.trim().length > 0;
 
-  const iconMap: Record<string, { svgPath: string; color: string; bg: string }> = {
-    email_received: {
-      svgPath: 'M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z',
-      color: 'text-primary-600',
-      bg: 'bg-primary-50 border-primary-100',
-    },
-    email_sent: {
-      svgPath: 'M12 19l9 2-9-18-9 18 9-2zm0 0v-8',
-      color: 'text-emerald-600',
-      bg: 'bg-emerald-50 border-emerald-100',
-    },
-    activity: {
-      svgPath: 'M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2',
-      color: 'text-slate-600',
-      bg: 'bg-slate-50 border-slate-200',
-    },
-    draft: {
-      svgPath: 'M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z',
-      color: 'text-purple-600',
-      bg: 'bg-purple-50 border-purple-100',
-    },
-  };
-  const currentIcon = iconMap[item.type] || iconMap.activity;
+  // System Activity event (centered pill)
+  if (message.type === 'activity' || message.type === 'draft') {
+    return (
+      <div className="flex items-center justify-center my-2">
+        <div className="inline-flex items-center gap-2 px-3 py-1 bg-slate-100 border border-slate-200/80 rounded-full text-[11px] text-slate-600 font-medium shadow-2xs">
+          <span className="w-1.5 h-1.5 rounded-full bg-slate-400" />
+          <span className="font-semibold text-slate-700">{message.title}:</span>
+          <span>{message.body}</span>
+          <span className="text-slate-400 text-[10px]">• {formatChatTime(message.timestamp)}</span>
+        </div>
+      </div>
+    );
+  }
+
+  const isSent = message.type === 'sent';
+  const rawText = message.body || '';
+  const isLong = rawText.length > 250;
+  const displayText = expanded || !isLong ? rawText : rawText.slice(0, 240) + '...';
+
+  const avatarInitial = (message.sender || '?').charAt(0).toUpperCase();
+  const avatarBg = isSent ? 'from-primary-600 to-indigo-700 text-white' : getAvatarColor(message.sender);
 
   return (
-    <div
-      className={`border rounded-xl transition-all ${
-        expanded ? `${currentIcon.bg} shadow-xs` : 'bg-white border-slate-200/70 hover:border-slate-300'
-      }`}
-    >
-      <button onClick={() => setExpanded(!expanded)} className="w-full text-left px-3.5 py-2.5 flex items-start gap-3">
-        <div
-          className={`w-6 h-6 rounded-md flex items-center justify-center flex-shrink-0 mt-0.5 ${currentIcon.color} bg-white shadow-2xs border border-slate-100`}
-        >
-          <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-            <path strokeLinecap="round" strokeLinejoin="round" d={currentIcon.svgPath} />
-          </svg>
-        </div>
-        <div className="flex-1 min-w-0">
-          <div className="flex items-baseline justify-between gap-2">
-            <span className="text-xs font-semibold text-slate-800 truncate">{item.title}</span>
-            <span className="text-[11px] text-slate-400 flex-shrink-0">{relativeTime(item.timestamp)}</span>
-          </div>
-          <p className="text-xs text-slate-500 mt-0.5 truncate">{item.summary}</p>
-        </div>
-        {hasDetail && (
-          <svg
-            className={`w-4 h-4 text-slate-400 flex-shrink-0 mt-1 transition-transform ${expanded ? 'rotate-180' : ''}`}
-            fill="none"
-            viewBox="0 0 24 24"
-            stroke="currentColor"
-            strokeWidth={2}
-          >
-            <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
-          </svg>
-        )}
-      </button>
+    <div className={`flex items-start gap-2.5 my-3 ${isSent ? 'flex-row-reverse' : 'flex-row'}`}>
+      {/* Avatar */}
+      <div
+        className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold shadow-2xs bg-gradient-to-br flex-shrink-0 ${avatarBg}`}
+      >
+        {avatarInitial}
+      </div>
 
-      {expanded && hasDetail && (
-        <div className="px-3.5 pb-3 pt-0 ml-9">
-          {item.type === 'email_received' || item.type === 'email_sent' ? (
-            <div className="bg-white border border-slate-200/80 rounded-lg p-3 text-xs text-slate-700 whitespace-pre-wrap max-h-64 overflow-y-auto leading-relaxed">
-              {item.detail}
-            </div>
-          ) : (
-            <p className="text-xs text-slate-600 whitespace-pre-wrap">{item.detail}</p>
-          )}
+      {/* Bubble Container */}
+      <div
+        className={`max-w-[85%] sm:max-w-[78%] rounded-2xl p-3.5 shadow-2xs transition-all ${
+          isSent
+            ? 'bg-primary-50/90 border border-primary-200/80 rounded-tr-xs text-slate-900'
+            : 'bg-white border border-slate-200/90 rounded-tl-xs text-slate-900'
+        }`}
+      >
+        {/* Bubble Header: Sender, Badge & Timestamp */}
+        <div className="flex items-center justify-between gap-3 mb-1.5 border-b border-slate-100/80 pb-1">
+          <div className="flex items-center gap-1.5 min-w-0">
+            <span className="font-bold text-xs text-slate-900 truncate">{message.sender}</span>
+            <span
+              className={`text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.2 rounded-full border ${
+                isSent
+                  ? 'bg-primary-100 text-primary-800 border-primary-200'
+                  : 'bg-slate-100 text-slate-700 border-slate-200'
+              }`}
+            >
+              {isSent ? 'Outgoing' : 'Inbound'}
+            </span>
+          </div>
+          <span className="text-[10px] text-slate-400 font-medium whitespace-nowrap">
+            {formatChatTime(message.timestamp)}
+          </span>
         </div>
-      )}
+
+        {/* Message Body (50+ words with Read More toggle) */}
+        <div className="text-xs sm:text-sm text-slate-700 whitespace-pre-wrap leading-relaxed">
+          {displayText}
+        </div>
+
+        {/* Inline Read More / Show Less Toggle */}
+        {isLong && (
+          <button
+            type="button"
+            onClick={() => setExpanded(!expanded)}
+            className="mt-1.5 text-xs font-bold text-primary-600 hover:text-primary-800 transition-colors flex items-center gap-1"
+          >
+            {expanded ? 'Show less ↑' : '... Read more ↓'}
+          </button>
+        )}
+      </div>
     </div>
   );
 }
 
 /* ------------------------------------------------------------------ */
-/*  Card Detail Panel                                                 */
+/*  Main Card Detail Panel Component                                  */
 /* ------------------------------------------------------------------ */
 
 interface Props {
@@ -240,11 +254,11 @@ export default function CardDetailPanel({ card, onClose }: Props) {
   const [activityLogs, setActivityLogs] = useState<ActivityLogData[]>([]);
   const [sending, setSending] = useState(false);
   const [deleting, setDeleting] = useState(false);
-  const [loading, setLoading] = useState(true);
+  const [backgroundLoading, setBackgroundLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [fromAddresses, setFromAddresses] = useState<string[]>([]);
   const [selectedFrom, setSelectedFrom] = useState('');
-  const [cardData, setCardData] = useState<any>(null);
+  const [cardData, setCardData] = useState<any>(card);
   const [threadCards, setThreadCards] = useState<any[]>([]);
   const [isUnread, setIsUnread] = useState(card.status === 'unread');
   const [showHtml, setShowHtml] = useState(true);
@@ -255,6 +269,14 @@ export default function CardDetailPanel({ card, onClose }: Props) {
   const [assignedUserId, setAssignedUserId] = useState<string>(card.assignedToId || '');
   const [updatingAssignee, setUpdatingAssignee] = useState(false);
 
+  // Initialize draft immediately
+  useEffect(() => {
+    setDraftBody(
+      `Hi ${card.fromName || card.fromEmail.split('@')[0]},\n\nThank you for reaching out to us. I'd be happy to share more details and discuss how we can help.\n\nWould you be available for a brief call this week?\n\nBest regards`
+    );
+  }, [card]);
+
+  // Load team users for assignee dropdown
   useEffect(() => {
     fetch('/api/users')
       .then((r) => r.json())
@@ -263,6 +285,66 @@ export default function CardDetailPanel({ card, onClose }: Props) {
       })
       .catch(() => {});
   }, []);
+
+  // Fetch detailed data in background without blocking instant modal render
+  useEffect(() => {
+    async function loadBackgroundDetails() {
+      try {
+        setBackgroundLoading(true);
+        const [cardRes, configRes, threadRes] = await Promise.allSettled([
+          fetch(`/api/cards/${card.id}`),
+          fetch(`/api/email-configs`),
+          fetch(`/api/cards/${card.id}/thread`),
+        ]);
+
+        if (cardRes.status === 'fulfilled' && cardRes.value.ok) {
+          const data = await cardRes.value.json();
+          setActivityLogs(data.activityLogs || []);
+          setCardData(data);
+          setCardHtml(data.bodyHtml || '');
+
+          const drafts = data.drafts || [];
+          const pending = drafts.find((d: DraftData) => d.status === 'pending');
+          if (pending) {
+            setDraftId(pending.id);
+            setDraftBody(pending.body);
+          }
+        }
+
+        if (configRes.status === 'fulfilled' && configRes.value.ok) {
+          const configs = await configRes.value.json();
+          const addresses = configs.map((c: any) => c.smtpUser).filter(Boolean);
+          const uniqueAddrs = [...new Set(addresses)] as string[];
+          setFromAddresses(uniqueAddrs);
+          if (uniqueAddrs.length > 0 && !selectedFrom) setSelectedFrom(uniqueAddrs[0]);
+        }
+
+        if (threadRes.status === 'fulfilled' && threadRes.value.ok) {
+          const thread = await threadRes.value.json();
+          if (Array.isArray(thread)) setThreadCards(thread);
+        }
+      } catch (err: any) {
+        console.error('[CardDetailPanel] Background load error:', err);
+      } finally {
+        setBackgroundLoading(false);
+      }
+    }
+    loadBackgroundDetails();
+  }, [card.id, selectedFrom]);
+
+  // Keyboard shortcut: Escape to close modal
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [onClose]);
+
+  const timelineMessages = useMemo(
+    () => buildTimelineMessages(threadCards, activityLogs, card),
+    [threadCards, activityLogs, card]
+  );
 
   async function handleAssignUser(newUserId: string) {
     setUpdatingAssignee(true);
@@ -274,77 +356,15 @@ export default function CardDetailPanel({ card, onClose }: Props) {
       });
       if (res.ok) {
         setAssignedUserId(newUserId);
-        toast.success(newUserId ? 'Penanggung jawab diperbarui' : 'Penugasan dihapus');
+        toast.success(newUserId ? 'Assignee updated' : 'Assignee removed');
         window.dispatchEvent(new Event('board-refresh'));
       }
     } catch {
-      toast.error('Gagal memperbarui penugasan');
+      toast.error('Failed to update assignee');
     } finally {
       setUpdatingAssignee(false);
     }
   }
-
-  useEffect(() => {
-    async function loadCardDetails() {
-      try {
-        setLoading(true);
-        const [cardRes, configRes] = await Promise.all([fetch(`/api/cards/${card.id}`), fetch(`/api/email-configs`)]);
-        if (!cardRes.ok) {
-          const errBody = await cardRes.json().catch(() => ({}));
-          throw new Error(errBody.error || `Failed to load card (HTTP ${cardRes.status})`);
-        }
-        const data = await cardRes.json();
-
-        setActivityLogs(data.activityLogs || []);
-        setCardData(data);
-        setCardHtml(data.bodyHtml || '');
-
-        try {
-          const threadRes = await fetch(`/api/cards/${card.id}/thread`);
-          if (threadRes.ok) {
-            const thread = await threadRes.json();
-            setThreadCards(thread);
-          }
-        } catch {}
-
-        if (configRes.ok) {
-          const configs = await configRes.json();
-          const addresses = configs.map((c: any) => c.smtpUser).filter(Boolean);
-          setFromAddresses([...new Set(addresses)] as string[]);
-          if (addresses.length > 0 && !selectedFrom) setSelectedFrom(addresses[0]);
-        }
-
-        const drafts = data.drafts || [];
-        const pending = drafts.find((d: DraftData) => d.status === 'pending');
-        if (pending) {
-          setDraftId(pending.id);
-          setDraftBody(pending.body);
-        } else {
-          setDraftBody(
-            `Hi ${card.fromName || card.fromEmail.split('@')[0]},\n\nThank you for reaching out to us. I'd be happy to share more details about our services and discuss how we can help.\n\nWould you be available for a brief call this week?\n\nBest regards`
-          );
-        }
-      } catch (err: any) {
-        setError(err.message);
-      } finally {
-        setLoading(false);
-      }
-    }
-    loadCardDetails();
-  }, [card.id, card.fromName, card.fromEmail]);
-
-  // Global Escape key handler to close panel
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        onClose();
-      }
-    };
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [onClose]);
-
-  const timeline = useMemo(() => buildTimeline(threadCards, activityLogs, card.id), [threadCards, activityLogs, card.id]);
 
   function copyToClipboard(text: string) {
     navigator.clipboard.writeText(text);
@@ -357,13 +377,13 @@ export default function CardDetailPanel({ card, onClose }: Props) {
     const name = card.fromName || card.fromEmail.split('@')[0];
     let template = '';
     if (type === 'meeting') {
-      template = `Hi ${name},\n\nThanks for contacting us! I would love to learn more about your project goals. Are you open for a quick 15-minute discovery call tomorrow or later this week?\n\nBest regards`;
+      template = `Hi ${name},\n\nThank you for reaching out! We would love to discuss your project requirements in detail. Are you available for a quick 15-minute discovery call tomorrow or later this week?\n\nBest regards`;
     } else if (type === 'pricing') {
-      template = `Hi ${name},\n\nThank you for your interest! I'd be happy to provide our customized pricing tiers and package details. Could you let me know your estimated timeline and scope?\n\nBest regards`;
+      template = `Hi ${name},\n\nThank you for your interest! I'd be happy to provide our customized pricing tiers and package details. Could you let me know your estimated timeline and specific scope?\n\nBest regards`;
     } else if (type === 'followup') {
-      template = `Hi ${name},\n\nJust following up on my previous message to see if you have any questions or if you'd like us to prepare a tailored plan for you.\n\nBest regards`;
+      template = `Hi ${name},\n\nJust following up on our previous conversation to see if you have any questions or if you would like us to prepare a tailored proposal for you.\n\nBest regards`;
     } else if (type === 'proposal') {
-      template = `Hi ${name},\n\nWe have prepared our service breakdown and strategy proposal for your review. Please let us know when would be a good time to go through the details together.\n\nBest regards`;
+      template = `Hi ${name},\n\nWe have prepared our scope of work and strategy proposal for your review. Please let us know when would be a convenient time to walk through the details together.\n\nBest regards`;
     }
     setDraftBody(template);
     toast.success('Template applied!');
@@ -397,7 +417,7 @@ export default function CardDetailPanel({ card, onClose }: Props) {
       }
       window.dispatchEvent(new Event('board-refresh'));
     } catch (e: any) {
-      toast.error(e.message);
+      toast.error(e.message || 'Failed to send email');
     } finally {
       setSending(false);
     }
@@ -459,7 +479,7 @@ export default function CardDetailPanel({ card, onClose }: Props) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ columnId: generalCol.id }),
       });
-      toast.success('Moved to General — marked not a lead', { duration: 2000 });
+      toast.success('Moved to General — marked as not a lead', { duration: 2000 });
       window.dispatchEvent(new Event('board-refresh'));
       setTimeout(() => onClose(), 100);
     } catch (e: any) {
@@ -484,7 +504,7 @@ export default function CardDetailPanel({ card, onClose }: Props) {
       {/* Modal Card Container */}
       <div className="relative w-full max-w-2xl bg-white rounded-2xl shadow-2xl border border-slate-200 flex flex-col max-h-[94vh] sm:max-h-[90vh] overflow-hidden">
         {/* Header */}
-        <div className="px-4 sm:px-6 py-3.5 border-b border-slate-200/80 bg-slate-50/60 flex items-start justify-between gap-3">
+        <div className="px-4 sm:px-6 py-3.5 border-b border-slate-200/80 bg-slate-50/60 flex items-start justify-between gap-3 flex-shrink-0">
           <div className="flex items-start gap-3 min-w-0 flex-1">
             <div
               className={`w-9 h-9 rounded-xl flex items-center justify-center text-xs font-bold shadow-xs bg-gradient-to-br flex-shrink-0 ${avatarGradient}`}
@@ -533,16 +553,16 @@ export default function CardDetailPanel({ card, onClose }: Props) {
                   </span>
                 )}
 
-                {/* Assign User Dropdown */}
+                {/* Assignee Dropdown */}
                 <div className="inline-flex items-center gap-1.5 bg-indigo-50/80 border border-indigo-200/80 px-2 py-0.5 rounded-lg text-xs">
-                  <span className="text-[11px] font-semibold text-indigo-900">👤 Penugasan:</span>
+                  <span className="text-[11px] font-semibold text-indigo-900">👤 Assignee:</span>
                   <select
                     value={assignedUserId}
                     disabled={updatingAssignee}
                     onChange={(e) => handleAssignUser(e.target.value)}
                     className="bg-transparent text-indigo-800 font-medium text-[11px] focus:outline-none cursor-pointer"
                   >
-                    <option value="">Belum Ditugaskan</option>
+                    <option value="">Unassigned</option>
                     {tenantUsers.map((u) => (
                       <option key={u.id} value={u.id}>
                         {u.name || u.email} ({u.role})
@@ -554,7 +574,7 @@ export default function CardDetailPanel({ card, onClose }: Props) {
             </div>
           </div>
 
-          {/* Quick Action Buttons */}
+          {/* Header Action Buttons */}
           <div className="flex items-center gap-1 flex-shrink-0">
             <button
               onClick={handleNotALead}
@@ -589,6 +609,7 @@ export default function CardDetailPanel({ card, onClose }: Props) {
             <button
               onClick={onClose}
               className="p-1.5 rounded-lg hover:bg-slate-200/70 text-slate-400 hover:text-slate-700 transition-colors"
+              title="Close (Esc)"
             >
               <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
@@ -597,9 +618,9 @@ export default function CardDetailPanel({ card, onClose }: Props) {
           </div>
         </div>
 
-        {/* AI Insight Card (if available) */}
+        {/* AI Insight Banner */}
         {aiMeta && (
-          <div className="px-4 sm:px-6 py-2.5 bg-gradient-to-r from-indigo-50/70 via-blue-50/50 to-slate-50 border-b border-indigo-100 flex items-center justify-between gap-3 text-xs">
+          <div className="px-4 sm:px-6 py-2.5 bg-gradient-to-r from-indigo-50/70 via-blue-50/50 to-slate-50 border-b border-indigo-100 flex items-center justify-between gap-3 text-xs flex-shrink-0">
             <div className="flex items-center gap-2 flex-wrap min-w-0">
               <span className="font-bold text-indigo-900 flex items-center gap-1">
                 <span>🤖</span> AI Analysis:
@@ -632,8 +653,8 @@ export default function CardDetailPanel({ card, onClose }: Props) {
           </div>
         )}
 
-        {/* Segmented View Tabs */}
-        <div className="flex items-center gap-2 px-4 sm:px-6 pt-3 border-b border-slate-100 bg-white">
+        {/* View Tabs */}
+        <div className="flex items-center gap-2 px-4 sm:px-6 pt-3 border-b border-slate-100 bg-white flex-shrink-0">
           <button
             onClick={() => setActiveTab('message')}
             className={`pb-2.5 px-2 text-xs font-bold border-b-2 transition-all ${
@@ -653,21 +674,17 @@ export default function CardDetailPanel({ card, onClose }: Props) {
             }`}
           >
             Thread & Activity
-            {timeline.length > 0 && (
-              <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-slate-100 text-slate-600">
-                {timeline.length}
+            {timelineMessages.length > 0 && (
+              <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-slate-100 text-slate-600 font-bold">
+                {timelineMessages.length}
               </span>
             )}
           </button>
         </div>
 
-        {/* Scrollable Content Body */}
+        {/* Scrollable Content Body (Instant Rendered) */}
         <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-4">
-          {loading ? (
-            <div className="flex items-center justify-center py-16">
-              <div className="animate-spin h-7 w-7 border-3 border-primary-200 border-t-primary-600 rounded-full" />
-            </div>
-          ) : error ? (
+          {error ? (
             <div className="text-center py-12 text-rose-500 text-xs">
               <p>{error}</p>
             </div>
@@ -704,16 +721,26 @@ export default function CardDetailPanel({ card, onClose }: Props) {
               )}
             </div>
           ) : (
-            <div className="space-y-3">
-              <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">
-                Full Conversation History ({timeline.length})
-              </span>
-              {timeline.length === 0 ? (
-                <p className="text-xs text-slate-400 text-center py-8">No prior activity recorded</p>
+            /* Thread & Activity: WhatsApp / Trello Comment Stream Style */
+            <div className="space-y-1">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">
+                  Conversation & Activity History
+                </span>
+                {backgroundLoading && (
+                  <span className="text-[11px] text-slate-400 flex items-center gap-1">
+                    <span className="w-1.5 h-1.5 rounded-full bg-primary-600 animate-pulse" />
+                    Syncing thread...
+                  </span>
+                )}
+              </div>
+
+              {timelineMessages.length === 0 ? (
+                <p className="text-xs text-slate-400 text-center py-8">No conversation history yet</p>
               ) : (
-                <div className="space-y-2">
-                  {timeline.map((item) => (
-                    <ActivityItem key={item.id} item={item} />
+                <div className="space-y-1 py-1">
+                  {timelineMessages.map((msg) => (
+                    <ChatBubble key={msg.id} message={msg} />
                   ))}
                 </div>
               )}
@@ -721,11 +748,11 @@ export default function CardDetailPanel({ card, onClose }: Props) {
           )}
         </div>
 
-        {/* Draft Reply Composer (Sticky Bottom) */}
-        {!loading && !error && (
+        {/* Quick Reply Composer (Sticky Bottom) */}
+        {!error && (
           <div className="border-t border-slate-200 bg-slate-50/80 px-4 sm:px-6 py-3.5 flex-shrink-0 space-y-2.5">
-            <div className="flex items-center justify-between">
-              <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">Quick Reply</span>
+            <div className="flex items-center justify-between flex-wrap gap-2">
+              <span className="text-xs font-bold text-slate-600 uppercase tracking-wider">Quick Reply</span>
 
               {/* Template shortcuts */}
               <div className="flex items-center gap-1.5 overflow-x-auto pb-0.5">
@@ -750,6 +777,13 @@ export default function CardDetailPanel({ card, onClose }: Props) {
                 >
                   ⚡ Follow-up
                 </button>
+                <button
+                  type="button"
+                  onClick={() => applyTemplate('proposal')}
+                  className="px-2 py-0.5 text-[11px] font-semibold bg-white border border-slate-200 rounded-lg hover:bg-slate-100 text-slate-700 shadow-2xs transition-all"
+                >
+                  🤝 Proposal
+                </button>
               </div>
             </div>
 
@@ -762,7 +796,7 @@ export default function CardDetailPanel({ card, onClose }: Props) {
 
             <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2.5">
               <div className="flex items-center gap-2">
-                {fromAddresses.length > 1 && (
+                {fromAddresses.length > 0 && (
                   <select
                     className="w-full sm:w-auto px-2.5 py-1.5 border border-slate-200 rounded-lg text-xs font-medium text-slate-700 focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500 bg-white"
                     value={selectedFrom}

@@ -32,7 +32,7 @@ const PRESETS: Record<string, { name: string; icon: string; imapHost: string; im
     imapPort: 993,
     smtpHost: 'smtp.zoho.com',
     smtpPort: 465,
-    hint: 'Gunakan Password Akun Zoho atau App Password jika akun mengaktifkan 2FA/OTP.',
+    hint: 'Use your Zoho Account Password or App Password if 2FA/OTP is enabled.',
   },
   zoho_in: {
     name: 'Zoho (India)',
@@ -41,7 +41,7 @@ const PRESETS: Record<string, { name: string; icon: string; imapHost: string; im
     imapPort: 993,
     smtpHost: 'smtp.zoho.in',
     smtpPort: 465,
-    hint: 'Khusus akun Zoho datacenter India (.in).',
+    hint: 'For Zoho accounts hosted on India datacenter (.in).',
   },
   gmail: {
     name: 'Google Gmail',
@@ -50,7 +50,7 @@ const PRESETS: Record<string, { name: string; icon: string; imapHost: string; im
     imapPort: 993,
     smtpHost: 'smtp.gmail.com',
     smtpPort: 465,
-    hint: 'Wajib gunakan 16 digit Google App Password (bukan password login biasa).',
+    hint: 'Use a 16-character Google App Password (not standard account password).',
   },
   outlook: {
     name: 'Outlook / Office 365',
@@ -59,7 +59,7 @@ const PRESETS: Record<string, { name: string; icon: string; imapHost: string; im
     imapPort: 993,
     smtpHost: 'smtp.office365.com',
     smtpPort: 587,
-    hint: 'Gunakan password akun Microsoft atau App Password.',
+    hint: 'Use your Microsoft account password or App Password.',
   },
 };
 
@@ -105,7 +105,7 @@ export default function EmailConfigForm({ initial, boards = [], isNew = false }:
         smtpPort: p.smtpPort,
       }));
       if (!silent) {
-        toast.success(`Preset ${p.name} aktif! Host & port otomatis disesuaikan.`);
+        toast.success(`${p.name} preset applied! Host and port filled automatically.`);
       }
     }
   }
@@ -143,11 +143,11 @@ export default function EmailConfigForm({ initial, boards = [], isNew = false }:
 
   async function handleTest(kind: 'imap' | 'smtp' | 'all'): Promise<boolean> {
     if (!form.imapUser.trim()) {
-      toast.error('Silakan isi Alamat Email terlebih dahulu.');
+      toast.error('Please enter the Email Address first.');
       return false;
     }
     if (!hasSavedPasswords && !singlePassword && !form.imapPass) {
-      toast.error('Silakan isi Password akun / App Password terlebih dahulu.');
+      toast.error('Please enter the Password or App Password first.');
       return false;
     }
 
@@ -184,10 +184,10 @@ export default function EmailConfigForm({ initial, boards = [], isNew = false }:
         }
         setStatus((current) => ({ ...current, smtp: 'Connected' }));
       }
-      toast.success(kind === 'all' ? '✅ IMAP dan SMTP berhasil terhubung!' : `✅ ${kind.toUpperCase()} berhasil terhubung!`);
+      toast.success(kind === 'all' ? '✅ IMAP and SMTP connected successfully!' : `✅ ${kind.toUpperCase()} connected successfully!`);
       return true;
     } catch (error: any) {
-      toast.error(error?.message || 'Uji coba koneksi gagal.');
+      toast.error(error?.message || 'Connection test failed.');
       return false;
     } finally {
       setTesting(null);
@@ -196,7 +196,7 @@ export default function EmailConfigForm({ initial, boards = [], isNew = false }:
 
   async function handleSave() {
     if (!form.imapUser.trim()) {
-      toast.error('Alamat Email wajib diisi.');
+      toast.error('Email address is required.');
       return;
     }
 
@@ -204,7 +204,7 @@ export default function EmailConfigForm({ initial, boards = [], isNew = false }:
     if (singlePassword || !hasSavedPasswords) {
       const isValid = await handleTest('all');
       if (!isValid) {
-        toast.error('Koneksi email gagal. Periksa kembali email dan password Anda sebelum menyimpan.');
+        toast.error('Connection test failed. Please check credentials before saving.');
         return;
       }
     }
@@ -217,10 +217,10 @@ export default function EmailConfigForm({ initial, boards = [], isNew = false }:
         smtpUser: form.smtpUser || form.imapUser,
         smtpPass: form.smtpPass || form.imapPass,
       });
-      toast.success('Konfigurasi email berhasil disimpan!');
+      toast.success('Email configuration saved successfully!');
       window.location.reload();
     } catch (error: any) {
-      toast.error(error?.message || 'Gagal menyimpan konfigurasi email.');
+      toast.error(error?.message || 'Failed to save email configuration.');
     } finally {
       setSaving(false);
     }
@@ -228,25 +228,26 @@ export default function EmailConfigForm({ initial, boards = [], isNew = false }:
 
   async function handleDelete() {
     if (!form.id) return;
-    if (!confirm('Hapus konfigurasi email ini?')) return;
+    if (!confirm('Delete this email configuration?')) return;
     try {
       await deleteEmailConfig(form.id);
-      toast.success('Konfigurasi email dihapus.');
+      toast.success('Email configuration deleted.');
       window.location.reload();
     } catch (error: any) {
-      toast.error(error?.message || 'Gagal menghapus konfigurasi.');
+      toast.error(error?.message || 'Failed to delete configuration.');
     }
   }
 
   const updateField = (field: keyof EmailValues, value: string | number) => setForm((prev) => ({ ...prev, [field]: value }));
   const activePresetInfo = PRESETS[selectedPreset] || PRESETS.zoho;
+  const passwordHint = hasSavedPasswords ? 'Leave blank to keep existing password.' : 'Enter account password or App Password.';
 
   return (
     <div className="space-y-4">
       {/* 1-Click Provider Presets Selector */}
       <div className="p-3.5 bg-slate-50 border border-slate-200/90 rounded-xl space-y-2">
         <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider">
-          Pilih Provider Email (Otomatis Mengisi Host & Port):
+          Select Email Provider (Pre-fills Host & Port):
         </label>
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
           {Object.entries(PRESETS).map(([key, p]) => (
@@ -271,14 +272,14 @@ export default function EmailConfigForm({ initial, boards = [], isNew = false }:
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <Input
           id={`name-${form.id || 'new'}`}
-          label="Label Konfigurasi"
+          label="Configuration Label"
           value={form.name || ''}
           onChange={(e) => updateField('name', e.target.value)}
-          placeholder="e.g., Zoho Salman, Support, Sales"
+          placeholder="e.g., Support, Info, Sales"
           required
         />
         <div className="space-y-1">
-          <label className="block text-sm font-medium text-gray-700">Hubungkan ke Board</label>
+          <label className="block text-sm font-medium text-gray-700">Link to Pipeline Board</label>
           <select
             id={`board-${form.id || 'new'}`}
             className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 bg-white text-sm text-slate-800"
@@ -300,14 +301,14 @@ export default function EmailConfigForm({ initial, boards = [], isNew = false }:
           <div>
             <Input
               id={`email-${form.id || 'new'}`}
-              label="Alamat Email (Username)"
+              label="Email Address (Username)"
               type="email"
               value={form.imapUser}
               onChange={(e) => handleEmailChange(e.target.value)}
-              placeholder="e.g., nama@zoho.com atau nama@zohomail.com"
+              placeholder="e.g., info@jetdigitalpro.com"
               required
             />
-            <p className="text-[11px] text-slate-500 mt-1">Otomatis digunakan untuk penerimaan (IMAP) & pengiriman (SMTP).</p>
+            <p className="text-[11px] text-slate-500 mt-1">Used automatically for inbound (IMAP) & outbound (SMTP).</p>
           </div>
           <div>
             <Input
@@ -316,7 +317,7 @@ export default function EmailConfigForm({ initial, boards = [], isNew = false }:
               type="password"
               value={singlePassword}
               onChange={(e) => handlePasswordChange(e.target.value)}
-              placeholder={hasSavedPasswords ? '••••••••' : 'Password Akun / App Password'}
+              placeholder={hasSavedPasswords ? '••••••••' : 'Account Password or App Password'}
               required={!hasSavedPasswords}
             />
             <p className="text-[11px] text-primary-700 font-medium mt-1">💡 {activePresetInfo.hint}</p>
@@ -327,7 +328,7 @@ export default function EmailConfigForm({ initial, boards = [], isNew = false }:
       {/* Advanced Server Ports & Hosts Details */}
       <details className="group border border-slate-200 rounded-xl p-3 bg-white text-xs">
         <summary className="font-semibold text-slate-700 cursor-pointer flex items-center justify-between select-none">
-          <span>⚙️ Pengaturan Teknis Server (Host & Port IMAP/SMTP)</span>
+          <span>⚙️ Advanced Server Ports & Host Settings (IMAP / SMTP)</span>
           <span className="text-slate-400 group-open:rotate-180 transition-transform">▼</span>
         </summary>
         <div className="mt-3 pt-3 border-t border-slate-100 space-y-4">
@@ -364,7 +365,7 @@ export default function EmailConfigForm({ initial, boards = [], isNew = false }:
           disabled={Boolean(testing) || saving}
           className="text-xs sm:text-sm font-semibold"
         >
-          🔍 Test Koneksi (Test All)
+          🔍 Test Connection (Test All)
         </Button>
         <Button
           type="button"
@@ -373,7 +374,7 @@ export default function EmailConfigForm({ initial, boards = [], isNew = false }:
           disabled={Boolean(testing)}
           className="text-xs sm:text-sm font-bold bg-primary-600 hover:bg-primary-700 text-white"
         >
-          {isNew ? '💾 Simpan Konfigurasi Email' : '💾 Simpan Perubahan'}
+          {isNew ? '💾 Save Email Configuration' : '💾 Save Changes'}
         </Button>
         {form.id && (
           <Button
@@ -382,7 +383,7 @@ export default function EmailConfigForm({ initial, boards = [], isNew = false }:
             onClick={handleDelete}
             className="text-xs sm:text-sm text-red-600 hover:text-red-700 hover:bg-red-50 ml-auto"
           >
-            Hapus
+            Delete
           </Button>
         )}
       </div>

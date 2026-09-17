@@ -67,7 +67,7 @@ export default function Navbar() {
       {isOffline && (
         <div className="bg-rose-600 text-white text-xs font-semibold py-1.5 px-4 text-center flex items-center justify-center gap-2 animate-pulse sticky top-0 z-40">
           <span>📡</span>
-          <span>Koneksi internet terputus. Sistem akan otomatis menyinkronkan data saat kembali online.</span>
+          <span>Internet connection lost. The system will automatically sync data when back online.</span>
         </div>
       )}
       <header className="h-14 bg-white/95 backdrop-blur-md border-b border-slate-200 flex items-center justify-between px-3 sm:px-6 sticky top-0 z-30">
@@ -114,9 +114,9 @@ export default function Navbar() {
             }`}
             title={
               isOffline
-                ? 'Offline — periksa koneksi internet'
+                ? 'Offline — check internet connection'
                 : connected
-                ? 'Real-time synchronization connected'
+                ? 'Real-time synchronization active'
                 : 'Connecting to real-time events...'
             }
           >
@@ -134,14 +134,14 @@ export default function Navbar() {
             className="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-semibold text-slate-700 bg-slate-50 border border-slate-200/90 rounded-lg hover:bg-slate-100 hover:border-slate-300 transition-all shadow-2xs"
           >
             <span>📖</span>
-            <span className="hidden sm:inline">Panduan</span>
+            <span className="hidden sm:inline">Guide</span>
           </Link>
 
           {/* User Avatar & Profile Link */}
           <Link
             href="/dashboard/profile"
             className="hidden sm:flex items-center gap-2 p-1 rounded-xl hover:bg-slate-100 transition"
-            title="Buka Profil Saya"
+            title="My Profile"
           >
             <span className="w-7 h-7 rounded-full bg-gradient-to-br from-primary-600 to-indigo-600 text-white text-xs font-bold flex items-center justify-center shadow-2xs overflow-hidden border border-slate-200">
               {currentUserAvatar ? (

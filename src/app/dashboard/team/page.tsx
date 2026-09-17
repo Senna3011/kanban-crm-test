@@ -80,7 +80,7 @@ export default function TeamPage() {
       setInvitations(invsData as any);
       setAllBoards(Array.isArray(boardsRes) ? boardsRes : []);
     } catch (err: any) {
-      toast.error(err?.message || 'Gagal memuat data tim');
+      toast.error(err?.message || 'Failed to load team data');
     } finally {
       setLoading(false);
     }
@@ -93,7 +93,7 @@ export default function TeamPage() {
   const handleDirectCreate = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!directEmail || !directPassword) {
-      toast.error('Email dan password wajib diisi.');
+      toast.error('Email and password are required.');
       return;
     }
     setSubmittingDirect(true);
@@ -105,7 +105,7 @@ export default function TeamPage() {
         role: directRole,
         boardIds: directBoardIds,
       });
-      toast.success('Pengguna baru berhasil dibuat!');
+      toast.success('New user created successfully!');
       setDirectName('');
       setDirectEmail('');
       setDirectPassword('');
@@ -114,7 +114,7 @@ export default function TeamPage() {
       setModalMode('none');
       loadData();
     } catch (err: any) {
-      toast.error(err?.message || 'Gagal membuat pengguna');
+      toast.error(err?.message || 'Failed to create user');
     } finally {
       setSubmittingDirect(false);
     }
@@ -123,7 +123,7 @@ export default function TeamPage() {
   const handleCreateInvite = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!inviteEmail) {
-      toast.error('Email wajib diisi.');
+      toast.error('Email address is required.');
       return;
     }
     setSubmittingInvite(true);
@@ -133,46 +133,46 @@ export default function TeamPage() {
         role: inviteRole,
       });
       setGeneratedLink(res.inviteLink);
-      toast.success(res.emailSent ? 'Undangan terkirim via email!' : 'Link undangan berhasil dibuat!');
+      toast.success(res.emailSent ? 'Invitation sent via email!' : 'Invitation link generated!');
       setInviteEmail('');
       setInviteRole('member');
       loadData();
     } catch (err: any) {
-      toast.error(err?.message || 'Gagal membuat undangan');
+      toast.error(err?.message || 'Failed to generate invitation');
     } finally {
       setSubmittingInvite(false);
     }
   };
 
   const handleDeleteUser = async (userId: string, email: string) => {
-    if (!confirm(`Hapus pengguna ${email} dari tim?`)) return;
+    if (!confirm(`Delete user ${email} from workspace?`)) return;
     try {
       await deleteTenantUser(userId);
-      toast.success('Pengguna berhasil dihapus.');
+      toast.success('User deleted successfully.');
       loadData();
     } catch (err: any) {
-      toast.error(err?.message || 'Gagal menghapus pengguna.');
+      toast.error(err?.message || 'Failed to delete user.');
     }
   };
 
   const handleRoleChange = async (userId: string, newRole: 'admin' | 'member') => {
     try {
       await updateTenantUserRole(userId, newRole);
-      toast.success('Peran pengguna berhasil diperbarui.');
+      toast.success('User role updated successfully.');
       loadData();
     } catch (err: any) {
-      toast.error(err?.message || 'Gagal memperbarui peran.');
+      toast.error(err?.message || 'Failed to update user role.');
     }
   };
 
   const handleRevokeInvite = async (inviteId: string) => {
-    if (!confirm('Batalkan undangan ini?')) return;
+    if (!confirm('Cancel this invitation?')) return;
     try {
       await revokeInvitation(inviteId);
-      toast.success('Undangan dibatalkan.');
+      toast.success('Invitation revoked.');
       loadData();
     } catch (err: any) {
-      toast.error(err?.message || 'Gagal membatalkan undangan.');
+      toast.error(err?.message || 'Failed to revoke invitation.');
     }
   };
 
@@ -181,11 +181,11 @@ export default function TeamPage() {
     setSavingBoards(true);
     try {
       await updateUserBoardAccess(editingUser.id, selectedBoardIds);
-      toast.success('Penugasan papan kerja berhasil diperbarui.');
+      toast.success('Board access permissions updated.');
       setEditingUser(null);
       loadData();
     } catch (err: any) {
-      toast.error(err?.message || 'Gagal memperbarui penugasan.');
+      toast.error(err?.message || 'Failed to update permissions.');
     } finally {
       setSavingBoards(false);
     }
@@ -193,7 +193,7 @@ export default function TeamPage() {
 
   const copyToClipboard = (text: string) => {
     navigator.clipboard.writeText(text);
-    toast.success('Link undangan disalin ke clipboard!');
+    toast.success('Invitation link copied to clipboard!');
   };
 
   return (
@@ -203,9 +203,9 @@ export default function TeamPage() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-xl sm:text-2xl font-bold text-slate-900">Manajemen Pengguna & Tim</h1>
+          <h1 className="text-xl sm:text-2xl font-bold text-slate-900">Team & User Management</h1>
           <p className="text-xs sm:text-sm text-slate-500 mt-1">
-            Kelola akses anggota tim, atur penugasan papan kerja (board), atau kirim tautan undangan.
+            Manage team access, configure board assignment restrictions, or generate invite links.
           </p>
         </div>
 
@@ -219,7 +219,7 @@ export default function TeamPage() {
               className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-primary-600 hover:bg-primary-700 text-white text-xs font-semibold rounded-xl shadow-xs transition"
             >
               <span>➕</span>
-              <span>Buat User Baru</span>
+              <span>Add New User</span>
             </button>
             <button
               onClick={() => {
@@ -229,7 +229,7 @@ export default function TeamPage() {
               className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 text-xs font-semibold rounded-xl shadow-xs transition"
             >
               <span>✉️</span>
-              <span>Undang via Email</span>
+              <span>Invite via Link</span>
             </button>
           </div>
         )}
@@ -245,7 +245,7 @@ export default function TeamPage() {
               : 'border-transparent text-slate-500 hover:text-slate-800'
           }`}
         >
-          Anggota Tim ({users.length})
+          Team Members ({users.length})
         </button>
         {isAdmin && (
           <button
@@ -256,7 +256,7 @@ export default function TeamPage() {
                 : 'border-transparent text-slate-500 hover:text-slate-800'
             }`}
           >
-            Undangan Pending ({invitations.length})
+            Pending Invitations ({invitations.length})
           </button>
         )}
       </div>
@@ -265,7 +265,7 @@ export default function TeamPage() {
       {loading ? (
         <div className="bg-white rounded-2xl border border-slate-200 p-12 text-center">
           <div className="animate-spin h-7 w-7 border-3 border-primary-200 border-t-primary-600 rounded-full mx-auto" />
-          <p className="text-xs text-slate-400 mt-3">Memuat data pengguna...</p>
+          <p className="text-xs text-slate-400 mt-3">Loading team users...</p>
         </div>
       ) : activeTab === 'members' ? (
         /* Members List */
@@ -274,11 +274,11 @@ export default function TeamPage() {
             <table className="w-full text-left text-xs sm:text-sm">
               <thead className="bg-slate-50/75 border-b border-slate-200 text-slate-500 text-[11px] uppercase tracking-wider font-semibold">
                 <tr>
-                  <th className="py-3 px-4">Pengguna</th>
-                  <th className="py-3 px-4">Peran (Role)</th>
-                  <th className="py-3 px-4">Akses Papan (Board)</th>
-                  <th className="py-3 px-4">Terdaftar</th>
-                  {isAdmin && <th className="py-3 px-4 text-right">Aksi</th>}
+                  <th className="py-3 px-4">User</th>
+                  <th className="py-3 px-4">Role</th>
+                  <th className="py-3 px-4">Board Access</th>
+                  <th className="py-3 px-4">Joined</th>
+                  {isAdmin && <th className="py-3 px-4 text-right">Actions</th>}
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
@@ -306,10 +306,10 @@ export default function TeamPage() {
                           </div>
                           <div>
                             <p className="font-semibold text-slate-900 flex items-center gap-1.5">
-                              {u.name || 'Tanpa Nama'}
+                              {u.name || 'Unnamed User'}
                               {isSelf && (
                                 <span className="text-[10px] bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded font-normal">
-                                  Anda
+                                  You
                                 </span>
                               )}
                             </p>
@@ -322,17 +322,17 @@ export default function TeamPage() {
                           <select
                             value={u.role}
                             onChange={(e) => handleRoleChange(u.id, e.target.value as any)}
-                            className="text-xs border border-slate-200 rounded-lg px-2 py-1 bg-white font-medium text-slate-700 focus:outline-none focus:ring-1 focus:ring-primary-500"
+                            className="bg-slate-50 border border-slate-200 text-slate-700 text-xs rounded-lg px-2.5 py-1 focus:ring-1 focus:ring-primary-500 focus:outline-none"
                           >
                             <option value="member">Member</option>
                             <option value="admin">Admin</option>
                           </select>
                         ) : (
                           <span
-                            className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold capitalize ${
+                            className={`inline-block px-2.5 py-0.5 rounded-full text-xs font-semibold capitalize ${
                               u.role === 'admin'
-                                ? 'bg-indigo-50 text-indigo-700 border border-indigo-200'
-                                : 'bg-slate-100 text-slate-700'
+                                ? 'bg-indigo-50 text-indigo-700 border border-indigo-200/80'
+                                : 'bg-slate-100 text-slate-700 border border-slate-200'
                             }`}
                           >
                             {u.role}
@@ -341,40 +341,32 @@ export default function TeamPage() {
                       </td>
                       <td className="py-3.5 px-4">
                         {u.role === 'admin' ? (
-                          <span className="text-xs font-medium text-slate-400 italic">Semua Papan (Akses Penuh)</span>
+                          <span className="text-xs text-slate-500 italic">All Boards (Full Access)</span>
                         ) : (
-                          <div className="flex items-center gap-1.5 flex-wrap">
-                            {assignedBoardTitles.length === 0 ? (
-                              <span className="text-xs text-slate-400">Semua Papan (Default)</span>
-                            ) : (
-                              assignedBoardTitles.map((title, idx) => (
-                                <span
-                                  key={idx}
-                                  className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-semibold bg-blue-50 text-blue-700 border border-blue-200"
-                                >
-                                  <span>📌</span>
-                                  <span>{title}</span>
-                                </span>
-                              ))
-                            )}
-                            {isAdmin && !isSelf && (
+                          <div className="flex items-center gap-2">
+                            <span className="text-xs text-slate-700">
+                              {assignedBoardTitles.length === 0
+                                ? 'All Boards (Default)'
+                                : assignedBoardTitles.join(', ')}
+                            </span>
+                            {isAdmin && (
                               <button
                                 onClick={() => {
                                   setEditingUser(u);
                                   setSelectedBoardIds(parsedBoardIds);
                                 }}
-                                className="text-[11px] text-primary-600 hover:text-primary-800 underline font-semibold ml-1"
+                                className="text-[11px] text-primary-600 hover:underline font-semibold"
                               >
-                                Atur Board
+                                Edit
                               </button>
                             )}
                           </div>
                         )}
                       </td>
-                      <td className="py-3.5 px-4 text-xs text-slate-500">
-                        {new Date(u.createdAt).toLocaleDateString('id-ID', {
-                          day: 'numeric',
+                      <td className="py-3.5 px-4 text-xs text-slate-400">
+                        {new Date(u.createdAt).toLocaleDateString(undefined, {
                           month: 'short',
+                          day: 'numeric',
                           year: 'numeric',
                         })}
                       </td>
@@ -383,9 +375,9 @@ export default function TeamPage() {
                           {!isSelf && (
                             <button
                               onClick={() => handleDeleteUser(u.id, u.email)}
-                              className="text-xs text-red-600 hover:text-red-800 font-medium px-2 py-1 rounded hover:bg-red-50 transition"
+                              className="text-xs text-red-600 hover:text-red-800 hover:underline font-medium"
                             >
-                              Hapus
+                              Delete
                             </button>
                           )}
                         </td>
@@ -398,71 +390,54 @@ export default function TeamPage() {
           </div>
         </div>
       ) : (
-        /* Invitations List */
+        /* Pending Invitations List */
         <div className="bg-white rounded-2xl border border-slate-200/90 shadow-sm overflow-hidden">
           {invitations.length === 0 ? (
-            <div className="p-12 text-center text-slate-400 text-xs">
-              Tidak ada undangan yang sedang aktif/pending.
-            </div>
+            <div className="text-center py-12 text-slate-400 text-xs">No active pending invitations</div>
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full text-left text-xs sm:text-sm">
                 <thead className="bg-slate-50/75 border-b border-slate-200 text-slate-500 text-[11px] uppercase tracking-wider font-semibold">
                   <tr>
-                    <th className="py-3 px-4">Email Calon Pengguna</th>
-                    <th className="py-3 px-4">Peran</th>
-                    <th className="py-3 px-4">Kadaluarsa</th>
-                    <th className="py-3 px-4 text-right">Aksi</th>
+                    <th className="py-3 px-4">Email</th>
+                    <th className="py-3 px-4">Role</th>
+                    <th className="py-3 px-4">Expires At</th>
+                    <th className="py-3 px-4 text-right">Actions</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
-                  {invitations.map((inv) => {
-                    const isExpired = new Date() > new Date(inv.expiresAt);
-                    const link = `${typeof window !== 'undefined' ? window.location.origin : ''}/invite/${inv.token}`;
-                    return (
-                      <tr key={inv.id} className="hover:bg-slate-50/60 transition">
-                        <td className="py-3.5 px-4">
-                          <p className="font-semibold text-slate-900">{inv.email}</p>
-                          <p className="text-[11px] text-slate-400 font-mono truncate max-w-xs">{inv.token}</p>
-                        </td>
-                        <td className="py-3.5 px-4">
-                          <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold capitalize bg-blue-50 text-blue-700 border border-blue-200">
-                            {inv.role}
-                          </span>
-                        </td>
-                        <td className="py-3.5 px-4 text-xs">
-                          {isExpired ? (
-                            <span className="text-red-600 font-semibold">Kadaluarsa</span>
-                          ) : (
-                            <span className="text-slate-600">
-                              {new Date(inv.expiresAt).toLocaleDateString('id-ID', {
-                                day: 'numeric',
-                                month: 'short',
-                                hour: '2-digit',
-                                minute: '2-digit',
-                              })}
-                            </span>
-                          )}
-                        </td>
-                        <td className="py-3.5 px-4 text-right space-x-2">
-                          {!isExpired && (
-                            <button
-                              onClick={() => copyToClipboard(link)}
-                              className="text-xs text-primary-600 hover:text-primary-800 font-medium px-2 py-1 rounded hover:bg-primary-50 transition"
-                            >
-                              Salin Link
-                            </button>
-                          )}
-                          <button
-                            onClick={() => handleRevokeInvite(inv.id)}
-                            className="text-xs text-red-600 hover:text-red-800 font-medium px-2 py-1 rounded hover:bg-red-50 transition"
-                          >
-                            Batalkan
-                          </button>
-                        </td>
-                      </tr>
-                    );
-                  })}
+                  {invitations.map((inv) => (
+                    <tr key={inv.id} className="hover:bg-slate-50/60 transition">
+                      <td className="py-3.5 px-4 font-semibold text-slate-900">{inv.email}</td>
+                      <td className="py-3.5 px-4">
+                        <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-slate-100 text-slate-700 capitalize">
+                          {inv.role}
+                        </span>
+                      </td>
+                      <td className="py-3.5 px-4 text-xs text-slate-500">
+                        {new Date(inv.expiresAt).toLocaleString(undefined, {
+                          month: 'short',
+                          day: 'numeric',
+                          hour: '2-digit',
+                          minute: '2-digit',
+                        })}
+                      </td>
+                      <td className="py-3.5 px-4 text-right space-x-2">
+                        <button
+                          onClick={() => copyToClipboard(`${window.location.origin}/invite/${inv.token}`)}
+                          className="text-xs text-primary-600 hover:underline font-semibold"
+                        >
+                          Copy Link
+                        </button>
+                        <button
+                          onClick={() => handleRevokeInvite(inv.id)}
+                          className="text-xs text-red-600 hover:underline font-medium"
+                        >
+                          Cancel
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
                 </tbody>
               </table>
             </div>
@@ -470,96 +445,79 @@ export default function TeamPage() {
         </div>
       )}
 
-      {/* Modal: Direct User Creation */}
+      {/* Modal: Direct Create User */}
       {modalMode === 'direct' && (
         <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-xl border border-slate-200 space-y-4 max-h-[90vh] overflow-y-auto">
+          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-xl border border-slate-200 space-y-4">
             <div className="flex items-center justify-between">
-              <h2 className="text-base font-bold text-slate-900">Buat Akun Pengguna Langsung</h2>
-              <button
-                onClick={() => setModalMode('none')}
-                className="text-slate-400 hover:text-slate-600 text-lg leading-none"
-              >
+              <h3 className="text-base font-bold text-slate-900">Add New Team Member</h3>
+              <button onClick={() => setModalMode('none')} className="text-slate-400 hover:text-slate-600">
                 ✕
               </button>
             </div>
-            <p className="text-xs text-slate-500">
-              Admin membuatkan akun langsung dengan password sementara dan menentukan penempatan papan kerja (board).
-            </p>
 
-            <form onSubmit={handleDirectCreate} className="space-y-3">
+            <form onSubmit={handleDirectCreate} className="space-y-3.5 text-xs sm:text-sm">
               <div>
-                <label className="block text-[11px] font-bold text-slate-600 uppercase mb-1">
-                  Nama Lengkap
-                </label>
+                <label className="block text-xs font-semibold text-slate-700 uppercase mb-1">Full Name</label>
                 <input
                   type="text"
+                  placeholder="e.g., Jane Doe"
                   value={directName}
                   onChange={(e) => setDirectName(e.target.value)}
-                  placeholder="Contoh: Siti Rahma"
-                  className="w-full px-3 py-2 text-xs border border-slate-200 rounded-xl focus:ring-2 focus:ring-primary-500 focus:outline-none"
+                  className="w-full px-3.5 py-2 border border-slate-300 rounded-xl focus:ring-2 focus:ring-primary-500 focus:outline-none"
                 />
               </div>
 
               <div>
-                <label className="block text-[11px] font-bold text-slate-600 uppercase mb-1">
-                  Email Akun *
-                </label>
+                <label className="block text-xs font-semibold text-slate-700 uppercase mb-1">Email Address</label>
                 <input
                   type="email"
-                  required
+                  placeholder="jane@company.com"
                   value={directEmail}
                   onChange={(e) => setDirectEmail(e.target.value)}
-                  placeholder="user@startupanda.com"
-                  className="w-full px-3 py-2 text-xs border border-slate-200 rounded-xl focus:ring-2 focus:ring-primary-500 focus:outline-none"
+                  required
+                  className="w-full px-3.5 py-2 border border-slate-300 rounded-xl focus:ring-2 focus:ring-primary-500 focus:outline-none"
                 />
               </div>
 
               <div>
-                <label className="block text-[11px] font-bold text-slate-600 uppercase mb-1">
-                  Password Sementara *
-                </label>
+                <label className="block text-xs font-semibold text-slate-700 uppercase mb-1">Temporary Password</label>
                 <input
                   type="password"
-                  required
+                  placeholder="Minimum 6 characters"
                   value={directPassword}
                   onChange={(e) => setDirectPassword(e.target.value)}
-                  placeholder="Minimal 6 karakter"
-                  className="w-full px-3 py-2 text-xs border border-slate-200 rounded-xl focus:ring-2 focus:ring-primary-500 focus:outline-none"
+                  required
+                  className="w-full px-3.5 py-2 border border-slate-300 rounded-xl focus:ring-2 focus:ring-primary-500 focus:outline-none"
                 />
               </div>
 
               <div>
-                <label className="block text-[11px] font-bold text-slate-600 uppercase mb-1">
-                  Peran (Role)
-                </label>
+                <label className="block text-xs font-semibold text-slate-700 uppercase mb-1">Role</label>
                 <select
                   value={directRole}
                   onChange={(e) => setDirectRole(e.target.value as any)}
-                  className="w-full px-3 py-2 text-xs border border-slate-200 rounded-xl bg-white focus:ring-2 focus:ring-primary-500 focus:outline-none font-medium"
+                  className="w-full px-3.5 py-2 border border-slate-300 rounded-xl bg-white focus:ring-2 focus:ring-primary-500 focus:outline-none"
                 >
-                  <option value="member">Member (Kelola Kartu & Draft)</option>
-                  <option value="admin">Admin (Akses Penuh & Konfigurasi)</option>
+                  <option value="member">Member (Pipeline Operations)</option>
+                  <option value="admin">Admin (Full Workspace Management)</option>
                 </select>
               </div>
 
-              {directRole === 'member' && allBoards.length > 1 && (
+              {allBoards.length > 0 && directRole === 'member' && (
                 <div>
-                  <label className="block text-[11px] font-bold text-slate-600 uppercase mb-1">
-                    Penugasan Papan Kerja (Pilih Board)
+                  <label className="block text-xs font-semibold text-slate-700 uppercase mb-1">
+                    Allowed Board Access (Leave empty for all boards)
                   </label>
-                  <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl space-y-1.5 max-h-32 overflow-y-auto">
+                  <div className="space-y-1 max-h-32 overflow-y-auto p-2 border border-slate-200 rounded-xl">
                     {allBoards.map((b) => (
                       <label key={b.id} className="flex items-center gap-2 text-xs text-slate-700 cursor-pointer">
                         <input
                           type="checkbox"
                           checked={directBoardIds.includes(b.id)}
                           onChange={(e) => {
-                            if (e.target.checked) {
-                              setDirectBoardIds((prev) => [...prev, b.id]);
-                            } else {
-                              setDirectBoardIds((prev) => prev.filter((id) => id !== b.id));
-                            }
+                            if (e.target.checked) setDirectBoardIds([...directBoardIds, b.id]);
+                            else setDirectBoardIds(directBoardIds.filter((id) => id !== b.id));
                           }}
                           className="rounded text-primary-600 focus:ring-primary-500"
                         />
@@ -567,7 +525,6 @@ export default function TeamPage() {
                       </label>
                     ))}
                   </div>
-                  <p className="text-[10px] text-slate-400 mt-1">Kosongkan centang jika user boleh mengakses semua papan.</p>
                 </div>
               )}
 
@@ -575,16 +532,16 @@ export default function TeamPage() {
                 <button
                   type="button"
                   onClick={() => setModalMode('none')}
-                  className="px-4 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-100 rounded-xl transition"
+                  className="px-4 py-2 text-xs text-slate-600 hover:bg-slate-100 rounded-xl"
                 >
-                  Batal
+                  Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={submittingDirect}
-                  className="px-4 py-2 text-xs font-semibold bg-primary-600 hover:bg-primary-700 disabled:opacity-50 text-white rounded-xl shadow-xs transition"
+                  className="px-4 py-2 text-xs bg-primary-600 hover:bg-primary-700 text-white font-semibold rounded-xl shadow-xs disabled:opacity-50"
                 >
-                  {submittingDirect ? 'Menyimpan...' : 'Buat Akun'}
+                  {submittingDirect ? 'Creating...' : 'Create User'}
                 </button>
               </div>
             </form>
@@ -592,167 +549,137 @@ export default function TeamPage() {
         </div>
       )}
 
-      {/* Modal: Edit Board Access for Member */}
+      {/* Modal: Invite via Link */}
+      {modalMode === 'invite' && (
+        <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-xl border border-slate-200 space-y-4">
+            <div className="flex items-center justify-between">
+              <h3 className="text-base font-bold text-slate-900">Invite via Registration Link</h3>
+              <button onClick={() => setModalMode('none')} className="text-slate-400 hover:text-slate-600">
+                ✕
+              </button>
+            </div>
+
+            <p className="text-xs text-slate-500">
+              Generate a secure invitation link (valid for 48 hours) for self-registration into this workspace.
+            </p>
+
+            <form onSubmit={handleCreateInvite} className="space-y-3.5 text-xs sm:text-sm">
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 uppercase mb-1">Invitee Email Address</label>
+                <input
+                  type="email"
+                  placeholder="collaborator@company.com"
+                  value={inviteEmail}
+                  onChange={(e) => setInviteEmail(e.target.value)}
+                  required
+                  className="w-full px-3.5 py-2 border border-slate-300 rounded-xl focus:ring-2 focus:ring-primary-500 focus:outline-none"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 uppercase mb-1">Assigned Role</label>
+                <select
+                  value={inviteRole}
+                  onChange={(e) => setInviteRole(e.target.value as any)}
+                  className="w-full px-3.5 py-2 border border-slate-300 rounded-xl bg-white focus:ring-2 focus:ring-primary-500 focus:outline-none"
+                >
+                  <option value="member">Member</option>
+                  <option value="admin">Admin</option>
+                </select>
+              </div>
+
+              {generatedLink && (
+                <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-xl space-y-2">
+                  <p className="text-xs font-semibold text-emerald-800">✅ Link successfully generated:</p>
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="text"
+                      readOnly
+                      value={generatedLink}
+                      className="flex-1 px-2.5 py-1.5 bg-white border border-emerald-300 rounded-lg text-xs font-mono text-slate-700 select-all"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => copyToClipboard(generatedLink)}
+                      className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-lg shadow-2xs"
+                    >
+                      Copy
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              <div className="flex items-center justify-end gap-2 pt-3">
+                <button
+                  type="button"
+                  onClick={() => setModalMode('none')}
+                  className="px-4 py-2 text-xs text-slate-600 hover:bg-slate-100 rounded-xl"
+                >
+                  Close
+                </button>
+                <button
+                  type="submit"
+                  disabled={submittingInvite}
+                  className="px-4 py-2 text-xs bg-primary-600 hover:bg-primary-700 text-white font-semibold rounded-xl shadow-xs disabled:opacity-50"
+                >
+                  {submittingInvite ? 'Generating...' : 'Generate Link'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Modal: Edit User Board Access */}
       {editingUser && (
         <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4 z-50">
           <div className="bg-white rounded-2xl max-w-sm w-full p-6 shadow-xl border border-slate-200 space-y-4">
             <div className="flex items-center justify-between">
-              <h2 className="text-base font-bold text-slate-900">Atur Akses Papan Kerja</h2>
-              <button
-                onClick={() => setEditingUser(null)}
-                className="text-slate-400 hover:text-slate-600 text-lg leading-none"
-              >
+              <h3 className="text-base font-bold text-slate-900">Board Access Permissions</h3>
+              <button onClick={() => setEditingUser(null)} className="text-slate-400 hover:text-slate-600">
                 ✕
               </button>
             </div>
+
             <p className="text-xs text-slate-500">
-              Pilih papan kerja (board) yang dapat diakses dan dilihat oleh <strong>{editingUser.name || editingUser.email}</strong>.
+              Configure allowed boards for <strong>{editingUser.name || editingUser.email}</strong>. Leave all unchecked to grant access to all boards.
             </p>
 
-            <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl space-y-2 max-h-48 overflow-y-auto">
+            <div className="space-y-2 max-h-48 overflow-y-auto p-3 border border-slate-200 rounded-xl">
               {allBoards.map((b) => (
-                <label key={b.id} className="flex items-center gap-2 text-xs text-slate-700 cursor-pointer">
+                <label key={b.id} className="flex items-center gap-2.5 text-xs text-slate-700 cursor-pointer">
                   <input
                     type="checkbox"
                     checked={selectedBoardIds.includes(b.id)}
                     onChange={(e) => {
-                      if (e.target.checked) {
-                        setSelectedBoardIds((prev) => [...prev, b.id]);
-                      } else {
-                        setSelectedBoardIds((prev) => prev.filter((id) => id !== b.id));
-                      }
+                      if (e.target.checked) setSelectedBoardIds([...selectedBoardIds, b.id]);
+                      else setSelectedBoardIds(selectedBoardIds.filter((id) => id !== b.id));
                     }}
                     className="rounded text-primary-600 focus:ring-primary-500"
                   />
-                  <span className="font-medium">{b.title}</span>
+                  <span>📌 {b.title}</span>
                 </label>
               ))}
             </div>
-            <p className="text-[10px] text-slate-400">
-              Jika tidak ada yang dicentang, anggota tim otomatis dapat melihat seluruh papan kerja di workspace ini.
-            </p>
 
             <div className="flex items-center justify-end gap-2 pt-2">
               <button
                 type="button"
                 onClick={() => setEditingUser(null)}
-                className="px-4 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-100 rounded-xl transition"
+                className="px-4 py-2 text-xs text-slate-600 hover:bg-slate-100 rounded-xl"
               >
-                Batal
+                Cancel
               </button>
               <button
                 type="button"
-                disabled={savingBoards}
                 onClick={handleSaveBoardAccess}
-                className="px-4 py-2 text-xs font-semibold bg-primary-600 hover:bg-primary-700 disabled:opacity-50 text-white rounded-xl shadow-xs transition"
+                disabled={savingBoards}
+                className="px-4 py-2 text-xs bg-primary-600 hover:bg-primary-700 text-white font-semibold rounded-xl shadow-xs disabled:opacity-50"
               >
-                {savingBoards ? 'Menyimpan...' : 'Simpan Penugasan'}
+                {savingBoards ? 'Saving...' : 'Save Permissions'}
               </button>
             </div>
-          </div>
-        </div>
-      )}
-
-      {/* Modal: Email / Link Invitation */}
-      {modalMode === 'invite' && (
-        <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-xl border border-slate-200 space-y-4">
-            <div className="flex items-center justify-between">
-              <h2 className="text-base font-bold text-slate-900">Undang Anggota via Email / Link</h2>
-              <button
-                onClick={() => {
-                  setModalMode('none');
-                  setGeneratedLink(null);
-                }}
-                className="text-slate-400 hover:text-slate-600 text-lg leading-none"
-              >
-                ✕
-              </button>
-            </div>
-            <p className="text-xs text-slate-500">
-              Sistem akan mengirimkan undangan ke email calon anggota atau Anda dapat menyalin link registrasi secara manual.
-            </p>
-
-            {generatedLink ? (
-              <div className="space-y-3 bg-emerald-50 border border-emerald-200 rounded-xl p-4">
-                <p className="text-xs font-bold text-emerald-800">✓ Undangan Berhasil Dibuat!</p>
-                <p className="text-[11px] text-emerald-700">
-                  Bagikan tautan berikut kepada calon anggota (berlaku 48 jam):
-                </p>
-                <div className="flex items-center gap-2">
-                  <input
-                    type="text"
-                    readOnly
-                    value={generatedLink}
-                    className="w-full px-2.5 py-1.5 text-xs bg-white border border-emerald-300 rounded-lg text-slate-700 font-mono"
-                  />
-                  <button
-                    onClick={() => copyToClipboard(generatedLink)}
-                    className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold rounded-lg shrink-0"
-                  >
-                    Salin
-                  </button>
-                </div>
-                <div className="text-right pt-2">
-                  <button
-                    onClick={() => {
-                      setGeneratedLink(null);
-                      setModalMode('none');
-                    }}
-                    className="text-xs font-semibold text-emerald-800 underline"
-                  >
-                    Selesai
-                  </button>
-                </div>
-              </div>
-            ) : (
-              <form onSubmit={handleCreateInvite} className="space-y-3">
-                <div>
-                  <label className="block text-[11px] font-bold text-slate-600 uppercase mb-1">
-                    Email Calon Anggota *
-                  </label>
-                  <input
-                    type="email"
-                    required
-                    value={inviteEmail}
-                    onChange={(e) => setInviteEmail(e.target.value)}
-                    placeholder="calon.anggota@gmail.com"
-                    className="w-full px-3 py-2 text-xs border border-slate-200 rounded-xl focus:ring-2 focus:ring-primary-500 focus:outline-none"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-[11px] font-bold text-slate-600 uppercase mb-1">
-                    Peran (Role)
-                  </label>
-                  <select
-                    value={inviteRole}
-                    onChange={(e) => setInviteRole(e.target.value as any)}
-                    className="w-full px-3 py-2 text-xs border border-slate-200 rounded-xl bg-white focus:ring-2 focus:ring-primary-500 focus:outline-none font-medium"
-                  >
-                    <option value="member">Member (Kelola Kartu & Draft)</option>
-                    <option value="admin">Admin (Akses Penuh & Konfigurasi)</option>
-                  </select>
-                </div>
-
-                <div className="flex items-center justify-end gap-2 pt-3">
-                  <button
-                    type="button"
-                    onClick={() => setModalMode('none')}
-                    className="px-4 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-100 rounded-xl transition"
-                  >
-                    Batal
-                  </button>
-                  <button
-                    type="submit"
-                    disabled={submittingInvite}
-                    className="px-4 py-2 text-xs font-semibold bg-primary-600 hover:bg-primary-700 disabled:opacity-50 text-white rounded-xl shadow-xs transition"
-                  >
-                    {submittingInvite ? 'Memproses...' : 'Buat & Kirim Undangan'}
-                  </button>
-                </div>
-              </form>
-            )}
           </div>
         </div>
       )}

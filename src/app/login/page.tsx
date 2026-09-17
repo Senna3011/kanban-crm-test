@@ -26,7 +26,7 @@ function LoginForm() {
     });
 
     if (result?.error) {
-      setError(result.error === 'CredentialsSignin' ? 'Email atau password salah.' : result.error);
+      setError(result.error === 'CredentialsSignin' ? 'Invalid email or password.' : result.error);
       setLoading(false);
       return;
     }
@@ -43,13 +43,13 @@ function LoginForm() {
         </span>
         <div>
           <h1 className="text-xl sm:text-2xl font-bold text-slate-900">Jet Digital Pro</h1>
-          <p className="mt-1 text-xs sm:text-sm text-slate-500">Kanban CRM — Masuk ke akun Anda</p>
+          <p className="mt-1 text-xs sm:text-sm text-slate-500">Kanban CRM — Sign in to your workspace</p>
         </div>
       </div>
 
       {registered && (
         <div className="text-xs sm:text-sm text-center text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-xl py-2.5 px-3 font-medium">
-          ✓ Akun Anda berhasil dibuat. Silakan login.
+          ✓ Your account has been registered successfully. Please sign in.
         </div>
       )}
 
@@ -62,11 +62,11 @@ function LoginForm() {
       <form className="mt-6 sm:mt-8 space-y-4" onSubmit={handleSubmit}>
         <div>
           <label className="block text-xs font-semibold text-slate-700 uppercase mb-1">
-            Email
+            Email Address
           </label>
           <input
             type="email"
-            placeholder="nama@email.com"
+            placeholder="name@company.com"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             required
@@ -82,7 +82,7 @@ function LoginForm() {
           </label>
           <input
             type="password"
-            placeholder="Password akun"
+            placeholder="Account password"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             required
@@ -96,13 +96,13 @@ function LoginForm() {
           disabled={loading}
           className="w-full mt-2 py-2.5 px-4 bg-primary-600 hover:bg-primary-700 active:scale-[0.99] disabled:opacity-50 text-white rounded-xl font-medium transition-all text-sm shadow-xs"
         >
-          {loading ? 'Memproses...' : 'Sign In'}
+          {loading ? 'Signing in...' : 'Sign In'}
         </button>
 
         <div className="pt-2 text-center text-xs text-slate-500">
-          Startup/Perusahaan baru?{' '}
+          New startup or team?{' '}
           <a href="/register" className="font-semibold text-primary-600 hover:underline">
-            Daftarkan Workspace di sini
+            Register a new workspace here
           </a>
         </div>
       </form>
@@ -114,7 +114,7 @@ export default function LoginPage() {
   return (
     <div className="min-h-screen flex flex-col bg-slate-50 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-indigo-100 via-slate-50 to-slate-50">
       <div className="flex-1 flex items-center justify-center p-4">
-        <Suspense fallback={<div className="text-slate-400 text-xs">Memuat halaman login...</div>}>
+        <Suspense fallback={<div className="text-slate-400 text-xs">Loading login form...</div>}>
           <LoginForm />
         </Suspense>
       </div>
@@ -131,4 +131,3 @@ export default function LoginPage() {
     </div>
   );
 }
-

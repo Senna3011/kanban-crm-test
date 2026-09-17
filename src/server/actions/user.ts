@@ -50,11 +50,11 @@ export async function createTenantUser(data: {
 
   const email = data.email?.trim().toLowerCase();
   if (!email || !email.includes('@')) {
-    throw new Error('Alamat email tidak valid.');
+    throw new Error('Invalid email address format.');
   }
 
   if (!data.password || data.password.length < 6) {
-    throw new Error('Password minimal 6 karakter.');
+    throw new Error('Password must be at least 6 characters.');
   }
 
   const role = data.role === 'admin' ? 'admin' : 'member';
@@ -64,7 +64,7 @@ export async function createTenantUser(data: {
   });
 
   if (existing) {
-    throw new Error('Email sudah terdaftar.');
+    throw new Error('Email address is already registered.');
   }
 
   const passwordHash = await bcrypt.hash(data.password, 12);
@@ -127,7 +127,7 @@ export async function deleteTenantUser(userId: string) {
   const admin = await requireAdmin();
 
   if (admin.id === userId) {
-    throw new Error('Tidak dapat menghapus akun admin sendiri.');
+    throw new Error('You cannot delete your own admin account.');
   }
 
   const target = await prisma.user.findFirst({
@@ -135,7 +135,7 @@ export async function deleteTenantUser(userId: string) {
   });
 
   if (!target) {
-    throw new Error('User tidak ditemukan.');
+    throw new Error('User not found.');
   }
 
   await prisma.user.delete({
@@ -149,7 +149,7 @@ export async function updateTenantUserRole(userId: string, role: 'admin' | 'memb
   const admin = await requireAdmin();
 
   if (admin.id === userId) {
-    throw new Error('Tidak dapat mengubah role akun sendiri.');
+    throw new Error('You cannot change your own role.');
   }
 
   const target = await prisma.user.findFirst({
@@ -157,7 +157,7 @@ export async function updateTenantUserRole(userId: string, role: 'admin' | 'memb
   });
 
   if (!target) {
-    throw new Error('User tidak ditemukan.');
+    throw new Error('User not found.');
   }
 
   await prisma.user.update({

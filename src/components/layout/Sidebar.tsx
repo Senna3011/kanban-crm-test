@@ -9,8 +9,8 @@ import clsx from 'clsx';
 const navItems = [
   { href: '/dashboard', label: 'Board', icon: '📋' },
   { href: '/dashboard/team', label: 'Team', icon: '👥' },
-  { href: '/dashboard/profile', label: 'Profil Saya', icon: '👤' },
-  { href: '/dashboard/guide', label: 'Panduan', icon: '📖' },
+  { href: '/dashboard/profile', label: 'My Profile', icon: '👤' },
+  { href: '/dashboard/guide', label: 'User Guide', icon: '📖' },
   { href: '/dashboard/settings', label: 'Settings', icon: '⚙️' },
   { href: '/dashboard/spam', label: 'Spam Box', icon: '🛡️' },
 ];
@@ -147,7 +147,7 @@ export default function Sidebar() {
                   <button
                     onClick={async (e) => {
                       e.stopPropagation();
-                      if (!confirm(`Hapus papan "${board.title}" beserta seluruh kartu di dalamnya?`)) return;
+                      if (!confirm(`Delete board "${board.title}" and all cards in it?`)) return;
                       try {
                         const res = await fetch(`/api/boards/${board.id}`, { method: 'DELETE' });
                         if (res.ok) {
@@ -160,7 +160,7 @@ export default function Sidebar() {
                       } catch {}
                     }}
                     className="opacity-0 group-hover:opacity-100 hover:text-red-600 p-0.5 rounded transition text-[11px]"
-                    title="Hapus Board"
+                    title="Delete Board"
                   >
                     🗑️
                   </button>
@@ -203,14 +203,14 @@ export default function Sidebar() {
         </div>
       </aside>
 
-      {/* Modal Form: Buat Board Baru */}
+      {/* Modal Form: Create New Board */}
       {showNewBoardModal && (
         <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4 z-50">
           <div className="bg-white rounded-2xl max-w-sm w-full p-5 sm:p-6 shadow-xl border border-slate-200 space-y-4">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <span className="text-base">📌</span>
-                <h3 className="text-sm font-bold text-slate-900">Buat Papan (Board) Baru</h3>
+                <h3 className="text-sm font-bold text-slate-900">Create New Board</h3>
               </div>
               <button
                 onClick={() => setShowNewBoardModal(false)}
@@ -220,7 +220,7 @@ export default function Sidebar() {
               </button>
             </div>
             <p className="text-xs text-slate-500">
-              Tambahkan papan kerja baru untuk memisahkan alur task atau saluran email tim Anda.
+              Add a new pipeline board to organize your team workflow or email channels.
             </p>
 
             {boardError && (
@@ -233,7 +233,7 @@ export default function Sidebar() {
               onSubmit={async (e) => {
                 e.preventDefault();
                 if (!newBoardTitle.trim()) {
-                  setBoardError('Nama board tidak boleh kosong.');
+                  setBoardError('Board title cannot be empty.');
                   return;
                 }
                 setCreatingBoard(true);
@@ -249,31 +249,28 @@ export default function Sidebar() {
                     setBoards((prev) => [...prev, newBoard]);
                     selectBoard(newBoard.id);
                     setShowNewBoardModal(false);
-                    setNewBoardTitle('');
                   } else {
-                    const data = await res.json();
-                    setBoardError(data.error || 'Gagal membuat board.');
+                    const err = await res.json().catch(() => ({}));
+                    setBoardError(err.error || 'Failed to create board.');
                   }
                 } catch {
-                  setBoardError('Terjadi kesalahan koneksi.');
+                  setBoardError('Connection error occurred.');
                 } finally {
                   setCreatingBoard(false);
                 }
               }}
-              className="space-y-3"
+              className="space-y-4"
             >
               <div>
-                <label className="block text-[11px] font-bold text-slate-600 uppercase mb-1">
-                  Nama Papan *
-                </label>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">Board Title</label>
                 <input
                   type="text"
-                  required
-                  autoFocus
-                  placeholder="Contoh: Leads, CS Support, Project"
+                  placeholder="e.g., Sales Team, Operations"
                   value={newBoardTitle}
                   onChange={(e) => setNewBoardTitle(e.target.value)}
-                  className="w-full px-3 py-2 text-xs border border-slate-300 rounded-xl focus:ring-2 focus:ring-primary-500 focus:outline-none"
+                  className="w-full px-3 py-2 border border-slate-300 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-primary-500"
+                  required
+                  autoFocus
                 />
               </div>
 
@@ -281,16 +278,16 @@ export default function Sidebar() {
                 <button
                   type="button"
                   onClick={() => setShowNewBoardModal(false)}
-                  className="px-3.5 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-100 rounded-xl transition"
+                  className="px-3 py-1.5 text-xs text-slate-600 hover:bg-slate-100 rounded-lg"
                 >
-                  Batal
+                  Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={creatingBoard}
-                  className="px-4 py-1.5 text-xs font-semibold bg-primary-600 hover:bg-primary-700 disabled:opacity-50 text-white rounded-xl shadow-xs transition"
+                  className="px-4 py-1.5 text-xs bg-primary-600 text-white font-semibold rounded-lg hover:bg-primary-700 disabled:opacity-50"
                 >
-                  {creatingBoard ? 'Membuat...' : 'Buat Board'}
+                  {creatingBoard ? 'Creating...' : 'Create Board'}
                 </button>
               </div>
             </form>

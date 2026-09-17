@@ -91,13 +91,10 @@ async function pollFolder(imapConfig: Record<string, string>, folder: string, te
         continue;
       }
 
-      // Skip outbound emails — if fromEmail is from configured mailbox domain or matches configured user
-      const senderEmail = msg.fromEmail?.toLowerCase() || '';
-      const configUser = imapConfig.user?.toLowerCase() || '';
-      const configDomain = configUser.includes('@') ? configUser.split('@')[1] : '';
-      const isOurDomain = configDomain ? senderEmail.endsWith(`@${configDomain}`) : false;
-      const isConfigUser = configUser && senderEmail === configUser;
-      if (isOurDomain || isConfigUser) {
+      // Skip outbound emails only if sender is the exact configured mailbox username (i.e. self-sent)
+      const senderEmail = msg.fromEmail?.toLowerCase().trim() || '';
+      const configUser = imapConfig.user?.toLowerCase().trim() || '';
+      if (configUser && senderEmail === configUser) {
         console.log(`[IMAP Poller] Skipping outbound email: ${msg.subject} (from ${msg.fromEmail})`);
         continue;
       }

@@ -9,7 +9,7 @@ export async function GET() {
   if (!apiKey || apiKey === 'sk-your-deepseek-api-key' || apiKey.startsWith('sk-your')) {
     return NextResponse.json({
       configured: false,
-      message: providerName + ' API key belum dikonfigurasi. AI classification & draft generation tidak akan jalan.',
+      message: providerName + ' API key is not configured. AI classification and automated drafting are paused.',
     });
   }
 
@@ -31,7 +31,7 @@ export async function GET() {
       return NextResponse.json({
         configured: true,
         valid: false,
-        message: providerName + ' API key tidak valid atau sudah expired.',
+        message: providerName + ' API key is invalid or expired.',
       });
     }
 
@@ -39,7 +39,7 @@ export async function GET() {
       return NextResponse.json({
         configured: true,
         valid: false,
-        message: providerName + ' token sudah habis (quota exceeded).',
+        message: providerName + ' quota exceeded. Please top up token balance.',
       });
     }
 

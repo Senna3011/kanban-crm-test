@@ -21,7 +21,7 @@ export default async function SettingsPage() {
       <div className="flex items-start justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Settings</h1>
-          <p className="text-gray-500 mt-1">Manage your company information and email configurations.</p>
+          <p className="text-gray-500 mt-1">Manage your company branding and mailbox connections.</p>
         </div>
         <Link href="/dashboard" className="text-sm text-primary-700 hover:underline">← Back to board</Link>
       </div>
@@ -33,17 +33,17 @@ export default async function SettingsPage() {
         <div className="p-4 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-600 flex items-center justify-between">
           <div className="flex items-center gap-2">
             <span className="w-2 h-2 rounded-full bg-slate-400" />
-            <span>Anda masuk sebagai <strong>Member</strong>. Konfigurasi integrasi & informasi perusahaan dikelola oleh Administrator.</span>
+            <span>You are signed in as a <strong>Team Member</strong>. Integrations and company settings are managed by Administrators.</span>
           </div>
           <Link href="/dashboard/team" className="text-primary-600 hover:underline font-semibold">
-            Lihat Tim (👥)
+            View Team (👥)
           </Link>
         </div>
       )}
 
       {/* Company Information Section */}
       <section className="bg-white rounded-xl border border-gray-200 p-6">
-        <h2 className="text-lg font-semibold mb-4">Company Information</h2>
+        <h2 className="text-lg font-semibold mb-4">Company Profile & Context</h2>
         <CompanyInfoForm initial={data.company} readOnly={!isAdmin} />
       </section>
 
@@ -52,12 +52,12 @@ export default async function SettingsPage() {
         <div className="flex items-center justify-between mb-4">
           <div>
             <h2 className="text-lg font-semibold">
-              {isAdmin ? 'Email Account Integrations (IMAP / SMTP)' : 'Connected Email Accounts'}
+              {isAdmin ? 'Email Mailbox Integrations (IMAP / SMTP)' : 'Connected Mailbox Accounts'}
             </h2>
             <p className="text-xs text-gray-500 mt-0.5">
               {isAdmin
-                ? 'Hubungkan akun email bisnis (Zoho Mail, Gmail, Outlook, dll) untuk sinkronisasi otomatis ke Kanban.'
-                : 'Daftar akun email yang terhubung untuk sinkronisasi pesan masuk.'}
+                ? 'Connect multiple business mailboxes (Zoho Mail, Gmail, Outlook, etc.) for automatic Kanban sync.'
+                : 'List of active mailboxes synced with your pipeline boards.'}
             </p>
           </div>
           <p className="text-sm text-gray-500">{data.configs.length} configured</p>
@@ -108,7 +108,7 @@ export default async function SettingsPage() {
                   <p className="text-xs text-slate-500 mt-0.5">
                     Email: <span className="font-medium text-slate-700">{cfg.imapUser}</span> • Board:{' '}
                     <span className="font-medium text-slate-700">
-                      {data.boards.find((b) => b.id === cfg.boardId)?.title || 'Semua Board'}
+                      {data.boards.find((b) => b.id === cfg.boardId)?.title || 'All Boards'}
                     </span>
                   </p>
                 </div>
@@ -118,7 +118,7 @@ export default async function SettingsPage() {
                       cfg.isActive ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'
                     }`}
                   >
-                    {cfg.isActive ? 'Aktif' : 'Nonaktif'}
+                    {cfg.isActive ? 'Active' : 'Inactive'}
                   </span>
                 </div>
               </div>

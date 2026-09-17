@@ -38,18 +38,33 @@ export class EmailAdapter implements ChannelAdapter {
 
       const messages: InboundMessage[] = [];
 
-      // Fetch all recent messages (not just unseen) to catch team emails
+      // Search recent messages (last 30 days) by UID
       const since = new Date();
       since.setDate(since.getDate() - 30);
-      for await (const message of imap.fetch({ since }, { source: true, uid: true, flags: true })) {
-        if (!message.source) { console.log('[IMAP] Skipping message with no source'); continue; }
+
+      let uids: number[] = [];
+      try {
+        const searchResult = await imap.search({ since }, { uid: true });
+        if (Array.isArray(searchResult)) {
+          uids = searchResult;
+        }
+      } catch (searchErr) {
+        console.log(`[IMAP] Search by date failed, falling back to recent range in ${folder}`);
+        uids = [];
+      }
+
+      // If search returns specific UIDs, fetch by those UIDs. Otherwise fetch latest messages range '1:*'
+      const fetchRange: any = uids && uids.length > 0 ? uids : '1:*';
+      const fetchOptions: any = { uid: uids && uids.length > 0 };
+
+      for await (const message of imap.fetch(fetchRange, { source: true, uid: true, flags: true }, fetchOptions)) {
+        if (!message.source) continue;
         const uid = message.uid;
-        if (!uid) { console.log('[IMAP] Skipping message with no uid'); continue; }
+        if (!uid) continue;
 
         try {
           const parsed = await simpleParser(message.source);
-          const messageId = parsed.messageId?.trim();
-          if (!messageId) { console.log('[IMAP] Skipping message with no messageId, subject:', parsed.subject); continue; }
+          const messageId = parsed.messageId?.trim() || `<uid-${uid}-${folder}@local>`;
 
           const isRead = message.flags instanceof Set && [...message.flags].some(f => f.endsWith('Seen'));
 
@@ -73,7 +88,9 @@ export class EmailAdapter implements ChannelAdapter {
 
       return messages;
     } finally {
-      await imap.logout();
+      try {
+        await imap.logout();
+      } catch {}
     }
   }
 
@@ -129,7 +146,21 @@ export class EmailAdapter implements ChannelAdapter {
       await imap.mailboxOpen(folder, { readOnly: true });
       const since = new Date();
       since.setDate(since.getDate() - 30);
-      for await (const message of imap.fetch({ since }, { source: true, uid: true, flags: true })) {
+
+      let uids: number[] = [];
+      try {
+        const searchResult = await imap.search({ since }, { uid: true });
+        if (Array.isArray(searchResult)) {
+          uids = searchResult;
+        }
+      } catch {
+        uids = [];
+      }
+
+      const fetchRange: any = uids && uids.length > 0 ? uids : '1:*';
+      const fetchOptions: any = { uid: uids && uids.length > 0 };
+
+      for await (const message of imap.fetch(fetchRange, { source: true, uid: true, flags: true }, fetchOptions)) {
         if (!message.source) continue;
         const uid = message.uid;
         if (!uid) continue;
@@ -152,7 +183,9 @@ export class EmailAdapter implements ChannelAdapter {
     } catch {
       return statusMap;
     } finally {
-      await imap.logout();
+      try {
+        await imap.logout();
+      } catch {}
     }
   }
 

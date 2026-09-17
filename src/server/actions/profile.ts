@@ -34,7 +34,7 @@ export async function updateUserProfile(data: {
     where: { id: authUser.id },
   });
 
-  if (!user) throw new Error('Pengguna tidak ditemukan.');
+  if (!user) throw new Error('User not found.');
 
   const updateData: any = {};
 
@@ -43,19 +43,19 @@ export async function updateUserProfile(data: {
   }
 
   if (data.avatar !== undefined) {
-    updateData.avatar = validateImageInput(data.avatar, 'Foto Profil');
+    updateData.avatar = validateImageInput(data.avatar, 'Profile Photo');
   }
 
   if (data.newPassword) {
     if (!data.currentPassword) {
-      throw new Error('Password saat ini wajib diisi untuk mengganti password.');
+      throw new Error('Current password is required to set a new password.');
     }
     const isValid = await bcrypt.compare(data.currentPassword, user.passwordHash);
     if (!isValid) {
-      throw new Error('Password saat ini salah.');
+      throw new Error('Current password is incorrect.');
     }
     if (data.newPassword.length < 6) {
-      throw new Error('Password baru minimal 6 karakter.');
+      throw new Error('New password must be at least 6 characters.');
     }
     updateData.passwordHash = await bcrypt.hash(data.newPassword, 12);
   }

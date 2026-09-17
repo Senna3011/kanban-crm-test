@@ -38,19 +38,19 @@ export async function registerTenant(input: RegisterTenantInput) {
   const password = input.password;
 
   if (!companyName || companyName.length < 2) {
-    throw new Error('Nama perusahaan/startup minimal 2 karakter.');
+    throw new Error('Company/workspace name must be at least 2 characters.');
   }
 
   if (!name || name.length < 2) {
-    throw new Error('Nama lengkap minimal 2 karakter.');
+    throw new Error('Admin full name must be at least 2 characters.');
   }
 
   if (!email || !email.includes('@')) {
-    throw new Error('Format email tidak valid.');
+    throw new Error('Invalid email address format.');
   }
 
   if (!password || password.length < 6) {
-    throw new Error('Password minimal 6 karakter.');
+    throw new Error('Password must be at least 6 characters.');
   }
 
   // Check if email already registered
@@ -59,7 +59,7 @@ export async function registerTenant(input: RegisterTenantInput) {
   });
 
   if (existingUser) {
-    throw new Error('Alamat email sudah terdaftar. Silakan gunakan email lain atau langsung login.');
+    throw new Error('Email address is already registered. Please sign in or use another email.');
   }
 
   const subdomain = generateSubdomain(companyName);

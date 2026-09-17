@@ -47,12 +47,12 @@ export default function CompanyInfoForm({ onNext, initial, readOnly = false }: P
       {readOnly && (
         <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl text-xs text-amber-800 flex items-center gap-2">
           <span>🔒</span>
-          <span>Mode Hanya Lihat: Hanya <strong>Administrator</strong> yang dapat mengubah informasi perusahaan.</span>
+          <span>View-only Mode: Only <strong>Administrators</strong> can modify company profile and branding.</span>
         </div>
       )}
       <div>
-        <h2 className="text-xl font-semibold">Profil & Informasi Perusahaan</h2>
-        <p className="text-gray-500 mt-1">Sesuaikan identitas brand dan informasi bisnis Anda.</p>
+        <h2 className="text-xl font-semibold">Company Profile & Branding</h2>
+        <p className="text-gray-500 mt-1">Customize your organization identity, brand logo, and business context.</p>
       </div>
 
       <div className="flex items-start gap-4 p-4 bg-slate-50 border border-slate-200 rounded-xl">
@@ -64,12 +64,12 @@ export default function CompanyInfoForm({ onNext, initial, readOnly = false }: P
           )}
         </div>
         <div className="flex-1 space-y-2">
-          <label className="block text-xs font-semibold text-slate-700">Logo Perusahaan</label>
+          <label className="block text-xs font-semibold text-slate-700">Company Logo</label>
           {!readOnly && (
             <div>
               <label className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white hover:bg-slate-50 text-slate-700 text-xs font-semibold border border-slate-300 rounded-lg cursor-pointer shadow-2xs transition">
                 <span>📁</span>
-                <span>Pilih File Gambar</span>
+                <span>Upload Logo File</span>
                 <input
                   type="file"
                   accept="image/*"
@@ -78,7 +78,7 @@ export default function CompanyInfoForm({ onNext, initial, readOnly = false }: P
                     const file = e.target.files?.[0];
                     if (!file) return;
                     if (file.size > 2 * 1024 * 1024) {
-                      toast.error('Ukuran gambar maksimal 2MB.');
+                      toast.error('Image size must be less than 2MB.');
                       return;
                     }
                     const reader = new FileReader();
@@ -97,39 +97,39 @@ export default function CompanyInfoForm({ onNext, initial, readOnly = false }: P
                   onClick={() => setLogoUrl('')}
                   className="ml-2 text-xs text-red-600 hover:underline font-medium"
                 >
-                  Hapus Logo
+                  Remove Logo
                 </button>
               )}
             </div>
           )}
-          <p className="text-[11px] text-slate-400">Pilih file logo dari laptop/HP Anda (PNG, JPG, SVG maks 2MB).</p>
+          <p className="text-[11px] text-slate-400">Supported formats: PNG, JPG, SVG, WebP up to 2MB.</p>
         </div>
       </div>
 
       <Input
         id="company-name"
-        label="Nama Perusahaan / Startup"
+        label="Company / Workspace Name"
         value={name}
         onChange={(e) => setName(e.target.value)}
-        placeholder="Contoh: Kopi Tech Indonesia"
+        placeholder="e.g., Jet Digital Pro"
         disabled={readOnly}
         required
       />
       <div className="space-y-1">
-        <label className="block text-sm font-medium text-gray-700">Deskripsi Produk / Layanan</label>
+        <label className="block text-sm font-medium text-gray-700">Products & Services Context</label>
         <textarea
           id="company-products"
           className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 h-32 disabled:bg-gray-100 disabled:text-gray-500 disabled:cursor-not-allowed text-sm"
           value={products}
           onChange={(e) => setProducts(e.target.value)}
-          placeholder="Describe what you sell, target audience, pricing model..."
+          placeholder="Describe your core services, target clients, pricing model (used by AI for classification & drafting)..."
           disabled={readOnly}
           required
         />
       </div>
       {!readOnly && (
         <Button type="submit" loading={loading}>
-          {onNext ? 'Continue →' : 'Simpan Profil Perusahaan'}
+          {onNext ? 'Continue →' : 'Save Company Profile'}
         </Button>
       )}
     </form>

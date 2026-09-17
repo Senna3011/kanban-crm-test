@@ -20,15 +20,26 @@ export async function sendDraft(draftId: string, fromAddress?: string) {
 
   if (!draft || draft.tenantId !== tenantId) throw new Error('Not found');
 
-  // Find the right email config: prefer one matching fromAddress, else first active
+  // Find the right email config: prefer one matching fromAddress, or card emailConfigId, else first active
   let emailConfig;
   if (fromAddress) {
-    emailConfig = await prisma.emailConfig.findFirst({ where: { tenantId, smtpUser: fromAddress, isActive: true } });
+    emailConfig = await prisma.emailConfig.findFirst({
+      where: {
+        tenantId,
+        isActive: true,
+        OR: [{ smtpUser: fromAddress }, { imapUser: fromAddress }, { id: fromAddress }],
+      },
+    });
+  }
+  if (!emailConfig && draft.card.emailConfigId) {
+    emailConfig = await prisma.emailConfig.findFirst({
+      where: { id: draft.card.emailConfigId, tenantId, isActive: true },
+    });
   }
   if (!emailConfig) {
     emailConfig = await prisma.emailConfig.findFirst({ where: { tenantId, isActive: true } });
   }
-  if (!emailConfig) throw new Error('Email not configured');
+  if (!emailConfig) throw new Error('No active email mailbox configured in Settings.');
 
   // Send via SMTP
   const authConfig: any = { user: emailConfig.smtpUser };
@@ -43,23 +54,32 @@ export async function sendDraft(draftId: string, fromAddress?: string) {
     host: emailConfig.smtpHost,
     port: emailConfig.smtpPort,
     secure: emailConfig.smtpPort === 465,
+    requireTLS: emailConfig.smtpPort === 587,
     auth: authConfig,
   });
 
   const sendFrom = fromAddress || emailConfig.smtpUser;
-  await transporter.sendMail({
-    from: sendFrom,
-    to: draft.card.fromEmail,
-    subject: draft.subject || '',
-    text: draft.body,
-    inReplyTo: draft.card.messageId || undefined,
-    references: draft.card.messageId || undefined,
-  });
+  const senderDisplayName = (session.user as any).name || (session.user as any).tenantName || 'Support Team';
+  const fromHeader = `"${senderDisplayName}" <${sendFrom}>`;
+
+  try {
+    await transporter.sendMail({
+      from: fromHeader,
+      to: draft.card.fromEmail,
+      subject: draft.subject || '',
+      text: draft.body,
+      inReplyTo: draft.card.messageId || undefined,
+      references: draft.card.messageId || undefined,
+    });
+  } catch (smtpErr: any) {
+    console.error('[sendDraft] SMTP sendMail failed:', smtpErr?.message || smtpErr);
+    throw new Error(`SMTP Error (${emailConfig.smtpHost}): ${smtpErr?.response || smtpErr?.message || 'Failed to send email'}`);
+  }
 
   // Update draft status
   await prisma.draftMessage.update({
     where: { id: draftId },
-    data: { status: 'sent', sentAt: new Date() },
+    data: { status: 'sent', sentAt: new Date(), fromAddress: sendFrom },
   });
 
   // Log activity

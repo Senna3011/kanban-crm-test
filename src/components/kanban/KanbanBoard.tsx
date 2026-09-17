@@ -523,7 +523,7 @@ export default function KanbanBoard() {
           <div>
             <p className="font-semibold">{aiStatus.message}</p>
             <p className="mt-0.5 text-xs text-amber-700">
-              Email tetap ditarik, namun <strong>AI classification</strong> dan <strong>auto-draft</strong> menunggu token AI. Semua pesan masuk ke kolom <strong>Unreads</strong>.
+              Inbound emails continue syncing, but <strong>AI classification</strong> and <strong>automated drafting</strong> are paused. Messages are placed in the <strong>Unreads</strong> column by default.
             </p>
           </div>
         </div>

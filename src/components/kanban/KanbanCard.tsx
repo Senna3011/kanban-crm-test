@@ -147,16 +147,20 @@ export default function KanbanCard({
       <p
         className={clsx(
           'text-sm mt-1.5 leading-snug line-clamp-2 transition-colors group-hover:text-primary-700',
-          isUnread ? 'font-bold text-slate-900' : 'font-medium text-slate-800'
+          isUnread ? 'font-bold text-slate-900' : 'font-semibold text-slate-800'
         )}
       >
         {card.subject || '(No Subject)'}
       </p>
 
-      {/* Snippet preview if available */}
-      {card.bodyText && (
-        <p className="text-xs text-slate-500 mt-1 line-clamp-1 leading-relaxed">
+      {/* Rich Snippet Preview - Shows ~3 lines of message content for quick decision making */}
+      {card.bodyText ? (
+        <p className="text-xs text-slate-600 mt-1.5 line-clamp-3 leading-relaxed font-normal bg-slate-50/70 p-1.5 rounded-lg border border-slate-100">
           {card.bodyText.replace(/\s+/g, ' ').trim()}
+        </p>
+      ) : (
+        <p className="text-xs text-slate-400 mt-1.5 italic line-clamp-1">
+          No body text preview
         </p>
       )}
 

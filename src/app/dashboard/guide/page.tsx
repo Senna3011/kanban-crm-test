@@ -8,16 +8,16 @@ export default function GuidePage() {
       {/* Header */}
       <div className="flex items-start justify-between gap-4">
         <div>
-          <h1 className="text-xl sm:text-2xl font-bold text-slate-900">Panduan Penggunaan Sistem</h1>
+          <h1 className="text-xl sm:text-2xl font-bold text-slate-900">System User Guide</h1>
           <p className="text-xs sm:text-sm text-slate-500 mt-1">
-            Petunjuk alur kerja Kanban CRM mulai dari login, koneksi Zoho Mail, hingga penerimaan pesan.
+            Complete walkthrough for Kanban CRM: sign-in, email mailbox connection, and inbound lead automation.
           </p>
         </div>
         <Link
           href="/dashboard"
           className="text-xs sm:text-sm text-primary-700 hover:underline font-medium shrink-0"
         >
-          ← Kembali ke Board
+          ← Back to Board
         </Link>
       </div>
 
@@ -27,14 +27,14 @@ export default function GuidePage() {
           <span className="w-8 h-8 rounded-xl bg-primary-100 text-primary-700 font-bold text-sm flex items-center justify-center shrink-0">
             1
           </span>
-          <h2 className="text-base sm:text-lg font-bold text-slate-800">Login ke Aplikasi</h2>
+          <h2 className="text-base sm:text-lg font-bold text-slate-800">Sign In to the Platform</h2>
         </div>
         <div className="pl-11 space-y-2 text-xs sm:text-sm text-slate-600 leading-relaxed">
           <p>
-            Buka tautan website pada browser handphone atau desktop. Masuk menggunakan email dan password akun Anda yang telah didaftarkan oleh Administrator atau dibuat melalui link undangan (invitation).
+            Open the CRM application on desktop or mobile browser. Sign in using your team credentials or create a new workspace via <Link href="/register" className="text-primary-600 underline font-medium">/register</Link>.
           </p>
           <p>
-            Setelah klik <strong>Sign in</strong>, Anda akan langsung diarahkan ke tampilan <strong>Main Board</strong>.
+            Upon successful sign-in, you are directed immediately to your workspace <strong>Main Board</strong>.
           </p>
         </div>
       </div>
@@ -45,11 +45,11 @@ export default function GuidePage() {
           <span className="w-8 h-8 rounded-xl bg-primary-100 text-primary-700 font-bold text-sm flex items-center justify-center shrink-0">
             2
           </span>
-          <h2 className="text-base sm:text-lg font-bold text-slate-800">Menghubungkan Akun Email (Zoho / Gmail / Outlook)</h2>
+          <h2 className="text-base sm:text-lg font-bold text-slate-800">Connect Email Mailboxes (Zoho, Gmail, Outlook)</h2>
         </div>
         <div className="pl-11 space-y-3 text-xs sm:text-sm text-slate-600 leading-relaxed">
           <p>
-            Masuk ke menu <Link href="/dashboard/settings" className="text-primary-600 underline font-medium">Settings (⚙️)</Link> melalui sidebar atau menu hamburger di HP.
+            Navigate to <Link href="/dashboard/settings" className="text-primary-600 underline font-medium">Settings (⚙️)</Link> from the sidebar or mobile menu.
           </p>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-1">
@@ -59,28 +59,28 @@ export default function GuidePage() {
               </span>
               <h3 className="font-semibold text-slate-900 text-sm">Zoho Mail IMAP & SMTP</h3>
               <ul className="text-xs text-slate-600 space-y-1 list-disc list-inside">
-                <li><strong>IMAP:</strong> imap.zoho.com (Port: 993)</li>
-                <li><strong>SMTP:</strong> smtp.zoho.com (Port: 465)</li>
-                <li><strong>User:</strong> alamat email Zoho Anda</li>
-                <li><strong>Password:</strong> App Password / Password Akun Zoho</li>
+                <li><strong>IMAP:</strong> imap.zoho.com (Port: 993, SSL)</li>
+                <li><strong>SMTP:</strong> smtp.zoho.com (Port: 465, SSL)</li>
+                <li><strong>Username:</strong> your Zoho email address</li>
+                <li><strong>Password:</strong> Account Password or App Password (if 2FA enabled)</li>
               </ul>
             </div>
 
             <div className="p-4 rounded-xl border border-slate-200 bg-slate-50 space-y-2">
               <span className="inline-block px-2 py-0.5 text-[11px] font-semibold bg-slate-200 text-slate-700 rounded-full">
-                Gmail / Custom Domain
+                Gmail / Outlook / Custom
               </span>
               <h3 className="font-semibold text-slate-900 text-sm">Universal IMAP & SMTP</h3>
               <ul className="text-xs text-slate-600 space-y-1 list-disc list-inside">
-                <li><strong>Gmail:</strong> imap.gmail.com (993) / smtp.gmail.com (465)</li>
+                <li><strong>Gmail:</strong> imap.gmail.com (993) / smtp.gmail.com (465) with 16-char App Password</li>
                 <li><strong>Outlook:</strong> outlook.office365.com (993) / smtp.office365.com (587)</li>
-                <li>Gunakan <em>App Password</em> jika akun memiliki verifikasi 2 langkah (2FA).</li>
+                <li>Multiple mailboxes can be linked to separate pipeline boards.</li>
               </ul>
             </div>
           </div>
 
           <p className="text-xs text-slate-500 pt-1">
-            Klik tombol <strong>Test All</strong> untuk memastikan status berubah hijau <em>Connected</em>, lalu klik <strong>Save Configuration</strong>.
+            Click <strong>Test Connection (Test All)</strong> to verify both IMAP and SMTP, then click <strong>Save Email Configuration</strong>.
           </p>
         </div>
       </div>
@@ -91,21 +91,21 @@ export default function GuidePage() {
           <span className="w-8 h-8 rounded-xl bg-primary-100 text-primary-700 font-bold text-sm flex items-center justify-center shrink-0">
             3
           </span>
-          <h2 className="text-base sm:text-lg font-bold text-slate-800">Menguji Pesan Masuk ke Board</h2>
+          <h2 className="text-base sm:text-lg font-bold text-slate-800">Test Inbound Emails & Auto-Sync</h2>
         </div>
         <div className="pl-11 space-y-2 text-xs sm:text-sm text-slate-600 leading-relaxed">
           <ol className="list-decimal list-inside space-y-1.5">
             <li>
-              Kirim email pengujian dari <strong>alamat email eksternal</strong> (seperti Gmail pribadi) ke alamat email Zoho yang baru saja dikonfigurasi.
+              Send a test inquiry email from an <strong>external email address</strong> (e.g. personal Gmail) to your connected mailbox.
             </li>
             <li>
-              Buka menu <Link href="/dashboard" className="text-primary-600 underline font-medium">Board (📋)</Link>.
+              Open the <Link href="/dashboard" className="text-primary-600 underline font-medium">Board (📋)</Link> page.
             </li>
             <li>
-              Sistem akan otomatis menarik email setiap 2 menit, atau Anda dapat menekan tombol <strong>Sync</strong> di kanan atas untuk penarikan instan.
+              The background worker polls every 2 minutes, or click the <strong>Sync</strong> button in the top right for immediate ingestion.
             </li>
             <li>
-              Pesan baru akan muncul sebagai kartu di kolom <strong>General</strong> atau langsung diklasifikasi oleh AI ke kolom <strong>Leads</strong>.
+              New emails appear as cards in the <strong>General</strong> column or are automatically classified by AI into <strong>Leads</strong>.
             </li>
           </ol>
         </div>
@@ -117,21 +117,21 @@ export default function GuidePage() {
           <span className="w-8 h-8 rounded-xl bg-primary-100 text-primary-700 font-bold text-sm flex items-center justify-center shrink-0">
             4
           </span>
-          <h2 className="text-base sm:text-lg font-bold text-slate-800">Membaca Detail & Mengirim Balasan AI</h2>
+          <h2 className="text-base sm:text-lg font-bold text-slate-800">View Details & Send Quick AI Responses</h2>
         </div>
         <div className="pl-11 space-y-2 text-xs sm:text-sm text-slate-600 leading-relaxed">
           <ul className="list-disc list-inside space-y-1.5">
             <li>
-              <strong>Buka Kartu:</strong> Klik kartu pesan untuk membuka pop-up panel detail dan riwayat percakapan.
+              <strong>Card Detail:</strong> Click any card to inspect full email content and WhatsApp/Trello-style conversation timeline.
             </li>
             <li>
-              <strong>Analisis AI:</strong> AI otomatis menganalisis pesan, minat prospek, dan menyusun draf balasan resmi.
+              <strong>AI Analysis:</strong> View AI intent evaluation, interest level, and confidence metric.
             </li>
             <li>
-              <strong>Kirim Balasan:</strong> Sesuaikan draf pesan di bagian <em>Reply</em> lalu klik <strong>Send Reply</strong>.
+              <strong>Quick Templates:</strong> Apply 1-click templates (Meeting, Pricing, Follow-up, Proposal) or write a custom reply.
             </li>
             <li>
-              <strong>Perpindahan Otomatis:</strong> Kartu akan otomatis bergeser ke tahapan <strong>Follow up 1</strong> beserta jadwal tindak lanjut berikutnya.
+              <strong>Automatic Stage Progression:</strong> Clicking <strong>Send Reply</strong> sends the email via SMTP and advances the card to <strong>Follow up 1</strong> with automated scheduling.
             </li>
           </ul>
         </div>

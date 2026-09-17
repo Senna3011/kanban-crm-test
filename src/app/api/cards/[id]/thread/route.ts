@@ -19,7 +19,7 @@ export async function GET(
     return NextResponse.json({ error: 'Not found' }, { status: 404 });
   }
 
-  // Find all cards in the same thread using RFC Message-ID chain
+  // Find all cards in the same thread using RFC Message-ID chain (fast 2-round resolution)
   const threadMessageIds = new Set<string>();
   const threadCardIds = new Set<string>();
 
@@ -27,10 +27,9 @@ export async function GET(
   if (card.inReplyTo) threadMessageIds.add(card.inReplyTo);
   threadCardIds.add(card.id);
 
-  // Recursive thread discovery via RFC inReplyTo / messageId chains
-  let found = true;
-  while (found) {
-    found = false;
+  // Bounded 2-round thread lookup to prevent unbounded recursive loops
+  for (let round = 0; round < 2; round++) {
+    if (threadMessageIds.size === 0) break;
     const related = await prisma.card.findMany({
       where: {
         tenantId,
@@ -41,22 +40,25 @@ export async function GET(
         ],
       },
       select: { id: true, messageId: true, inReplyTo: true },
+      take: 50,
     });
 
+    let addedNew = false;
     for (const r of related) {
       if (r.messageId && !threadMessageIds.has(r.messageId)) {
         threadMessageIds.add(r.messageId);
-        found = true;
+        addedNew = true;
       }
       if (r.inReplyTo && !threadMessageIds.has(r.inReplyTo)) {
         threadMessageIds.add(r.inReplyTo);
-        found = true;
+        addedNew = true;
       }
       if (!threadCardIds.has(r.id)) {
         threadCardIds.add(r.id);
-        found = true;
+        addedNew = true;
       }
     }
+    if (!addedNew) break;
   }
 
   // Fetch all received emails in thread
