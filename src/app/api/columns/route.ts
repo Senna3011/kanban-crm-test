@@ -87,6 +87,22 @@ export async function GET(req: NextRequest) {
     });
   }
 
+  // Ensure "General" column exists and is positioned at 0 (leftmost)
+  const generalCol = await prisma.column.findFirst({
+    where: { boardId: board.id, title: 'General' },
+  });
+  if (!generalCol) {
+    await prisma.column.create({
+      data: { title: 'General', position: 0, color: '#64748b', isSystem: false, boardId: board.id },
+    });
+  } else if (generalCol.position !== 0) {
+    // Re-index so General is strictly position 0
+    await prisma.column.update({
+      where: { id: generalCol.id },
+      data: { position: 0 },
+    });
+  }
+
   const columns = await prisma.column.findMany({
     where: { boardId: board.id },
     orderBy: { position: 'asc' },
@@ -106,8 +122,15 @@ export async function GET(req: NextRequest) {
     },
   });
 
+  // Re-sort columns array in memory to guarantee "General" is strictly the first item (leftmost)
+  const sortedColumns = [...columns].sort((a, b) => {
+    if (a.title.toLowerCase() === 'general') return -1;
+    if (b.title.toLowerCase() === 'general') return 1;
+    return a.position - b.position;
+  });
+
   // Compute threadCount per card: group cards by normalized subject within this board's cards
-  const allCards = columns.flatMap(c => c.cards);
+  const allCards = sortedColumns.flatMap(c => c.cards);
   const subjectGroups = new Map<string, string[]>();
   for (const c of allCards) {
     const base = (c.subject || '')
@@ -126,7 +149,7 @@ export async function GET(req: NextRequest) {
   }
 
   // Add threadCount and descLen to each card
-  const enriched = columns.map(col => ({
+  const enriched = sortedColumns.map(col => ({
     ...col,
     cards: col.cards.map(card => ({
       ...card,
