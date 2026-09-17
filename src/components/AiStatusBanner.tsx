@@ -21,7 +21,7 @@ export default function AiStatusBanner() {
         <p className="font-medium">{status.message}</p>
         <p className="mt-1 text-xs text-amber-600">
           Fitur yang terpengaruh: <strong>AI email classification</strong> (lead/general/spam) dan <strong>auto-draft follow-up</strong>.
-          Tanpa token aktif, semua email masuk ke kolom <strong>Unreads</strong> dan draft hanya menggunakan template default.
+          Tanpa token aktif, semua email masuk ke kolom <strong>General</strong> dan draft hanya menggunakan template default.
         </p>
         <p className="mt-1 text-xs text-amber-600">
           Cara fix: update <code className="bg-amber-100 px-1 rounded">DEEPSEEK_API_KEY</code> di file <code className="bg-amber-100 px-1 rounded">.env</code> di server, lalu restart worker.

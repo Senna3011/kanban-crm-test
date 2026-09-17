@@ -14,6 +14,8 @@ interface Props {
   selectionMode?: boolean;
   selectedIds?: Set<string>;
   onToggleSelect?: (cardId: string) => void;
+  onSelectColumn?: (cardIds: string[], select: boolean) => void;
+  forcedSortMode?: 'default' | 'unreads' | 'date';
 }
 
 export default function KanbanColumn({
@@ -24,32 +26,48 @@ export default function KanbanColumn({
   selectionMode,
   selectedIds,
   onToggleSelect,
+  onSelectColumn,
+  forcedSortMode,
 }: Props) {
   const { setNodeRef, isOver } = useDroppable({ id: column.id });
-  const [sortMode, setSortMode] = useState<'default' | 'unreads' | 'date'>('default');
+  const [localSortMode, setLocalSortMode] = useState<'default' | 'unreads' | 'date'>('default');
+
+  const activeSortMode = forcedSortMode && forcedSortMode !== 'default' ? forcedSortMode : localSortMode;
 
   const sortedCards = useMemo(() => {
-    if (sortMode === 'unreads') {
+    if (activeSortMode === 'unreads') {
       return [...column.cards].sort((a, b) => {
         if (a.status === 'unread' && b.status !== 'unread') return -1;
         if (a.status !== 'unread' && b.status === 'unread') return 1;
         return new Date(b.lastActivityAt).getTime() - new Date(a.lastActivityAt).getTime();
       });
     }
-    if (sortMode === 'date') {
+    if (activeSortMode === 'date') {
       return [...column.cards].sort(
         (a, b) => new Date(b.lastActivityAt).getTime() - new Date(a.lastActivityAt).getTime()
       );
     }
     return column.cards;
-  }, [column.cards, sortMode]);
+  }, [column.cards, activeSortMode]);
 
   const unreadCount = column.cards.filter((c) => c.status === 'unread').length;
+  const colCardIds = useMemo(() => column.cards.map((c) => c.id), [column.cards]);
+  const selectedInColCount = useMemo(() => {
+    if (!selectedIds) return 0;
+    return colCardIds.filter((id) => selectedIds.has(id)).length;
+  }, [colCardIds, selectedIds]);
+  const isAllColSelected = colCardIds.length > 0 && selectedInColCount === colCardIds.length;
 
   function toggleSort() {
-    if (sortMode === 'default') setSortMode('unreads');
-    else if (sortMode === 'unreads') setSortMode('date');
-    else setSortMode('default');
+    if (localSortMode === 'default') setLocalSortMode('unreads');
+    else if (localSortMode === 'unreads') setLocalSortMode('date');
+    else setLocalSortMode('default');
+  }
+
+  function handleColumnCheckboxChange() {
+    if (onSelectColumn) {
+      onSelectColumn(colCardIds, !isAllColSelected);
+    }
   }
 
   return (
@@ -67,10 +85,21 @@ export default function KanbanColumn({
       {/* Column header */}
       <div className="p-3.5 flex items-center justify-between border-b border-slate-200/60 bg-white/50 backdrop-blur-xs">
         <div className="flex items-center gap-2.5 min-w-0">
-          <div
-            className="w-2.5 h-2.5 rounded-full flex-shrink-0 shadow-2xs ring-2 ring-white"
-            style={{ backgroundColor: column.color || '#3b82f6' }}
-          />
+          {selectionMode ? (
+            <input
+              type="checkbox"
+              checked={isAllColSelected}
+              disabled={colCardIds.length === 0}
+              onChange={handleColumnCheckboxChange}
+              title={isAllColSelected ? 'Deselect column' : 'Select all in column'}
+              className="w-4 h-4 text-primary-600 rounded border-slate-300 focus:ring-primary-500 cursor-pointer disabled:opacity-40"
+            />
+          ) : (
+            <div
+              className="w-2.5 h-2.5 rounded-full flex-shrink-0 shadow-2xs ring-2 ring-white"
+              style={{ backgroundColor: column.color || '#3b82f6' }}
+            />
+          )}
           <h3 className="font-bold text-sm text-slate-800 truncate tracking-tight">{column.title}</h3>
           <span className="text-xs font-semibold text-slate-500 bg-slate-200/70 px-2 py-0.5 rounded-full leading-none">
             {column.cards.length}
@@ -86,19 +115,21 @@ export default function KanbanColumn({
             </span>
           )}
 
-          <button
-            onClick={toggleSort}
-            className={`p-1.5 rounded-lg text-xs font-medium transition-all ${
-              sortMode !== 'default'
-                ? 'bg-primary-50 text-primary-700 font-semibold'
-                : 'text-slate-400 hover:text-slate-700 hover:bg-slate-200/60'
-            }`}
-            title={`Sort: ${sortMode === 'unreads' ? 'Unreads first' : sortMode === 'date' ? 'Newest first' : 'Default'}`}
-          >
-            <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M3 4h13M3 8h9m-9 4h6m4 0l4-4m0 0l4 4m-4-4v12" />
-            </svg>
-          </button>
+          {!selectionMode && (
+            <button
+              onClick={toggleSort}
+              className={`p-1.5 rounded-lg text-xs font-medium transition-all ${
+                activeSortMode !== 'default'
+                  ? 'bg-primary-50 text-primary-700 font-semibold'
+                  : 'text-slate-400 hover:text-slate-700 hover:bg-slate-200/60'
+              }`}
+              title={`Sort: ${activeSortMode === 'unreads' ? 'Unreads first' : activeSortMode === 'date' ? 'Newest first' : 'Default'}`}
+            >
+              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M3 4h13M3 8h9m-9 4h6m4 0l4-4m0 0l4 4m-4-4v12" />
+              </svg>
+            </button>
+          )}
         </div>
       </div>
 

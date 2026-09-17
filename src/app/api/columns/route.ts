@@ -65,6 +65,28 @@ export async function GET(req: NextRequest) {
 
   if (!board) return NextResponse.json([]);
 
+  // Auto-merge: if an "Unreads" column exists, migrate any cards to "General" and delete "Unreads"
+  const unreadsCol = await prisma.column.findFirst({
+    where: { boardId: board.id, title: 'Unreads' },
+  });
+  if (unreadsCol) {
+    let generalCol = await prisma.column.findFirst({
+      where: { boardId: board.id, title: 'General' },
+    });
+    if (!generalCol) {
+      generalCol = await prisma.column.create({
+        data: { title: 'General', position: 0, color: '#64748b', isSystem: false, boardId: board.id },
+      });
+    }
+    await prisma.card.updateMany({
+      where: { columnId: unreadsCol.id },
+      data: { columnId: generalCol.id },
+    });
+    await prisma.column.delete({
+      where: { id: unreadsCol.id },
+    });
+  }
+
   const columns = await prisma.column.findMany({
     where: { boardId: board.id },
     orderBy: { position: 'asc' },
