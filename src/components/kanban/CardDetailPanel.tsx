@@ -16,10 +16,109 @@ interface TimelineMessage {
   title: string;
   sender: string;
   senderEmail?: string;
+  recipientEmail?: string;
+  subject?: string;
   body: string;
   timestamp: Date;
   meta?: Record<string, unknown>;
   isCurrent?: boolean;
+}
+
+function parseActivityPayload(type: string, rawContent: any): { title: string; summary: string; detail?: string } {
+  let c: any = rawContent;
+  if (typeof c === 'string') {
+    try {
+      c = JSON.parse(c);
+    } catch {
+      c = { message: rawContent };
+    }
+  }
+
+  switch (type) {
+    case 'email_received': {
+      const from = c?.from ? `from ${c.from}` : '';
+      const to = c?.to ? ` to ${c.to}` : '';
+      const subj = c?.subject ? ` ("${c.subject}")` : '';
+      return {
+        title: 'Email Received',
+        summary: `Received email ${from}${to}${subj}`.trim(),
+        detail: c?.bodyText || c?.preview || undefined,
+      };
+    }
+    case 'email_sent': {
+      const to = c?.to ? `to ${c.to}` : '';
+      const from = c?.from ? ` from ${c.from}` : '';
+      const subj = c?.subject ? ` ("${c.subject}")` : '';
+      return {
+        title: 'Email Sent',
+        summary: `Sent email ${to}${from}${subj}`.trim(),
+        detail: c?.body || undefined,
+      };
+    }
+    case 'email_reply_received': {
+      const from = c?.from ? `from ${c.from}` : '';
+      return {
+        title: 'Reply Received',
+        summary: `Inbound reply ${from}${c?.subject ? ` ("${c.subject}")` : ''}`.trim(),
+      };
+    }
+    case 'ai_reclassified': {
+      const fromCol = c?.from || 'Previous stage';
+      const toCol = c?.to || 'New stage';
+      const confidence = typeof c?.confidence === 'number' ? ` (${c.confidence}% confidence)` : '';
+      const reason = c?.reason ? ` • ${c.reason}` : '';
+      return {
+        title: 'AI Auto-Classified',
+        summary: `Moved from "${fromCol}" to "${toCol}"${confidence}${reason}`,
+      };
+    }
+    case 'ai_classified': {
+      const category = c?.category ? ` as "${c.category.toUpperCase()}"` : '';
+      const confidence = typeof c?.confidence === 'number' ? ` (${c.confidence}% confidence)` : '';
+      const reason = c?.reason ? ` • ${c.reason}` : '';
+      return {
+        title: 'AI Classification',
+        summary: `Classified${category}${confidence}${reason}`,
+      };
+    }
+    case 'draft_created': {
+      return {
+        title: 'Draft Created',
+        summary: 'New reply draft prepared by AI or team',
+      };
+    }
+    case 'user_edited': {
+      return {
+        title: 'Draft Customized',
+        summary: 'Reply content customized by team member',
+      };
+    }
+    case 'card_moved': {
+      const from = c?.from ? `from "${c.from}"` : '';
+      const to = c?.to ? `to "${c.to}"` : '';
+      return {
+        title: 'Stage Moved',
+        summary: `Card moved ${from} ${to}`.trim(),
+      };
+    }
+    default: {
+      const fallbackTitle = type.replace(/_/g, ' ').replace(/\b\w/g, (l) => l.toUpperCase());
+      let fallbackSummary = '';
+      if (typeof c === 'object' && c !== null) {
+        const parts = Object.entries(c)
+          .filter(([_, v]) => typeof v === 'string' || typeof v === 'number' || typeof v === 'boolean')
+          .slice(0, 3)
+          .map(([k, v]) => `${k}: ${v}`);
+        fallbackSummary = parts.length > 0 ? parts.join(', ') : fallbackTitle;
+      } else {
+        fallbackSummary = String(c || fallbackTitle);
+      }
+      return {
+        title: fallbackTitle,
+        summary: fallbackSummary,
+      };
+    }
+  }
 }
 
 function buildTimelineMessages(
@@ -31,7 +130,7 @@ function buildTimelineMessages(
   const shownCardIds = new Set<string>();
   const shownDraftIds = new Set<string>();
 
-  // Add all thread cards
+  // Add all thread cards as message bubbles
   for (const tc of threadCards) {
     shownCardIds.add(tc.id);
 
@@ -42,6 +141,7 @@ function buildTimelineMessages(
         type: 'sent',
         title: 'Outgoing Reply',
         sender: tc.from || 'Team',
+        subject: tc.subject || '(No Subject)',
         body: tc.body || '',
         timestamp: new Date(tc.timestamp || Date.now()),
       });
@@ -49,9 +149,10 @@ function buildTimelineMessages(
       items.push({
         id: `thread-${tc.id}`,
         type: 'received',
-        title: 'Client Email',
+        title: 'Inbound Email',
         sender: tc.from || 'Client',
         senderEmail: tc.fromEmail,
+        subject: tc.subject || '(No Subject)',
         body: tc.body || '',
         timestamp: new Date(tc.timestamp || Date.now()),
         isCurrent: tc.id === currentCard.id,
@@ -59,21 +160,22 @@ function buildTimelineMessages(
     }
   }
 
-  // If threadCards is empty or did not include current card, add current card
+  // Ensure current card is included in timeline
   if (!shownCardIds.has(currentCard.id)) {
     items.push({
       id: `current-${currentCard.id}`,
       type: 'received',
-      title: 'Client Email',
+      title: 'Inbound Email',
       sender: currentCard.fromName || currentCard.fromEmail.split('@')[0],
       senderEmail: currentCard.fromEmail,
+      subject: currentCard.subject || '(No Subject)',
       body: currentCard.bodyText || '',
       timestamp: new Date(currentCard.lastActivityAt || Date.now()),
       isCurrent: true,
     });
   }
 
-  // Add system activities (skip redundant email received/sent events already captured as bubbles)
+  // Parse and add activity logs
   const emailLogTypes = new Set(['email_received', 'email_sent', 'email_reply_received']);
   for (const log of activityLogs) {
     const c = log.content as any;
@@ -83,44 +185,20 @@ function buildTimelineMessages(
       if (c?.draftId && shownDraftIds.has(c.draftId)) continue;
     }
 
-    let type: TimelineMessage['type'] = 'activity';
-    let title = log.type.replace(/_/g, ' ');
-    let summary = '';
-
-    switch (log.type) {
-      case 'ai_reclassified':
-        title = 'AI Auto-Classified';
-        summary = `Moved from "${c?.from || 'Unreads'}" to "${c?.to || 'Leads'}" (${c?.confidence || 0}% confidence)`;
-        break;
-      case 'draft_created':
-        type = 'draft';
-        title = 'Draft Created';
-        summary = 'AI reply draft generated';
-        break;
-      case 'card_moved':
-        title = 'Card Moved';
-        summary = c?.from ? `Moved from "${c.from}" to "${c.to}"` : `Moved to "${c?.to || 'column'}"`;
-        break;
-      case 'user_edited':
-        title = 'Draft Edited';
-        summary = 'Reply draft customized by team';
-        break;
-      default:
-        summary = typeof c === 'object' ? JSON.stringify(c) : String(c || log.type);
-    }
+    const parsed = parseActivityPayload(log.type, log.content);
 
     items.push({
       id: `log-${log.id}`,
-      type,
-      title,
-      sender: 'System',
-      body: summary,
+      type: 'activity',
+      title: parsed.title,
+      sender: 'System Activity',
+      body: parsed.summary,
       timestamp: new Date(log.createdAt),
-      meta: c,
+      meta: typeof c === 'object' ? c : undefined,
     });
   }
 
-  // Sort chronological (oldest to newest for natural chat reading flow)
+  // Chronological order: oldest to newest for natural chat reading flow
   items.sort((a, b) => a.timestamp.getTime() - b.timestamp.getTime());
   return items;
 }
@@ -161,15 +239,17 @@ function getAvatarColor(str: string) {
 function ChatBubble({ message }: { message: TimelineMessage }) {
   const [expanded, setExpanded] = useState(false);
 
-  // System Activity event (centered pill)
+  // System Activity event: cleanly formatted horizontal banner/pill
   if (message.type === 'activity' || message.type === 'draft') {
     return (
-      <div className="flex items-center justify-center my-2">
-        <div className="inline-flex items-center gap-2 px-3 py-1 bg-slate-100 border border-slate-200/80 rounded-full text-[11px] text-slate-600 font-medium shadow-2xs">
-          <span className="w-1.5 h-1.5 rounded-full bg-slate-400" />
-          <span className="font-semibold text-slate-700">{message.title}:</span>
-          <span>{message.body}</span>
-          <span className="text-slate-400 text-[10px]">• {formatChatTime(message.timestamp)}</span>
+      <div className="flex items-center justify-center my-2.5 px-2 w-full">
+        <div className="inline-flex items-start sm:items-center gap-2 px-3.5 py-1.5 bg-slate-100/90 border border-slate-200/90 rounded-xl text-xs text-slate-700 shadow-2xs max-w-full break-words">
+          <span className="w-1.5 h-1.5 rounded-full bg-slate-400 mt-1 sm:mt-0 flex-shrink-0" />
+          <div className="flex-1 min-w-0">
+            <span className="font-bold text-slate-900 mr-1.5">{message.title}:</span>
+            <span className="text-slate-600 leading-relaxed break-words">{message.body}</span>
+            <span className="text-slate-400 text-[10px] ml-2 whitespace-nowrap">• {formatChatTime(message.timestamp)}</span>
+          </div>
         </div>
       </div>
     );
@@ -177,14 +257,14 @@ function ChatBubble({ message }: { message: TimelineMessage }) {
 
   const isSent = message.type === 'sent';
   const rawText = message.body || '';
-  const isLong = rawText.length > 250;
-  const displayText = expanded || !isLong ? rawText : rawText.slice(0, 240) + '...';
+  const isLong = rawText.length > 280;
+  const displayText = expanded || !isLong ? rawText : rawText.slice(0, 260) + '...';
 
   const avatarInitial = (message.sender || '?').charAt(0).toUpperCase();
   const avatarBg = isSent ? 'from-primary-600 to-indigo-700 text-white' : getAvatarColor(message.sender);
 
   return (
-    <div className={`flex items-start gap-2.5 my-3 ${isSent ? 'flex-row-reverse' : 'flex-row'}`}>
+    <div className={`flex items-start gap-2.5 my-3 w-full ${isSent ? 'flex-row-reverse' : 'flex-row'}`}>
       {/* Avatar */}
       <div
         className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold shadow-2xs bg-gradient-to-br flex-shrink-0 ${avatarBg}`}
@@ -194,15 +274,15 @@ function ChatBubble({ message }: { message: TimelineMessage }) {
 
       {/* Bubble Container */}
       <div
-        className={`max-w-[85%] sm:max-w-[78%] rounded-2xl p-3.5 shadow-2xs transition-all ${
+        className={`w-full max-w-[88%] sm:max-w-[80%] rounded-2xl p-4 shadow-2xs transition-all overflow-hidden border ${
           isSent
-            ? 'bg-primary-50/90 border border-primary-200/80 rounded-tr-xs text-slate-900'
-            : 'bg-white border border-slate-200/90 rounded-tl-xs text-slate-900'
+            ? 'bg-primary-50/90 border-primary-200/80 rounded-tr-xs text-slate-900'
+            : 'bg-white border-slate-200/90 rounded-tl-xs text-slate-900'
         }`}
       >
         {/* Bubble Header: Sender, Badge & Timestamp */}
-        <div className="flex items-center justify-between gap-3 mb-1.5 border-b border-slate-100/80 pb-1">
-          <div className="flex items-center gap-1.5 min-w-0">
+        <div className="flex items-center justify-between gap-2 mb-2 border-b border-slate-100/90 pb-1.5">
+          <div className="flex items-center gap-1.5 min-w-0 flex-wrap">
             <span className="font-bold text-xs text-slate-900 truncate">{message.sender}</span>
             <span
               className={`text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.2 rounded-full border ${
@@ -214,13 +294,20 @@ function ChatBubble({ message }: { message: TimelineMessage }) {
               {isSent ? 'Outgoing' : 'Inbound'}
             </span>
           </div>
-          <span className="text-[10px] text-slate-400 font-medium whitespace-nowrap">
+          <span className="text-[10px] text-slate-400 font-medium whitespace-nowrap flex-shrink-0">
             {formatChatTime(message.timestamp)}
           </span>
         </div>
 
-        {/* Message Body (50+ words with Read More toggle) */}
-        <div className="text-xs sm:text-sm text-slate-700 whitespace-pre-wrap leading-relaxed">
+        {/* Message Subject if available */}
+        {message.subject && (
+          <p className="text-xs font-semibold text-slate-800 mb-1.5 break-words">
+            Subject: {message.subject}
+          </p>
+        )}
+
+        {/* Message Body with clean wrapping and no overflow */}
+        <div className="text-xs sm:text-sm text-slate-700 whitespace-pre-wrap leading-relaxed break-words [overflow-wrap:anywhere]">
           {displayText}
         </div>
 
@@ -229,7 +316,7 @@ function ChatBubble({ message }: { message: TimelineMessage }) {
           <button
             type="button"
             onClick={() => setExpanded(!expanded)}
-            className="mt-1.5 text-xs font-bold text-primary-600 hover:text-primary-800 transition-colors flex items-center gap-1"
+            className="mt-2 text-xs font-bold text-primary-600 hover:text-primary-800 transition-colors inline-flex items-center gap-1"
           >
             {expanded ? 'Show less ↑' : '... Read more ↓'}
           </button>
@@ -682,8 +769,8 @@ export default function CardDetailPanel({ card, onClose }: Props) {
           </button>
         </div>
 
-        {/* Scrollable Content Body (Instant Rendered) */}
-        <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-4">
+        {/* Scrollable Content Body (Instant Rendered with Smooth Auto-Scroll & zero horizontal overflow) */}
+        <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-4 [overflow-wrap:anywhere]">
           {error ? (
             <div className="text-center py-12 text-rose-500 text-xs">
               <p>{error}</p>
@@ -713,7 +800,7 @@ export default function CardDetailPanel({ card, onClose }: Props) {
                   />
                 </div>
               ) : card.bodyText ? (
-                <div className="bg-slate-50 rounded-xl p-4 text-xs sm:text-sm text-slate-800 whitespace-pre-wrap leading-relaxed border border-slate-200/90 font-mono">
+                <div className="bg-slate-50 rounded-xl p-4 text-xs sm:text-sm text-slate-800 whitespace-pre-wrap leading-relaxed border border-slate-200/90 font-mono break-words [overflow-wrap:anywhere]">
                   {card.bodyText}
                 </div>
               ) : (
@@ -722,7 +809,7 @@ export default function CardDetailPanel({ card, onClose }: Props) {
             </div>
           ) : (
             /* Thread & Activity: WhatsApp / Trello Comment Stream Style */
-            <div className="space-y-1">
+            <div className="space-y-2 w-full">
               <div className="flex items-center justify-between mb-2">
                 <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">
                   Conversation & Activity History
@@ -738,7 +825,7 @@ export default function CardDetailPanel({ card, onClose }: Props) {
               {timelineMessages.length === 0 ? (
                 <p className="text-xs text-slate-400 text-center py-8">No conversation history yet</p>
               ) : (
-                <div className="space-y-1 py-1">
+                <div className="space-y-1 py-1 w-full">
                   {timelineMessages.map((msg) => (
                     <ChatBubble key={msg.id} message={msg} />
                   ))}
@@ -788,7 +875,7 @@ export default function CardDetailPanel({ card, onClose }: Props) {
             </div>
 
             <textarea
-              className="w-full h-24 sm:h-28 px-3.5 py-2.5 border border-slate-200 rounded-xl text-xs sm:text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500 resize-none bg-white shadow-2xs transition-all leading-relaxed"
+              className="w-full h-24 sm:h-28 px-3.5 py-2.5 border border-slate-200 rounded-xl text-xs sm:text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500 resize-none bg-white shadow-2xs transition-all leading-relaxed break-words"
               value={draftBody}
               onChange={(e) => setDraftBody(e.target.value)}
               placeholder="Write your email reply..."
