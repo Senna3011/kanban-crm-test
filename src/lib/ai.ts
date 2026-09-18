@@ -21,6 +21,27 @@ export interface FollowUpDraft {
   body: string;
 }
 
+export function parseCompanyContext(companyInfoRaw: string) {
+  let name = 'our company';
+  let products = '';
+  let customPrompt = '';
+  let knowledgeBase = '';
+
+  try {
+    if (companyInfoRaw) {
+      const parsed = JSON.parse(companyInfoRaw);
+      name = parsed.name || name;
+      products = parsed.products || '';
+      customPrompt = parsed.customPrompt || '';
+      knowledgeBase = parsed.knowledgeBase || '';
+    }
+  } catch {
+    products = companyInfoRaw;
+  }
+
+  return { name, products, customPrompt, knowledgeBase };
+}
+
 export async function classifyEmail(params: {
   companyContext: string;
   fromName: string;
@@ -30,7 +51,8 @@ export async function classifyEmail(params: {
 }): Promise<AIClassification> {
   const { apiKey, endpoint, model } = getAIConfig();
   const truncatedBody = (params.body || '').slice(0, 2000);
-  const companyDesc = params.companyContext || 'Sales & Support Team';
+  const { name, products, knowledgeBase } = parseCompanyContext(params.companyContext);
+  const companyDesc = `${name}. ${products ? `Products/Services: ${products}.` : ''} ${knowledgeBase ? `Knowledgebase: ${knowledgeBase.slice(0, 1000)}` : ''}`.trim();
   const response = await fetch(endpoint, {
     method: 'POST',
     headers: {
@@ -127,7 +149,10 @@ export async function generateFollowUpDraft(params: {
     : '';
 
   const { apiKey, endpoint, model } = getAIConfig();
-  const companyDesc = params.companyContext || 'our company';
+  const { name, products, customPrompt, knowledgeBase } = parseCompanyContext(params.companyContext);
+  const companyDesc = `${name}. ${products ? `Products/Services: ${products}.` : ''} ${knowledgeBase ? `Knowledgebase Guidelines: ${knowledgeBase.slice(0, 1500)}` : ''}`.trim();
+  const customInstructions = customPrompt ? `\nSPECIAL CUSTOM REPLY INSTRUCTIONS (MUST FOLLOW):\n${customPrompt}\n` : '';
+
   const response = await fetch(endpoint, {
     method: 'POST',
     headers: {
@@ -142,7 +167,7 @@ export async function generateFollowUpDraft(params: {
           content: `You write reply emails for a representative named ${params.senderName} at ${companyDesc}.
 
 The reply goes TO: ${params.contactName} <${params.contactEmail}>
-
+${customInstructions}
 STRICT RULES — violating any = wrong output:
 1. You ARE ${params.senderName}. You are NOT the client.
 2. NEVER use phrases like: "I would like", "I want to", "Please give me", "Can I get", "I need" — these are CLIENT phrases

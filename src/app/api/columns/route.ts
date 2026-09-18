@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/server/auth';
 import prisma from '@/lib/prisma';
+import { sanitizeEmailBody } from '@/lib/email-cleaner';
 
 export async function GET(req: NextRequest) {
   const session = await getServerSession(authOptions);
@@ -148,14 +149,18 @@ export async function GET(req: NextRequest) {
     }
   }
 
-  // Add threadCount and descLen to each card
+  // Add threadCount and descLen to each card, and sanitize any existing bodyText
   const enriched = sortedColumns.map(col => ({
     ...col,
-    cards: col.cards.map(card => ({
-      ...card,
-      threadCount: threadCountMap.get(card.id) || 1,
-      descLen: card.bodyText ? card.bodyText.length : 0,
-    })),
+    cards: col.cards.map(card => {
+      const cleanBody = sanitizeEmailBody(card.bodyText);
+      return {
+        ...card,
+        bodyText: cleanBody,
+        threadCount: threadCountMap.get(card.id) || 1,
+        descLen: cleanBody ? cleanBody.length : 0,
+      };
+    }),
   }));
 
   return NextResponse.json(enriched);

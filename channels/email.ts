@@ -3,6 +3,7 @@ import { simpleParser } from 'mailparser';
 import nodemailer from 'nodemailer';
 import type { ChannelAdapter } from './interface';
 import type { InboundMessage, SendParams, SendResult } from '../src/types';
+import { sanitizeEmailBody } from '../src/lib/email-cleaner';
 
 function createImapConnection(config: Record<string, string>): ImapFlow {
   const port = parseInt(config.port, 10);
@@ -67,6 +68,7 @@ export class EmailAdapter implements ChannelAdapter {
           const messageId = parsed.messageId?.trim() || `<uid-${uid}-${folder}@local>`;
 
           const isRead = message.flags instanceof Set && [...message.flags].some(f => f.endsWith('Seen'));
+          const cleanText = sanitizeEmailBody(parsed.text, parsed.html || undefined);
 
           messages.push({
             messageId,
@@ -77,7 +79,7 @@ export class EmailAdapter implements ChannelAdapter {
             fromName: parsed.from?.value[0]?.name || undefined,
             toEmail: Array.isArray(parsed.to) ? parsed.to[0]?.value[0]?.address : parsed.to?.value[0]?.address || undefined,
             subject: parsed.subject || '(No subject)',
-            bodyText: parsed.text || '',
+            bodyText: cleanText,
             bodyHtml: parsed.html || undefined,
             receivedAt: parsed.date || new Date(),
           });

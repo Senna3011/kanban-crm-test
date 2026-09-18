@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/server/auth';
 import prisma from '@/lib/prisma';
 import { syncArchiveEmail } from '@/lib/imap-sync';
+import { sanitizeEmailBody } from '@/lib/email-cleaner';
 
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> | { id: string } }) {
   try {
@@ -31,7 +32,10 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
       return NextResponse.json({ error: 'Not found' }, { status: 404 });
     }
 
-    return NextResponse.json(card);
+    return NextResponse.json({
+      ...card,
+      bodyText: sanitizeEmailBody(card.bodyText, card.bodyHtml),
+    });
   } catch (error: any) {
     console.error(`[API /api/cards/[id]] GET error:`, error);
     return NextResponse.json(

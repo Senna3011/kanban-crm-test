@@ -38,10 +38,16 @@ export async function getEmailConfigs() {
     prisma.emailConfig.findMany({ where: { tenantId }, orderBy: { createdAt: 'asc' } }),
     prisma.board.findMany({ where: { tenantId }, select: { id: true, title: true } }),
   ]);
-  let companyInfo: { name?: string; products?: string; logoUrl?: string } = {};
+  let companyInfo: { name?: string; products?: string; logoUrl?: string; customPrompt?: string; knowledgeBase?: string } = {};
   try { if (tenant?.companyInfo) companyInfo = JSON.parse(tenant.companyInfo); } catch {}
   return {
-    company: { name: tenant?.name || companyInfo.name || '', products: companyInfo.products || '', logoUrl: companyInfo.logoUrl || '' },
+    company: {
+      name: tenant?.name || companyInfo.name || '',
+      products: companyInfo.products || '',
+      logoUrl: companyInfo.logoUrl || '',
+      customPrompt: companyInfo.customPrompt || '',
+      knowledgeBase: companyInfo.knowledgeBase || '',
+    },
     configs: configs.map(c => ({
       id: c.id, name: c.name, boardId: c.boardId || undefined,
       authType: c.authType,
@@ -234,6 +240,8 @@ export async function updateCompanyInfo(data: {
   name: string;
   companyInfo: string;
   logoUrl?: string;
+  customPrompt?: string;
+  knowledgeBase?: string;
 }) {
   const user = await requireAdmin();
   const tenantId = user.tenantId;
@@ -258,6 +266,8 @@ export async function updateCompanyInfo(data: {
     ...parsedNewInfo,
     name: data.name,
     logoUrl: validatedLogo || undefined,
+    customPrompt: data.customPrompt !== undefined ? data.customPrompt : currentCompanyInfo.customPrompt,
+    knowledgeBase: data.knowledgeBase !== undefined ? data.knowledgeBase : currentCompanyInfo.knowledgeBase,
   });
 
   const updateData: any = {

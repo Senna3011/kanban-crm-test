@@ -38,6 +38,9 @@ model User {
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
+  resetPasswordToken   String?   @unique
+  resetPasswordExpires DateTime?
+
   tenantId String
   tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
@@ -69,7 +72,7 @@ model EmailConfig {
   tenantId  String
   tenant    Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
-  boardId String?  @unique
+  boardId String?
   board   Board? @relation(fields: [boardId], references: [id])
 
   cards    Card[]
@@ -88,7 +91,7 @@ model Board {
   tenant   Tenant  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   columns  Column[]
 
-  emailConfig EmailConfig?
+  emailConfigs EmailConfig[]
 }
 
 model Column {

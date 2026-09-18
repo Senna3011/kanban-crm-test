@@ -83,9 +83,18 @@ export async function processAIClassify(data: {
       }
     }
 
+    let senderDisplayName = tenant.name || 'Sales Team';
+    try {
+      const adminUser = await prisma.user.findFirst({
+        where: { tenantId, role: 'admin' },
+        select: { name: true },
+      });
+      if (adminUser?.name) senderDisplayName = adminUser.name;
+    } catch {}
+
     const draft = await generateFollowUpDraft({
       companyContext: tenant.companyInfo || '',
-      senderName: 'Nell VH',
+      senderName: senderDisplayName,
       contactName,
       contactEmail,
       extractedCompany: classification.extractedCompany,

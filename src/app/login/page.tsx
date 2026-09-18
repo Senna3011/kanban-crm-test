@@ -3,11 +3,13 @@
 import { useState, Suspense } from 'react';
 import { signIn } from 'next-auth/react';
 import { useRouter, useSearchParams } from 'next/navigation';
+import Link from 'next/link';
 
 function LoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const registered = searchParams.get('registered') === 'true';
+  const resetSuccess = searchParams.get('resetSuccess') === 'true';
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -49,7 +51,13 @@ function LoginForm() {
 
       {registered && (
         <div className="text-xs sm:text-sm text-center text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-xl py-2.5 px-3 font-medium">
-          ✓ Your account has been registered successfully. Please sign in.
+          ✓ Your workspace has been registered. Please sign in with your credentials.
+        </div>
+      )}
+
+      {resetSuccess && (
+        <div className="text-xs sm:text-sm text-center text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-xl py-2.5 px-3 font-medium">
+          ✓ Password has been reset successfully. Please sign in with your new password.
         </div>
       )}
 
@@ -77,9 +85,17 @@ function LoginForm() {
         </div>
 
         <div>
-          <label className="block text-xs font-semibold text-slate-700 uppercase mb-1">
-            Password
-          </label>
+          <div className="flex items-center justify-between mb-1">
+            <label className="block text-xs font-semibold text-slate-700 uppercase">
+              Password
+            </label>
+            <Link
+              href="/forgot-password"
+              className="text-xs text-primary-600 hover:underline font-semibold"
+            >
+              Forgot password?
+            </Link>
+          </div>
           <input
             type="password"
             placeholder="Account password"
@@ -101,9 +117,9 @@ function LoginForm() {
 
         <div className="pt-2 text-center text-xs text-slate-500">
           New startup or team?{' '}
-          <a href="/register" className="font-semibold text-primary-600 hover:underline">
+          <Link href="/register" className="font-semibold text-primary-600 hover:underline">
             Register a new workspace here
-          </a>
+          </Link>
         </div>
       </form>
     </div>

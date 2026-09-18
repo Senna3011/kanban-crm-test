@@ -8,7 +8,7 @@ import toast from 'react-hot-toast';
 
 interface Props {
   onNext?: () => void;
-  initial?: { name?: string; products?: string; logoUrl?: string };
+  initial?: { name?: string; products?: string; logoUrl?: string; customPrompt?: string; knowledgeBase?: string };
   readOnly?: boolean;
 }
 
@@ -16,13 +16,37 @@ export default function CompanyInfoForm({ onNext, initial, readOnly = false }: P
   const [name, setName] = useState(initial?.name || '');
   const [logoUrl, setLogoUrl] = useState(initial?.logoUrl || '');
   const [products, setProducts] = useState(initial?.products || '');
+  const [customPrompt, setCustomPrompt] = useState(initial?.customPrompt || '');
+  const [knowledgeBase, setKnowledgeBase] = useState(initial?.knowledgeBase || '');
   const [loading, setLoading] = useState(false);
+  const [importingFile, setImportingFile] = useState(false);
+
+  async function handleFileUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (file.size > 5 * 1024 * 1024) {
+      toast.error('File size must be less than 5MB.');
+      return;
+    }
+
+    setImportingFile(true);
+    try {
+      const text = await file.text();
+      setKnowledgeBase((prev) => (prev ? `${prev}\n\n--- [File: ${file.name}] ---\n${text}` : text));
+      toast.success(`Knowledge base file "${file.name}" imported successfully!`);
+    } catch {
+      toast.error('Failed to read file contents.');
+    } finally {
+      setImportingFile(false);
+    }
+  }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (readOnly) return;
-    if (!name.trim() || !products.trim()) {
-      toast.error('Company name and products/services are required.');
+    if (!name.trim()) {
+      toast.error('Company name is required.');
       return;
     }
     setLoading(true);
@@ -30,9 +54,16 @@ export default function CompanyInfoForm({ onNext, initial, readOnly = false }: P
       await updateCompanyInfo({
         name: name.trim(),
         logoUrl: logoUrl.trim(),
-        companyInfo: JSON.stringify({ name: name.trim(), products: products.trim() }),
+        customPrompt: customPrompt.trim(),
+        knowledgeBase: knowledgeBase.trim(),
+        companyInfo: JSON.stringify({
+          name: name.trim(),
+          products: products.trim(),
+          customPrompt: customPrompt.trim(),
+          knowledgeBase: knowledgeBase.trim(),
+        }),
       });
-      toast.success('Company information saved.');
+      toast.success('Company profile & AI knowledge base saved.');
       onNext?.();
       window.location.reload();
     } catch (error: any) {
@@ -47,12 +78,12 @@ export default function CompanyInfoForm({ onNext, initial, readOnly = false }: P
       {readOnly && (
         <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl text-xs text-amber-800 flex items-center gap-2">
           <span>🔒</span>
-          <span>View-only Mode: Only <strong>Administrators</strong> can modify company profile and branding.</span>
+          <span>View-only Mode: Only <strong>Administrators</strong> can modify company profile and AI prompts.</span>
         </div>
       )}
       <div>
-        <h2 className="text-xl font-semibold">Company Profile & Branding</h2>
-        <p className="text-gray-500 mt-1">Customize your organization identity, brand logo, and business context.</p>
+        <h2 className="text-xl font-semibold">Company Profile & AI Knowledge Base</h2>
+        <p className="text-gray-500 mt-1">Configure brand identity, products, custom AI reply rules, and knowledge base files.</p>
       </div>
 
       <div className="flex items-start gap-4 p-4 bg-slate-50 border border-slate-200 rounded-xl">
@@ -115,21 +146,75 @@ export default function CompanyInfoForm({ onNext, initial, readOnly = false }: P
         disabled={readOnly}
         required
       />
+
       <div className="space-y-1">
         <label className="block text-sm font-medium text-gray-700">Products & Services Context</label>
         <textarea
           id="company-products"
-          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 h-32 disabled:bg-gray-100 disabled:text-gray-500 disabled:cursor-not-allowed text-sm"
+          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 h-28 disabled:bg-gray-100 disabled:text-gray-500 disabled:cursor-not-allowed text-sm"
           value={products}
           onChange={(e) => setProducts(e.target.value)}
           placeholder="Describe your core services, target clients, pricing model (used by AI for classification & drafting)..."
           disabled={readOnly}
-          required
         />
       </div>
+
+      {/* Custom AI Reply Prompt Instructions */}
+      <div className="space-y-1 p-4 bg-indigo-50/50 border border-indigo-100 rounded-xl">
+        <div className="flex items-center justify-between mb-1">
+          <label className="block text-xs font-bold text-indigo-900 uppercase tracking-wider">
+            🤖 Custom AI Reply Rules & Prompt Guidelines
+          </label>
+        </div>
+        <textarea
+          id="ai-prompt"
+          className="w-full px-3 py-2 border border-indigo-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 h-24 bg-white text-xs sm:text-sm text-slate-800 disabled:bg-gray-100"
+          value={customPrompt}
+          onChange={(e) => setCustomPrompt(e.target.value)}
+          placeholder="e.g., Always offer a 15-min discovery call link (calendly.com/our-link). Keep tone confident and concise. Never discuss discounts..."
+          disabled={readOnly}
+        />
+        <p className="text-[11px] text-indigo-700 mt-1">
+          These instructions will be directly injected into the AI email reply prompt.
+        </p>
+      </div>
+
+      {/* Knowledge Base Import Section */}
+      <div className="space-y-2 p-4 bg-slate-50 border border-slate-200 rounded-xl">
+        <div className="flex items-center justify-between">
+          <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider">
+            📚 Knowledge Base Context / FAQ
+          </label>
+          {!readOnly && (
+            <label className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-white hover:bg-slate-100 text-slate-700 text-xs font-semibold border border-slate-300 rounded-lg cursor-pointer shadow-2xs transition">
+              <span>📄</span>
+              <span>{importingFile ? 'Reading...' : 'Import .TXT / Markdown File'}</span>
+              <input
+                type="file"
+                accept=".txt,.md,.csv,.json"
+                className="hidden"
+                disabled={importingFile}
+                onChange={handleFileUpload}
+              />
+            </label>
+          )}
+        </div>
+        <textarea
+          id="knowledge-base"
+          className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 h-32 bg-white text-xs sm:text-sm text-slate-800 disabled:bg-gray-100 font-mono"
+          value={knowledgeBase}
+          onChange={(e) => setKnowledgeBase(e.target.value)}
+          placeholder="Paste service pricing tiers, company FAQs, case studies, or import text/markdown files..."
+          disabled={readOnly}
+        />
+        <p className="text-[11px] text-slate-400">
+          AI references this knowledge base when generating contextual email responses and follow-ups.
+        </p>
+      </div>
+
       {!readOnly && (
-        <Button type="submit" loading={loading}>
-          {onNext ? 'Continue →' : 'Save Company Profile'}
+        <Button type="submit" loading={loading} className="w-full sm:w-auto">
+          {onNext ? 'Continue →' : 'Save Company Profile & AI Settings'}
         </Button>
       )}
     </form>

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/server/auth';
 import prisma from '@/lib/prisma';
+import { sanitizeEmailBody } from '@/lib/email-cleaner';
 
 export async function GET(
   req: NextRequest,
@@ -107,7 +108,7 @@ export async function GET(
       type: 'received' as const,
       subject: card.subject,
       from: card.fromName || card.fromEmail,
-      body: card.bodyText || '',
+      body: sanitizeEmailBody(card.bodyText, card.bodyHtml),
       timestamp: card.lastActivityAt,
       isCurrent: true,
     },
@@ -117,7 +118,7 @@ export async function GET(
       type: 'received' as const,
       subject: e.subject,
       from: e.fromName || e.fromEmail,
-      body: e.bodyText || '',
+      body: sanitizeEmailBody(e.bodyText),
       timestamp: e.lastActivityAt,
     })),
     // Sent emails (all drafts, not just 'sent' — show pending too)
@@ -126,7 +127,7 @@ export async function GET(
       type: 'sent' as const,
       subject: s.subject || '',
       from: s.fromAddress || session.user?.name || 'Support Team',
-      body: s.body,
+      body: sanitizeEmailBody(s.body),
       timestamp: s.sentAt || new Date(),
     })),
   ].sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());

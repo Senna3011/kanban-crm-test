@@ -15,7 +15,16 @@ const DEFAULT_FOLDER_MAPPING: Record<string, string> = {
   'Nell': 'Nell VH',
 };
 
-async function resolveBoard(tenantId: string, toEmail?: string, folder?: string) {
+async function resolveBoard(tenantId: string, emailConfigId?: string, toEmail?: string, folder?: string) {
+  // 1. If the email config is directly linked to a board, route there first
+  if (emailConfigId) {
+    const config = await prisma.emailConfig.findUnique({
+      where: { id: emailConfigId },
+      include: { board: true },
+    });
+    if (config?.board) return config.board;
+  }
+
   const tenant = await prisma.tenant.findUnique({ where: { id: tenantId }, select: { companyInfo: true } });
   let routing: Record<string, string> = {};
   let folderRouting: Record<string, string> = {};
@@ -27,19 +36,34 @@ async function resolveBoard(tenantId: string, toEmail?: string, folder?: string)
     }
   } catch {}
 
-  // 1. Try recipient-based routing
-  if (toEmail && routing[toEmail]) {
-    const board = await prisma.board.findFirst({ where: { tenantId, title: routing[toEmail] } });
-    if (board) return board;
+  // 2. Try recipient-based routing (e.g. toEmail = "nell@jetdigitalpro.com" -> board titled "nell@jetdigitalpro.com" or "Nell VH")
+  if (toEmail) {
+    const cleanTo = toEmail.trim().toLowerCase();
+    if (routing[cleanTo]) {
+      const board = await prisma.board.findFirst({ where: { tenantId, title: routing[cleanTo] } });
+      if (board) return board;
+    }
+
+    // Direct match: board title matches toEmail exactly or matches username part before @
+    const directToBoard = await prisma.board.findFirst({
+      where: {
+        tenantId,
+        OR: [
+          { title: { equals: cleanTo, mode: 'insensitive' } },
+          { title: { equals: cleanTo.split('@')[0], mode: 'insensitive' } },
+        ],
+      },
+    });
+    if (directToBoard) return directToBoard;
   }
 
-  // 2. Try tenant custom folder-based routing
+  // 3. Try tenant custom folder-based routing
   if (folder && folderRouting[folder]) {
     const board = await prisma.board.findFirst({ where: { tenantId, title: folderRouting[folder] } });
     if (board) return board;
   }
 
-  // 3. Try matching folder name directly to board title
+  // 4. Try matching folder name directly to board title
   if (folder) {
     const directMatch = await prisma.board.findFirst({
       where: { tenantId, title: { equals: folder, mode: 'insensitive' } },
@@ -47,13 +71,15 @@ async function resolveBoard(tenantId: string, toEmail?: string, folder?: string)
     if (directMatch) return directMatch;
   }
 
-  // 4. Try default mapping
+  // 5. Try default mapping
   if (folder && DEFAULT_FOLDER_MAPPING[folder]) {
     const board = await prisma.board.findFirst({ where: { tenantId, title: DEFAULT_FOLDER_MAPPING[folder] } });
     if (board) return board;
   }
 
-  // 5. Fallback: First board of the tenant
+  // 6. Fallback: Main Board or first board of the tenant
+  const mainBoard = await prisma.board.findFirst({ where: { tenantId, title: 'Main Board' } });
+  if (mainBoard) return mainBoard;
   return prisma.board.findFirst({ where: { tenantId } });
 }
 
@@ -116,7 +142,7 @@ async function pollFolder(imapConfig: Record<string, string>, folder: string, te
         console.log(`[IMAP Poller] Reply to unknown message ${msg.inReplyTo}, creating new card`);
       }
 
-      const board = await resolveBoard(tenantId, msg.toEmail, folder);
+      const board = await resolveBoard(tenantId, emailConfigId, msg.toEmail, folder);
       if (!board) continue;
 
       const general = await prisma.column.findFirst({ where: { boardId: board.id, title: 'General' } });
