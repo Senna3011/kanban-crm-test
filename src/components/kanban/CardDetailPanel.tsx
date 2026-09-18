@@ -16,7 +16,6 @@ interface TimelineMessage {
   title: string;
   sender: string;
   senderEmail?: string;
-  recipientEmail?: string;
   subject?: string;
   body: string;
   timestamp: Date;
@@ -356,6 +355,10 @@ export default function CardDetailPanel({ card, onClose }: Props) {
   const [assignedUserId, setAssignedUserId] = useState<string>(card.assignedToId || '');
   const [updatingAssignee, setUpdatingAssignee] = useState(false);
 
+  // New UI viewport optimizations: Maximize / Fullscreen & Collapsible Reply
+  const [isMaximized, setIsMaximized] = useState(false);
+  const [replyExpanded, setReplyExpanded] = useState(false);
+
   // Initialize draft immediately
   useEffect(() => {
     setDraftBody(
@@ -473,7 +476,8 @@ export default function CardDetailPanel({ card, onClose }: Props) {
       template = `Hi ${name},\n\nWe have prepared our scope of work and strategy proposal for your review. Please let us know when would be a convenient time to walk through the details together.\n\nBest regards`;
     }
     setDraftBody(template);
-    toast.success('Template applied!');
+    setReplyExpanded(true);
+    toast.success('Template applied & reply expanded!');
   }
 
   async function handleSend() {
@@ -502,6 +506,7 @@ export default function CardDetailPanel({ card, onClose }: Props) {
         const updatedData = await updatedRes.json();
         setActivityLogs(updatedData.activityLogs || []);
       }
+      setReplyExpanded(false);
       window.dispatchEvent(new Event('board-refresh'));
     } catch (e: any) {
       toast.error(e.message || 'Failed to send email');
@@ -583,13 +588,19 @@ export default function CardDetailPanel({ card, onClose }: Props) {
   const avatarGradient = getAvatarColor(card.fromEmail || senderName);
 
   return (
-    <div className="fixed inset-0 z-50 flex items-start justify-center pt-2 sm:pt-10 p-2 sm:p-4">
+    <div className="fixed inset-0 z-50 flex items-start justify-center pt-2 sm:pt-6 p-2 sm:p-4">
       <Toaster position="top-right" />
       {/* Backdrop */}
       <div className="absolute inset-0 bg-slate-900/50 backdrop-blur-xs transition-opacity" onClick={onClose} />
 
       {/* Modal Card Container */}
-      <div className="relative w-full max-w-2xl bg-white rounded-2xl shadow-2xl border border-slate-200 flex flex-col max-h-[94vh] sm:max-h-[90vh] overflow-hidden">
+      <div
+        className={`relative w-full bg-white rounded-2xl shadow-2xl border border-slate-200 flex flex-col transition-all duration-200 overflow-hidden ${
+          isMaximized
+            ? 'max-w-5xl h-[95vh]'
+            : 'max-w-2xl max-h-[94vh] sm:max-h-[90vh]'
+        }`}
+      >
         {/* Header */}
         <div className="px-4 sm:px-6 py-3.5 border-b border-slate-200/80 bg-slate-50/60 flex items-start justify-between gap-3 flex-shrink-0">
           <div className="flex items-start gap-3 min-w-0 flex-1">
@@ -693,6 +704,24 @@ export default function CardDetailPanel({ card, onClose }: Props) {
                 <path strokeLinecap="round" strokeLinejoin="round" d="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 00-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 013.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 00-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 00-7.5 0" />
               </svg>
             </button>
+
+            {/* Maximize / Fullscreen Toggle Button */}
+            <button
+              onClick={() => setIsMaximized(!isMaximized)}
+              className="p-1.5 rounded-lg hover:bg-slate-200/70 text-slate-500 hover:text-slate-800 transition-colors hidden sm:inline-flex"
+              title={isMaximized ? 'Restore normal size' : 'Maximize viewport'}
+            >
+              {isMaximized ? (
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M9 9L4 4m0 0h5m-5 0v5m6 6l5 5m0 0h-5m5 0v-5" />
+                </svg>
+              ) : (
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 3.75v4.5m0-4.5h4.5m-4.5 0L9 9M3.75 20.25v-4.5m0 4.5h4.5m-4.5 0L9 15M20.25 3.75h-4.5m4.5 0v4.5m0-4.5L15 9m5.25 11.25h-4.5m4.5 0v-4.5m0 4.5L15 15" />
+                </svg>
+              )}
+            </button>
+
             <button
               onClick={onClose}
               className="p-1.5 rounded-lg hover:bg-slate-200/70 text-slate-400 hover:text-slate-700 transition-colors"
@@ -769,8 +798,8 @@ export default function CardDetailPanel({ card, onClose }: Props) {
           </button>
         </div>
 
-        {/* Scrollable Content Body (Instant Rendered with Smooth Auto-Scroll & zero horizontal overflow) */}
-        <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-4 [overflow-wrap:anywhere]">
+        {/* Dynamic Vertical Viewport Container */}
+        <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-4 [overflow-wrap:anywhere] min-h-0">
           {error ? (
             <div className="text-center py-12 text-rose-500 text-xs">
               <p>{error}</p>
@@ -794,7 +823,7 @@ export default function CardDetailPanel({ card, onClose }: Props) {
                   <iframe
                     srcDoc={cardHtml}
                     className="w-full border-0"
-                    style={{ minHeight: 240, maxHeight: 420 }}
+                    style={{ minHeight: isMaximized ? 420 : 260, maxHeight: isMaximized ? 650 : 420 }}
                     sandbox="allow-same-origin"
                     title="Email HTML"
                   />
@@ -835,73 +864,117 @@ export default function CardDetailPanel({ card, onClose }: Props) {
           )}
         </div>
 
-        {/* Quick Reply Composer (Sticky Bottom) */}
+        {/* Collapsible Quick Reply Composer (Maximizes Reading Space) */}
         {!error && (
-          <div className="border-t border-slate-200 bg-slate-50/80 px-4 sm:px-6 py-3.5 flex-shrink-0 space-y-2.5">
-            <div className="flex items-center justify-between flex-wrap gap-2">
-              <span className="text-xs font-bold text-slate-600 uppercase tracking-wider">Quick Reply</span>
-
-              {/* Template shortcuts */}
-              <div className="flex items-center gap-1.5 overflow-x-auto pb-0.5">
+          <div className="border-t border-slate-200 bg-slate-50/90 px-4 sm:px-6 py-3 flex-shrink-0 transition-all">
+            {!replyExpanded ? (
+              /* Collapsed Compact State */
+              <div className="flex items-center justify-between gap-3">
                 <button
                   type="button"
-                  onClick={() => applyTemplate('meeting')}
-                  className="px-2 py-0.5 text-[11px] font-semibold bg-white border border-slate-200 rounded-lg hover:bg-slate-100 text-slate-700 shadow-2xs transition-all"
+                  onClick={() => setReplyExpanded(true)}
+                  className="flex-1 flex items-center gap-2 px-3.5 py-2 bg-white border border-slate-300 hover:border-primary-400 rounded-xl text-xs text-slate-400 text-left shadow-2xs hover:text-slate-600 transition group cursor-pointer"
                 >
-                  📅 Meeting
+                  <span className="text-slate-400 group-hover:text-primary-600">💬</span>
+                  <span className="font-medium">Click here to write a reply or choose a template...</span>
                 </button>
                 <button
                   type="button"
-                  onClick={() => applyTemplate('pricing')}
-                  className="px-2 py-0.5 text-[11px] font-semibold bg-white border border-slate-200 rounded-lg hover:bg-slate-100 text-slate-700 shadow-2xs transition-all"
+                  onClick={() => setReplyExpanded(true)}
+                  className="px-4 py-2 bg-primary-600 hover:bg-primary-700 text-white text-xs font-bold rounded-xl shadow-2xs transition shrink-0"
                 >
-                  💰 Pricing
-                </button>
-                <button
-                  type="button"
-                  onClick={() => applyTemplate('followup')}
-                  className="px-2 py-0.5 text-[11px] font-semibold bg-white border border-slate-200 rounded-lg hover:bg-slate-100 text-slate-700 shadow-2xs transition-all"
-                >
-                  ⚡ Follow-up
-                </button>
-                <button
-                  type="button"
-                  onClick={() => applyTemplate('proposal')}
-                  className="px-2 py-0.5 text-[11px] font-semibold bg-white border border-slate-200 rounded-lg hover:bg-slate-100 text-slate-700 shadow-2xs transition-all"
-                >
-                  🤝 Proposal
+                  Reply ✍️
                 </button>
               </div>
-            </div>
+            ) : (
+              /* Expanded State */
+              <div className="space-y-2.5 animate-in fade-in duration-150">
+                <div className="flex items-center justify-between flex-wrap gap-2">
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs font-bold text-slate-700 uppercase tracking-wider">Quick Reply</span>
+                    <button
+                      type="button"
+                      onClick={() => setReplyExpanded(false)}
+                      className="text-[11px] text-slate-400 hover:text-slate-600 hover:underline"
+                    >
+                      (Collapse ↓)
+                    </button>
+                  </div>
 
-            <textarea
-              className="w-full h-24 sm:h-28 px-3.5 py-2.5 border border-slate-200 rounded-xl text-xs sm:text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500 resize-none bg-white shadow-2xs transition-all leading-relaxed break-words"
-              value={draftBody}
-              onChange={(e) => setDraftBody(e.target.value)}
-              placeholder="Write your email reply..."
-            />
+                  {/* Template shortcuts */}
+                  <div className="flex items-center gap-1.5 overflow-x-auto pb-0.5">
+                    <button
+                      type="button"
+                      onClick={() => applyTemplate('meeting')}
+                      className="px-2 py-0.5 text-[11px] font-semibold bg-white border border-slate-200 rounded-lg hover:bg-slate-100 text-slate-700 shadow-2xs transition-all"
+                    >
+                      📅 Meeting
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => applyTemplate('pricing')}
+                      className="px-2 py-0.5 text-[11px] font-semibold bg-white border border-slate-200 rounded-lg hover:bg-slate-100 text-slate-700 shadow-2xs transition-all"
+                    >
+                      💰 Pricing
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => applyTemplate('followup')}
+                      className="px-2 py-0.5 text-[11px] font-semibold bg-white border border-slate-200 rounded-lg hover:bg-slate-100 text-slate-700 shadow-2xs transition-all"
+                    >
+                      ⚡ Follow-up
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => applyTemplate('proposal')}
+                      className="px-2 py-0.5 text-[11px] font-semibold bg-white border border-slate-200 rounded-lg hover:bg-slate-100 text-slate-700 shadow-2xs transition-all"
+                    >
+                      🤝 Proposal
+                    </button>
+                  </div>
+                </div>
 
-            <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2.5">
-              <div className="flex items-center gap-2">
-                {fromAddresses.length > 0 && (
-                  <select
-                    className="w-full sm:w-auto px-2.5 py-1.5 border border-slate-200 rounded-lg text-xs font-medium text-slate-700 focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500 bg-white"
-                    value={selectedFrom}
-                    onChange={(e) => setSelectedFrom(e.target.value)}
-                  >
-                    {fromAddresses.map((addr) => (
-                      <option key={addr} value={addr}>
-                        From: {addr}
-                      </option>
-                    ))}
-                  </select>
-                )}
+                {/* Compact Textarea (3-4 lines max default) */}
+                <textarea
+                  className="w-full h-20 sm:h-24 px-3.5 py-2 border border-slate-300 rounded-xl text-xs sm:text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500 resize-none bg-white shadow-2xs transition-all leading-relaxed break-words"
+                  value={draftBody}
+                  onChange={(e) => setDraftBody(e.target.value)}
+                  placeholder="Write your email reply..."
+                  autoFocus
+                />
+
+                <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2.5">
+                  <div className="flex items-center gap-2">
+                    {fromAddresses.length > 0 && (
+                      <select
+                        className="w-full sm:w-auto px-2.5 py-1.5 border border-slate-200 rounded-lg text-xs font-medium text-slate-700 focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500 bg-white"
+                        value={selectedFrom}
+                        onChange={(e) => setSelectedFrom(e.target.value)}
+                      >
+                        {fromAddresses.map((addr) => (
+                          <option key={addr} value={addr}>
+                            From: {addr}
+                          </option>
+                        ))}
+                      </select>
+                    )}
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setReplyExpanded(false)}
+                      className="px-3 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-200/70 rounded-lg"
+                    >
+                      Cancel
+                    </button>
+                    <Button size="sm" onClick={handleSend} loading={sending} className="w-full sm:w-auto font-bold shadow-xs">
+                      Send Reply & Advance Stage →
+                    </Button>
+                  </div>
+                </div>
               </div>
-
-              <Button size="sm" onClick={handleSend} loading={sending} className="w-full sm:w-auto font-bold shadow-xs">
-                Send Reply & Advance Stage →
-              </Button>
-            </div>
+            )}
           </div>
         )}
       </div>
