@@ -39,24 +39,34 @@ export class EmailAdapter implements ChannelAdapter {
 
       const messages: InboundMessage[] = [];
 
-      // Search recent messages (last 30 days) by UID
+      // Fetch all recent messages in the mailbox (up to last 150 messages or 60 days) to ensure no newsletter/notification is left behind
       const since = new Date();
-      since.setDate(since.getDate() - 30);
+      since.setDate(since.getDate() - 60);
 
       let uids: number[] = [];
       try {
         const searchResult = await imap.search({ since }, { uid: true });
-        if (Array.isArray(searchResult)) {
+        if (Array.isArray(searchResult) && searchResult.length > 0) {
           uids = searchResult;
         }
       } catch (searchErr) {
-        console.log(`[IMAP] Search by date failed, falling back to recent range in ${folder}`);
+        console.log(`[IMAP] Search by date failed, fetching by sequence range in ${folder}`);
         uids = [];
       }
 
-      // If search returns specific UIDs, fetch by those UIDs. Otherwise fetch latest messages range '1:*'
-      const fetchRange: any = uids && uids.length > 0 ? uids : '1:*';
-      const fetchOptions: any = { uid: uids && uids.length > 0 };
+      // If search by date returns empty (e.g. server timezone mismatch or older inbox), fallback to fetching the last 150 messages in the folder
+      let fetchRange: any;
+      let fetchOptions: any;
+
+      if (uids.length > 0) {
+        fetchRange = uids;
+        fetchOptions = { uid: true };
+      } else {
+        const totalExists = imap.mailbox ? imap.mailbox.exists : 0;
+        const startSeq = Math.max(1, totalExists - 150);
+        fetchRange = totalExists > 0 ? `${startSeq}:*` : '1:*';
+        fetchOptions = { uid: false };
+      }
 
       for await (const message of imap.fetch(fetchRange, { source: true, uid: true, flags: true }, fetchOptions)) {
         if (!message.source) continue;
