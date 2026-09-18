@@ -8,7 +8,14 @@ import toast from 'react-hot-toast';
 
 interface Props {
   onNext?: () => void;
-  initial?: { name?: string; products?: string; logoUrl?: string; customPrompt?: string; knowledgeBase?: string };
+  initial?: {
+    name?: string | null;
+    products?: string | null;
+    logoUrl?: string | null;
+    customPrompt?: string | null;
+    knowledgeBase?: string | null;
+    [key: string]: any;
+  } | null;
   readOnly?: boolean;
 }
 
