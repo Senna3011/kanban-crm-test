@@ -413,13 +413,16 @@ export default function KanbanBoard() {
     try {
       const res = await fetch('/api/sync', { method: 'POST' });
       if (!res.ok) throw new Error('Sync failed');
-      toast.success('Syncing emails...');
-      setTimeout(() => {
-        fetchColumns();
-        setSyncing(false);
-      }, 4000);
+      const data = await res.json();
+      if (typeof data.newEmails === 'number' && data.newEmails > 0) {
+        toast.success(`Sync complete! ${data.newEmails} new email(s) ingested.`);
+      } else {
+        toast.success(`Mailboxes checked (${data.mailboxes || 1} active). Inboxes up to date.`);
+      }
+      fetchColumns();
     } catch (err: any) {
       toast.error(err.message || 'Sync failed');
+    } finally {
       setSyncing(false);
     }
   }
