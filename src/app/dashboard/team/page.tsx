@@ -9,6 +9,7 @@ import {
   deleteTenantUser,
   updateTenantUserRole,
   updateUserBoardAccess,
+  resetTenantUserPassword,
 } from '@/server/actions/user';
 import { getTenantInvitations, createInvitation, revokeInvitation } from '@/server/actions/invitation';
 
@@ -67,6 +68,11 @@ export default function TeamPage() {
   const [editingUser, setEditingUser] = useState<UserItem | null>(null);
   const [selectedBoardIds, setSelectedBoardIds] = useState<string[]>([]);
   const [savingBoards, setSavingBoards] = useState(false);
+
+  // Reset Password Modal
+  const [resetUserTarget, setResetUserTarget] = useState<UserItem | null>(null);
+  const [resetNewPassword, setResetNewPassword] = useState('');
+  const [savingResetPassword, setSavingResetPassword] = useState(false);
 
   async function loadData() {
     setLoading(true);
@@ -188,6 +194,26 @@ export default function TeamPage() {
       toast.error(err?.message || 'Failed to update permissions.');
     } finally {
       setSavingBoards(false);
+    }
+  };
+
+  const handleResetPasswordSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!resetUserTarget) return;
+    if (!resetNewPassword || resetNewPassword.length < 6) {
+      toast.error('New password must be at least 6 characters.');
+      return;
+    }
+    setSavingResetPassword(true);
+    try {
+      await resetTenantUserPassword(resetUserTarget.id, resetNewPassword);
+      toast.success(`Password for ${resetUserTarget.email} updated successfully!`);
+      setResetUserTarget(null);
+      setResetNewPassword('');
+    } catch (err: any) {
+      toast.error(err?.message || 'Failed to reset member password.');
+    } finally {
+      setSavingResetPassword(false);
     }
   };
 
@@ -322,7 +348,7 @@ export default function TeamPage() {
                           <select
                             value={u.role}
                             onChange={(e) => handleRoleChange(u.id, e.target.value as any)}
-                            className="bg-slate-50 border border-slate-200 text-slate-700 text-xs rounded-lg px-2.5 py-1 focus:ring-1 focus:ring-primary-500 focus:outline-none"
+                            className="bg-slate-50 border border-slate-200 text-slate-700 text-xs rounded-lg px-2.5 py-1 focus:ring-1 focus:ring-primary-500 focus:outline-none cursor-pointer"
                           >
                             <option value="member">Member</option>
                             <option value="admin">Admin</option>
@@ -371,14 +397,26 @@ export default function TeamPage() {
                         })}
                       </td>
                       {isAdmin && (
-                        <td className="py-3.5 px-4 text-right">
+                        <td className="py-3.5 px-4 text-right space-x-2">
                           {!isSelf && (
-                            <button
-                              onClick={() => handleDeleteUser(u.id, u.email)}
-                              className="text-xs text-red-600 hover:text-red-800 hover:underline font-medium"
-                            >
-                              Delete
-                            </button>
+                            <>
+                              <button
+                                onClick={() => {
+                                  setResetUserTarget(u);
+                                  setResetNewPassword('');
+                                }}
+                                className="text-xs text-indigo-600 hover:text-indigo-800 hover:underline font-medium"
+                                title="Reset user password manually"
+                              >
+                                Reset Pass
+                              </button>
+                              <button
+                                onClick={() => handleDeleteUser(u.id, u.email)}
+                                className="text-xs text-red-600 hover:text-red-800 hover:underline font-medium"
+                              >
+                                Delete
+                              </button>
+                            </>
                           )}
                         </td>
                       )}
@@ -680,6 +718,56 @@ export default function TeamPage() {
                 {savingBoards ? 'Saving...' : 'Save Permissions'}
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal: Admin Manual Reset Password Member */}
+      {resetUserTarget && (
+        <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-2xl max-w-sm w-full p-6 shadow-xl border border-slate-200 space-y-4">
+            <div className="flex items-center justify-between">
+              <h3 className="text-base font-bold text-slate-900">Reset Member Password</h3>
+              <button onClick={() => setResetUserTarget(null)} className="text-slate-400 hover:text-slate-600">
+                ✕
+              </button>
+            </div>
+
+            <p className="text-xs text-slate-500">
+              Set a new password directly for <strong>{resetUserTarget.name || resetUserTarget.email}</strong>.
+            </p>
+
+            <form onSubmit={handleResetPasswordSubmit} className="space-y-3.5 text-xs sm:text-sm">
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 uppercase mb-1">New Password *</label>
+                <input
+                  type="password"
+                  placeholder="Minimum 6 characters"
+                  value={resetNewPassword}
+                  onChange={(e) => setResetNewPassword(e.target.value)}
+                  required
+                  autoFocus
+                  className="w-full px-3.5 py-2 border border-slate-300 rounded-xl focus:ring-2 focus:ring-primary-500 focus:outline-none"
+                />
+              </div>
+
+              <div className="flex items-center justify-end gap-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setResetUserTarget(null)}
+                  className="px-4 py-2 text-xs text-slate-600 hover:bg-slate-100 rounded-xl"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={savingResetPassword}
+                  className="px-4 py-2 text-xs bg-primary-600 hover:bg-primary-700 text-white font-bold rounded-xl shadow-xs disabled:opacity-50"
+                >
+                  {savingResetPassword ? 'Updating...' : 'Set Password'}
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

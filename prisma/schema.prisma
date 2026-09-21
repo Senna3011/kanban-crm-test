@@ -26,6 +26,9 @@ model Tenant {
   contacts     Contact[]
   spamLogs     SpamLog[]
   invitations  Invitation[]
+  outreachCampaigns OutreachCampaign[]
+  outreachAccounts  OutreachAccountConfig[]
+  outreachSuppressions OutreachSuppression[]
 }
 
 model User {
@@ -248,4 +251,111 @@ model Invitation {
   @@index([tenantId])
   @@unique([tenantId, email])
 }
+
+enum OutreachLeadStatus {
+  SCRAPED
+  VERIFYING
+  VERIFIED_SAFE
+  VERIFIED_RISKY
+  INVALID
+  DRAFT_READY
+  APPROVED
+  DISPATCHED
+  REPLIED
+  CONVERTED
+  FAILED
+}
+
+model OutreachAccountConfig {
+  id              String   @id @default(cuid())
+  name            String   @default("Outreach Sender")
+  senderName      String   @default("Outreach Team")
+  senderEmail     String
+  smtpHost        String   @default("smtp.zoho.com")
+  smtpPort        Int      @default(465)
+  smtpUser        String
+  smtpPass        String?
+  outscraperApiKey String?
+  reoonApiKey     String?
+  dailyLimit      Int      @default(50)
+  sentToday       Int      @default(0)
+  lastResetDate   DateTime @default(now())
+  isActive        Boolean  @default(true)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  campaigns OutreachCampaign[]
+
+  @@unique([tenantId, senderEmail])
+}
+
+model OutreachCampaign {
+  id               String                 @id @default(cuid())
+  name             String
+  targetRole       String?
+  targetLocation   String?
+  targetIndustry   String?
+  searchQuery      String?
+  promptInstructions String?              @db.Text
+  status           String                 @default("DRAFT") // DRAFT, RUNNING, PAUSED, COMPLETED
+  createdAt        DateTime               @default(now())
+  updatedAt        DateTime               @updatedAt
+
+  tenantId         String
+  tenant           Tenant                 @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  accountId        String?
+  account          OutreachAccountConfig? @relation(fields: [accountId], references: [id], onDelete: SetNull)
+
+  leads            OutreachLead[]
+
+  @@index([tenantId])
+}
+
+model OutreachLead {
+  id              String             @id @default(cuid())
+  fullName        String
+  firstName       String?
+  lastName        String?
+  jobTitle        String?
+  companyName     String?
+  companyDomain   String?
+  linkedinUrl     String?
+  location        String?
+  email           String?
+  verifyStatus    String?            // SAFE, RISKY, INVALID, UNVERIFIED
+  verifyScore     Int?               @default(0)
+  aiDraftSubject  String?
+  aiDraftBody     String?            @db.Text
+  status          OutreachLeadStatus @default(SCRAPED)
+  errorMessage    String?
+  sentAt          DateTime?
+  repliedAt       DateTime?
+  convertedCardId String?
+  metadata        Json?
+  createdAt       DateTime           @default(now())
+  updatedAt       DateTime           @updatedAt
+
+  campaignId String
+  campaign   OutreachCampaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+
+  @@index([campaignId])
+  @@index([email])
+}
+
+model OutreachSuppression {
+  id        String   @id @default(cuid())
+  email     String
+  reason    String?  // UNSUBSCRIBED, BOUNCED, SPAM_REPORT, MANUAL
+  createdAt DateTime @default(now())
+
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, email])
+}
+
 

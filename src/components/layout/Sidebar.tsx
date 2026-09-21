@@ -8,6 +8,7 @@ import clsx from 'clsx';
 
 const navItems = [
   { href: '/dashboard', label: 'Board', icon: '📋' },
+  { href: '/dashboard/outreach', label: 'Outreach', icon: '🚀' },
   { href: '/dashboard/team', label: 'Team', icon: '👥' },
   { href: '/dashboard/profile', label: 'My Profile', icon: '👤' },
   { href: '/dashboard/guide', label: 'User Guide', icon: '📖' },

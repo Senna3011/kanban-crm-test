@@ -145,6 +145,35 @@ export async function deleteTenantUser(userId: string) {
   return { success: true };
 }
 
+export async function resetTenantUserPassword(userId: string, newPassword: string) {
+  const admin = await requireAdmin();
+
+  if (!newPassword || newPassword.length < 6) {
+    throw new Error('Password must be at least 6 characters.');
+  }
+
+  const target = await prisma.user.findFirst({
+    where: { id: userId, tenantId: admin.tenantId },
+  });
+
+  if (!target) {
+    throw new Error('User not found in your organization.');
+  }
+
+  const passwordHash = await bcrypt.hash(newPassword, 12);
+
+  await prisma.user.update({
+    where: { id: userId },
+    data: {
+      passwordHash,
+      resetPasswordToken: null,
+      resetPasswordExpires: null,
+    } as any,
+  });
+
+  return { success: true };
+}
+
 export async function updateTenantUserRole(userId: string, role: 'admin' | 'member') {
   const admin = await requireAdmin();
 

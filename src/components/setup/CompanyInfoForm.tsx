@@ -188,22 +188,33 @@ export default function CompanyInfoForm({ onNext, initial, readOnly = false }: P
 
       {/* Knowledge Base Import Section */}
       <div className="space-y-2 p-4 bg-slate-50 border border-slate-200 rounded-xl">
-        <div className="flex items-center justify-between">
+        <div className="flex items-center justify-between flex-wrap gap-2">
           <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider">
             📚 Knowledge Base Context / FAQ
           </label>
           {!readOnly && (
-            <label className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-white hover:bg-slate-100 text-slate-700 text-xs font-semibold border border-slate-300 rounded-lg cursor-pointer shadow-2xs transition">
-              <span>📄</span>
-              <span>{importingFile ? 'Reading...' : 'Import .TXT / Markdown File'}</span>
-              <input
-                type="file"
-                accept=".txt,.md,.csv,.json"
-                className="hidden"
-                disabled={importingFile}
-                onChange={handleFileUpload}
-              />
-            </label>
+            <div className="flex items-center gap-2">
+              <label className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-white hover:bg-slate-100 text-slate-700 text-xs font-semibold border border-slate-300 rounded-lg cursor-pointer shadow-2xs transition">
+                <span>📄</span>
+                <span>{importingFile ? 'Reading...' : 'Import .TXT / Markdown File'}</span>
+                <input
+                  type="file"
+                  accept=".txt,.md,.csv,.json"
+                  className="hidden"
+                  disabled={importingFile}
+                  onChange={handleFileUpload}
+                />
+              </label>
+              {knowledgeBase && (
+                <button
+                  type="button"
+                  onClick={() => setKnowledgeBase('')}
+                  className="text-xs text-red-600 hover:text-red-700 font-semibold px-2 py-1 bg-red-50 hover:bg-red-100 border border-red-200 rounded-lg transition"
+                >
+                  Clear Knowledge Base
+                </button>
+              )}
+            </div>
           )}
         </div>
         <textarea
