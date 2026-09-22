@@ -65,5 +65,41 @@ export async function POST(req: NextRequest) {
     },
   });
 
+  // Automatically trigger AI classification and follow-up draft generation in background
+  try {
+    const tenant = await prisma.tenant.findUnique({
+      where: { id: tenantId },
+      select: { companyInfo: true, name: true },
+    });
+    const companyContext = tenant?.companyInfo || tenant?.name || 'Our Company';
+
+    // Generate initial follow-up draft
+    const { generateFollowUpDraft } = await import('@/lib/ai');
+    const draft = await generateFollowUpDraft({
+      companyContext,
+      senderName: (session.user as any).name || 'Our Team',
+      contactName: spamLog.fromName || spamLog.fromEmail.split('@')[0],
+      contactEmail: spamLog.fromEmail,
+      conversationHistory: [spamLog.bodyPreview || spamLog.subject],
+      followUpNumber: 1,
+    });
+
+    if (draft && draft.body) {
+      await prisma.draftMessage.create({
+        data: {
+          channel: 'email',
+          subject: draft.subject,
+          body: draft.body,
+          status: 'pending',
+          aiGeneratedAt: new Date(),
+          cardId: card.id,
+          tenantId,
+        },
+      });
+    }
+  } catch (aiErr) {
+    console.warn('[SPAM RECOVERY] AI draft auto-generation skipped:', aiErr);
+  }
+
   return NextResponse.json({ success: true, cardId: card.id });
 }

@@ -33,33 +33,54 @@ function withTimeout<T>(promise: Promise<T>, ms = 15000): Promise<T> {
 export async function getEmailConfigs() {
   const user = await requireAuth();
   const tenantId = user.tenantId;
-  const [tenant, configs, boards] = await Promise.all([
-    prisma.tenant.findUnique({ where: { id: tenantId }, select: { name: true, companyInfo: true } }),
-    prisma.emailConfig.findMany({ where: { tenantId }, orderBy: { createdAt: 'asc' } }),
-    prisma.board.findMany({ where: { tenantId }, select: { id: true, title: true } }),
-  ]);
-  let companyInfo: { name?: string; products?: string; logoUrl?: string; customPrompt?: string; knowledgeBase?: string } = {};
-  try { if (tenant?.companyInfo) companyInfo = JSON.parse(tenant.companyInfo); } catch {}
-  return {
-    company: {
-      name: tenant?.name || companyInfo.name || '',
-      products: companyInfo.products || '',
-      logoUrl: companyInfo.logoUrl || '',
-      customPrompt: companyInfo.customPrompt || '',
-      knowledgeBase: companyInfo.knowledgeBase || '',
-    },
-    configs: configs.map(c => ({
-      id: c.id, name: c.name, boardId: c.boardId || undefined,
-      authType: c.authType,
-      imapHost: c.imapHost, imapPort: c.imapPort, imapUser: c.imapUser,
-      smtpHost: c.smtpHost, smtpPort: c.smtpPort, smtpUser: c.smtpUser,
-      hasImapPassword: Boolean(c.imapPass), hasSmtpPassword: Boolean(c.smtpPass),
-      hasOAuthToken: Boolean(c.accessToken),
-      lastPolledAt: c.lastPolledAt?.toISOString() || null,
-      isActive: c.isActive,
-    })),
-    boards,
-  };
+
+  try {
+    const [tenant, configs, boards] = await Promise.all([
+      prisma.tenant.findUnique({ where: { id: tenantId }, select: { name: true, companyInfo: true } }),
+      prisma.emailConfig.findMany({ where: { tenantId }, orderBy: { createdAt: 'asc' } }),
+      prisma.board.findMany({ where: { tenantId }, select: { id: true, title: true } }),
+    ]);
+
+    let companyInfo: { name?: string; products?: string; logoUrl?: string; customPrompt?: string; knowledgeBase?: string } = {};
+    try {
+      if (tenant?.companyInfo) companyInfo = JSON.parse(tenant.companyInfo);
+    } catch {}
+
+    return {
+      company: {
+        name: tenant?.name || companyInfo.name || '',
+        products: companyInfo.products || '',
+        logoUrl: companyInfo.logoUrl || '',
+        customPrompt: companyInfo.customPrompt || '',
+        knowledgeBase: companyInfo.knowledgeBase || '',
+      },
+      configs: (configs || []).map((c) => ({
+        id: c.id,
+        name: c.name,
+        boardId: c.boardId || undefined,
+        authType: c.authType,
+        imapHost: c.imapHost,
+        imapPort: c.imapPort,
+        imapUser: c.imapUser,
+        smtpHost: c.smtpHost,
+        smtpPort: c.smtpPort,
+        smtpUser: c.smtpUser,
+        hasImapPassword: Boolean(c.imapPass),
+        hasSmtpPassword: Boolean(c.smtpPass),
+        hasOAuthToken: Boolean(c.accessToken),
+        lastPolledAt: c.lastPolledAt?.toISOString() || null,
+        isActive: c.isActive,
+      })),
+      boards: boards || [],
+    };
+  } catch (err: any) {
+    console.error('[SETTINGS GET EMAIL CONFIGS ERROR]', err);
+    return {
+      company: { name: 'Kanban CRM', products: '', logoUrl: '', customPrompt: '', knowledgeBase: '' },
+      configs: [],
+      boards: [],
+    };
+  }
 }
 
 // Keep backward compat

@@ -1,8 +1,14 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
+
+interface EmailAccountOption {
+  id: string;
+  name: string;
+  smtpUser: string;
+}
 
 export default function NewOutreachCampaignPage() {
   const router = useRouter();
@@ -14,9 +20,28 @@ export default function NewOutreachCampaignPage() {
   const [promptInstructions, setPromptInstructions] = useState(
     'Highlight our enterprise automation capabilities and offer a complimentary 10-minute architecture review.'
   );
+  const [testRecipientEmail, setTestRecipientEmail] = useState('');
   const [leadCount, setLeadCount] = useState(10);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+
+  // Available Mailbox accounts (from CRM & Outreach settings)
+  const [mailAccounts, setMailAccounts] = useState<EmailAccountOption[]>([]);
+  const [selectedAccountId, setSelectedAccountId] = useState<string>('');
+
+  useEffect(() => {
+    fetch('/api/email-configs')
+      .then((r) => r.json())
+      .then((data) => {
+        if (Array.isArray(data)) {
+          setMailAccounts(data);
+          if (data.length > 0) {
+            setSelectedAccountId(data[0].id);
+          }
+        }
+      })
+      .catch(() => {});
+  }, []);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -29,7 +54,7 @@ export default function NewOutreachCampaignPage() {
     setError('');
 
     try {
-      // 1. Create Campaign
+      // 1. Create Campaign with chosen sender mailbox
       const res = await fetch('/api/outreach/campaigns', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -40,6 +65,7 @@ export default function NewOutreachCampaignPage() {
           targetIndustry: targetIndustry.trim(),
           searchQuery: searchQuery.trim() || undefined,
           promptInstructions: promptInstructions.trim(),
+          accountId: selectedAccountId || undefined,
         }),
       });
 
@@ -67,6 +93,25 @@ export default function NewOutreachCampaignPage() {
         console.warn('Initial lead scraping warning on campaign creation');
       }
 
+      // 3. If Test Recipient Email is provided, add it as a primary verified lead
+      if (testRecipientEmail.trim()) {
+        try {
+          await fetch(`/api/outreach/campaigns/${campaign.id}/leads`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              fullName: 'Target Test Recipient',
+              email: testRecipientEmail.trim().toLowerCase(),
+              companyName: 'Test Target Org',
+              jobTitle: targetRole.trim() || 'Lead Decision Maker',
+              location: targetLocation.trim() || 'Indonesia',
+            }),
+          });
+        } catch (e) {
+          console.warn('Failed to seed test recipient lead:', e);
+        }
+      }
+
       // Navigate to campaign workspace
       router.push(`/dashboard/outreach/${campaign.id}`);
     } catch (err: any) {
@@ -87,7 +132,7 @@ export default function NewOutreachCampaignPage() {
           </Link>
           <h1 className="text-xl font-bold text-slate-900 tracking-tight">Create New Outreach Campaign</h1>
           <p className="text-xs text-slate-500 mt-0.5">
-            Configure your target market criteria and AI copywriting guidelines to source qualified leads.
+            Configure your target market criteria, sender email account, and AI copywriting guidelines.
           </p>
         </div>
       </div>
@@ -99,23 +144,45 @@ export default function NewOutreachCampaignPage() {
           </div>
         )}
 
-        {/* Campaign Basics */}
+        {/* Campaign Basics & Mailbox Selector */}
         <div className="space-y-4">
           <h2 className="text-sm font-bold text-slate-900 border-b border-slate-100 pb-2">
-            1. Campaign Details
+            1. Campaign Details & Outbound Sender Account
           </h2>
-          <div>
-            <label className="block text-xs font-semibold text-slate-700 mb-1">
-              Campaign Name <span className="text-red-500">*</span>
-            </label>
-            <input
-              type="text"
-              required
-              placeholder="e.g., Q4 US Tech Leadership Outreach"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              className="w-full px-3.5 py-2.5 border border-slate-300 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-primary-500"
-            />
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 mb-1">
+                Campaign Name <span className="text-red-500">*</span>
+              </label>
+              <input
+                type="text"
+                required
+                placeholder="e.g., Q4 US Tech Leadership Outreach"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                className="w-full px-3.5 py-2.5 border border-slate-300 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-primary-500"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 mb-1">
+                Sender Mailbox (Email Account for Dispatch)
+              </label>
+              <select
+                value={selectedAccountId}
+                onChange={(e) => setSelectedAccountId(e.target.value)}
+                className="w-full px-3.5 py-2.5 border border-slate-300 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-primary-500 bg-white"
+              >
+                {mailAccounts.length > 0 ? (
+                  mailAccounts.map((acc) => (
+                    <option key={acc.id} value={acc.id}>
+                      {acc.name} ({acc.smtpUser})
+                    </option>
+                  ))
+                ) : (
+                  <option value="">Default Connected Business Mailbox</option>
+                )}
+              </select>
+            </div>
           </div>
         </div>
 
@@ -178,6 +245,21 @@ export default function NewOutreachCampaignPage() {
               onChange={(e) => setSearchQuery(e.target.value)}
               className="w-full px-3.5 py-2.5 border border-slate-300 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-primary-500"
             />
+          </div>
+          <div className="p-3 bg-amber-50/70 border border-amber-200/80 rounded-xl space-y-1">
+            <label className="block text-xs font-bold text-amber-900">
+              Direct Target / Test Recipient Email (Optional)
+            </label>
+            <input
+              type="email"
+              placeholder="e.g., salmanajawe@gmail.com (to test real email delivery to your inbox)"
+              value={testRecipientEmail}
+              onChange={(e) => setTestRecipientEmail(e.target.value)}
+              className="w-full px-3.5 py-2 border border-amber-300 rounded-lg text-xs focus:outline-none focus:ring-2 focus:ring-amber-500 bg-white"
+            />
+            <p className="text-[11px] text-amber-700">
+              Jika diisi, email ini akan otomatis dibuatkan lead khusus dan AI draft agar Anda bisa langsung tes kirim email real ke inbox Anda.
+            </p>
           </div>
         </div>
 

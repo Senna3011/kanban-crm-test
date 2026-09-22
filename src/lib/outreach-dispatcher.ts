@@ -58,12 +58,76 @@ export async function dispatchColdEmail(params: DispatchLeadEmailParams): Promis
   }
 
   const account = lead.campaign.account;
-  const smtpHost = account?.smtpHost || process.env.SMTP_HOST || 'smtp.zoho.com';
-  const smtpPort = account?.smtpPort || Number(process.env.SMTP_PORT) || 465;
-  const smtpUser = account?.smtpUser || process.env.SMTP_USER || '';
-  const smtpPass = account?.smtpPass || process.env.SMTP_PASS || '';
-  const senderEmail = account?.senderEmail || smtpUser || 'outreach@jetdigitalpro.com';
-  const senderName = account?.senderName || 'Outreach Team';
+
+  // Daily rate limit enforcement
+  if (account) {
+    const isSameDay = new Date(account.lastResetDate).toDateString() === new Date().toDateString();
+    const currentSent = isSameDay ? account.sentToday : 0;
+
+    if (!isSameDay) {
+      await prisma.outreachAccountConfig.update({
+        where: { id: account.id },
+        data: { sentToday: 0, lastResetDate: new Date() },
+      });
+    }
+
+    if (currentSent >= account.dailyLimit) {
+      await prisma.outreachLead.update({
+        where: { id: lead.id },
+        data: {
+          status: 'FAILED',
+          errorMessage: `Daily mailbox sending limit reached (${account.dailyLimit}/day)`,
+        },
+      });
+      return { success: false, error: `Daily limit of ${account.dailyLimit} emails reached for this sender` };
+    }
+  }
+
+  // Check fallback to active Tenant EmailConfig if OutreachAccountConfig is not explicitly configured
+  let smtpHost = account?.smtpHost || process.env.SMTP_HOST;
+  let smtpPort = account?.smtpPort || (process.env.SMTP_PORT ? Number(process.env.SMTP_PORT) : undefined);
+  let smtpUser = account?.smtpUser || process.env.SMTP_USER;
+  let smtpPass = account?.smtpPass || process.env.SMTP_PASS;
+  let senderEmail = account?.senderEmail || smtpUser;
+  let senderName = account?.senderName || 'Outreach Team';
+
+  if (!smtpUser || !smtpPass) {
+    try {
+      const activeCrmConfig = await prisma.emailConfig.findFirst({
+        where: { tenantId: params.tenantId, isActive: true },
+      });
+      if (activeCrmConfig && activeCrmConfig.smtpUser && activeCrmConfig.smtpPass) {
+        const { decrypt } = await import('./encryption');
+        smtpHost = activeCrmConfig.smtpHost;
+        smtpPort = activeCrmConfig.smtpPort;
+        smtpUser = activeCrmConfig.smtpUser;
+        smtpPass = decrypt(activeCrmConfig.smtpPass);
+        senderEmail = activeCrmConfig.smtpUser;
+        senderName = activeCrmConfig.name || 'Outreach Team';
+      }
+    } catch (e) {
+      console.warn('[OUTREACH DISPATCH] Could not fallback to active CRM EmailConfig:', e);
+    }
+  }
+
+  // Set defaults if still empty
+  smtpHost = smtpHost || 'smtp.zoho.com';
+  smtpPort = smtpPort || 465;
+  smtpUser = smtpUser || '';
+  smtpPass = smtpPass || '';
+  senderEmail = senderEmail || smtpUser || 'outreach@jetdigitalpro.com';
+
+  // Compliant footer with unsubscribe option
+  const unsubscribeUrl = `${process.env.NEXTAUTH_URL || 'http://localhost:3099'}/api/outreach/unsubscribe?email=${encodeURIComponent(lead.email)}&t=${params.tenantId}`;
+  const emailBodyText = `${lead.aiDraftBody}\n\n---\nIf you prefer not to receive future messages, unsubscribe here: ${unsubscribeUrl}`;
+  const emailBodyHtml = `<div style="font-family: Arial, sans-serif; font-size: 14px; line-height: 1.6; color: #1e293b;">
+    ${lead.aiDraftBody.replace(/\n\n/g, '<br/><br/>').replace(/\n/g, '<br/>')}
+    <br/><br/>
+    <hr style="border: none; border-top: 1px solid #e2e8f0; margin: 20px 0;" />
+    <p style="font-size: 11px; color: #64748b; margin: 0;">
+      You received this message from ${senderName}. If you would like to stop receiving these emails, please <a href="${unsubscribeUrl}" style="color: #6366f1; text-decoration: underline;">unsubscribe here</a>.
+    </p>
+  </div>`;
 
   if (!smtpUser || !smtpPass) {
     // If SMTP credentials are not yet configured, simulate successful dispatch in sandbox mode
@@ -99,10 +163,14 @@ export async function dispatchColdEmail(params: DispatchLeadEmailParams): Promis
       from: `"${senderName}" <${senderEmail}>`,
       to: lead.email,
       subject: lead.aiDraftSubject,
-      text: lead.aiDraftBody,
-      html: `<div style="font-family: Arial, sans-serif; font-size: 14px; line-height: 1.6; color: #1e293b;">
-        ${lead.aiDraftBody.replace(/\n\n/g, '<br/><br/>').replace(/\n/g, '<br/>')}
-      </div>`,
+      text: emailBodyText,
+      html: emailBodyHtml,
+      headers: {
+        'List-Unsubscribe': `<${unsubscribeUrl}>, <mailto:${senderEmail}?subject=Unsubscribe%20${encodeURIComponent(lead.email)}>`,
+        'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click',
+        'X-Outreach-Campaign-Id': lead.campaignId,
+        'X-Outreach-Lead-Id': lead.id,
+      },
     });
 
     await prisma.outreachLead.update({

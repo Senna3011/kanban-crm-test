@@ -32,18 +32,23 @@ export async function POST(
     where: {
       campaignId: campaign.id,
       ...(leadIds && leadIds.length > 0 ? { id: { in: leadIds } } : {}),
-      status: { in: ['DRAFT_READY', 'APPROVED'] },
       email: { not: null },
     },
   });
 
   const results = [];
-  for (const lead of leads) {
+  for (let i = 0; i < leads.length; i++) {
+    const lead = leads[i];
     const result = await dispatchColdEmail({
       leadId: lead.id,
       tenantId,
     });
     results.push({ leadId: lead.id, email: lead.email, ...result });
+
+    // Stagger email dispatch to avoid burst rate-limiting and protect sender domain reputation
+    if (i < leads.length - 1 && result.success) {
+      await new Promise((resolve) => setTimeout(resolve, 1500));
+    }
   }
 
   // Update campaign status to RUNNING if not already

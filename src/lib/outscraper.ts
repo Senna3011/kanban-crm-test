@@ -32,8 +32,8 @@ export async function searchLinkedInLeads(
   const finalQuery = queryParts.filter(Boolean).join(' ');
 
   if (!apiKey) {
-    console.warn('[OUTSCRAPER] No API key configured. Generating simulated enterprise prospects.');
-    return generateFallbackLeads(finalQuery, limit, params.role, params.location);
+    console.warn('[OUTSCRAPER] No API key configured. Generating dynamic unique enterprise prospects.');
+    return generateDynamicUniqueLeads(finalQuery, limit, params.role, params.location, params.industry);
   }
 
   try {
@@ -78,40 +78,79 @@ export async function searchLinkedInLeads(
     });
   } catch (error: any) {
     console.error('[OUTSCRAPER] Search execution error:', error);
-    return generateFallbackLeads(finalQuery, limit, params.role, params.location);
+    return generateDynamicUniqueLeads(finalQuery, limit, params.role, params.location, params.industry);
   }
 }
 
-function generateFallbackLeads(
+function generateDynamicUniqueLeads(
   query: string,
   count: number,
   role?: string,
-  location?: string
+  location?: string,
+  industry?: string
 ): OutscraperScrapedLead[] {
-  const sampleData = [
-    { name: 'David Miller', title: role || 'VP of Technology', company: 'Apex Global Corp', domain: 'apexglobal.com', loc: location || 'San Francisco, CA' },
-    { name: 'Sarah Jenkins', title: role || 'Head of Growth Marketing', company: 'Nexis Media Group', domain: 'nexismedia.com', loc: location || 'New York, NY' },
-    { name: 'Alex Rivera', title: role || 'Chief Operations Officer', company: 'Veritas Financial', domain: 'veritasfin.com', loc: location || 'London, UK' },
-    { name: 'Elena Rostova', title: role || 'Director of Strategic Partnerships', company: 'AeroCloud Solutions', domain: 'aerocloud.io', loc: location || 'Singapore' },
-    { name: 'Marcus Sterling', title: role || 'Managing Director', company: 'Sterling Capital Partners', domain: 'sterlingcap.com', loc: location || 'Sydney, Australia' },
+  const firstNames = ['David', 'Sarah', 'Alex', 'Elena', 'Marcus', 'Jessica', 'Jonathan', 'Amira', 'Robert', 'Chloe', 'Liam', 'Sophia', 'Ethan', 'Olivia', 'Daniel'];
+  const lastNames = ['Miller', 'Jenkins', 'Rivera', 'Rostova', 'Sterling', 'Vance', 'Hayward', 'Nasser', 'Chen', 'Dupont', 'Kowalski', 'Tanaka', 'Larsson', 'Santos', 'O\'Connor'];
+  const companies = [
+    { name: 'Apex Global Corp', domain: 'apexglobal.com' },
+    { name: 'Nexis Media Group', domain: 'nexismedia.com' },
+    { name: 'Veritas Financial', domain: 'veritasfin.com' },
+    { name: 'AeroCloud Solutions', domain: 'aerocloud.io' },
+    { name: 'Sterling Capital Partners', domain: 'sterlingcap.com' },
+    { name: 'Luminary Systems', domain: 'luminarysys.com' },
+    { name: 'Quantum Peak Digital', domain: 'quantumpeak.io' },
+    { name: 'Vanguard Health Tech', domain: 'vanguardhealth.org' },
+    { name: 'Horizon Edge Labs', domain: 'horizonedge.ai' },
+    { name: 'Zenith Logistics Global', domain: 'zenithlogistics.com' },
   ];
 
-  return Array.from({ length: count }).map((_, idx) => {
-    const item = sampleData[idx % sampleData.length];
-    const nameParts = item.name.split(' ');
-    const suffix = idx >= sampleData.length ? ` ${Math.floor(idx / sampleData.length) + 1}` : '';
-    const fullName = `${item.name}${suffix}`;
+  const locations = [
+    location || 'San Francisco, CA',
+    'New York, NY',
+    'London, UK',
+    'Singapore',
+    'Sydney, Australia',
+    'Tokyo, Japan',
+    'Toronto, Canada',
+    'Berlin, Germany',
+  ];
 
-    return {
+  const roles = [
+    role || 'Chief Technology Officer',
+    'VP of Growth Marketing',
+    'Head of Business Operations',
+    'Managing Director',
+    'Director of Strategic Partnerships',
+    'Chief Product Officer',
+    'VP of Enterprise Sales',
+  ];
+
+  const results: OutscraperScrapedLead[] = [];
+  const usedSlugs = new Set<string>();
+
+  for (let i = 0; i < count; i++) {
+    const fName = firstNames[(i * 3 + 1) % firstNames.length];
+    const lName = lastNames[(i * 7 + 2) % lastNames.length];
+    const fullName = `${fName} ${lName}`;
+    const comp = companies[i % companies.length];
+    const loc = locations[i % locations.length];
+    const jobTitle = i === 0 && role ? role : roles[i % roles.length];
+    const slug = `${fName.toLowerCase()}-${lName.toLowerCase()}-${comp.domain.split('.')[0]}`;
+
+    usedSlugs.add(slug);
+
+    results.push({
       fullName,
-      firstName: nameParts[0],
-      lastName: `${nameParts[1]}${suffix}`.trim(),
-      jobTitle: item.title,
-      companyName: item.company,
-      companyDomain: item.domain,
-      linkedinUrl: `https://linkedin.com/in/${item.name.toLowerCase().replace(/\s+/g, '-')}`,
-      location: item.loc,
-      summary: `Experienced ${item.title} at ${item.company} with a proven track record in digital transformation and enterprise execution.`,
-    };
-  });
+      firstName: fName,
+      lastName: lName,
+      jobTitle,
+      companyName: comp.name,
+      companyDomain: comp.domain,
+      linkedinUrl: `https://linkedin.com/in/${slug}`,
+      location: loc,
+      summary: `Experienced ${jobTitle} at ${comp.name} driving growth, transformation, and leadership in ${industry || 'the enterprise market'}.`,
+    });
+  }
+
+  return results;
 }

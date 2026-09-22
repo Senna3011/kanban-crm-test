@@ -26,6 +26,7 @@ export default function OutreachDashboardPage() {
   const [campaigns, setCampaigns] = useState<CampaignItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [deletingId, setDeletingId] = useState<string | null>(null);
 
   useEffect(() => {
     fetchCampaigns();
@@ -43,6 +44,22 @@ export default function OutreachDashboardPage() {
       setError(err.message || 'Connection error');
     } finally {
       setLoading(false);
+    }
+  }
+
+  async function handleDeleteCampaign(id: string, name: string) {
+    if (!confirm(`Are you sure you want to delete campaign "${name}" and all its leads? This action cannot be undone.`)) {
+      return;
+    }
+    setDeletingId(id);
+    try {
+      const res = await fetch(`/api/outreach/campaigns/${id}`, { method: 'DELETE' });
+      if (!res.ok) throw new Error('Failed to delete campaign');
+      setCampaigns((prev) => prev.filter((c) => c.id !== id));
+    } catch (err: any) {
+      alert(`Delete error: ${err.message}`);
+    } finally {
+      setDeletingId(null);
     }
   }
 
@@ -140,11 +157,11 @@ export default function OutreachDashboardPage() {
                   <th className="px-4 py-3">Campaign Name</th>
                   <th className="px-4 py-3">Target Profile</th>
                   <th className="px-4 py-3">Sender Account</th>
-                  <th className="px-4 py-3 text-center">Leads Sourced</th>
-                  <th className="px-4 py-3 text-center">Verified Safe</th>
+                  <th className="px-4 py-3 text-center">Leads</th>
+                  <th className="px-4 py-3 text-center">Safe</th>
                   <th className="px-4 py-3 text-center">Dispatched</th>
                   <th className="px-4 py-3 text-center">Converted</th>
-                  <th className="px-4 py-3 text-right">Action</th>
+                  <th className="px-4 py-3 text-right">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
@@ -184,13 +201,21 @@ export default function OutreachDashboardPage() {
                     <td className="px-4 py-3.5 text-center font-semibold text-emerald-700">
                       {camp.metrics.converted}
                     </td>
-                    <td className="px-4 py-3.5 text-right">
+                    <td className="px-4 py-3.5 text-right space-x-2">
                       <Link
                         href={`/dashboard/outreach/${camp.id}`}
                         className="inline-flex items-center px-3 py-1 bg-slate-100 hover:bg-primary-50 hover:text-primary-700 text-slate-700 text-xs font-semibold rounded-lg transition-colors"
                       >
-                        Open Workspace →
+                        Open →
                       </Link>
+                      <button
+                        onClick={() => handleDeleteCampaign(camp.id, camp.name)}
+                        disabled={deletingId === camp.id}
+                        className="inline-flex items-center px-2.5 py-1 text-red-600 hover:bg-red-50 text-xs font-semibold rounded-lg transition-colors disabled:opacity-50"
+                        title="Delete Campaign"
+                      >
+                        {deletingId === camp.id ? 'Deleting...' : '🗑️'}
+                      </button>
                     </td>
                   </tr>
                 ))}

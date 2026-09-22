@@ -11,48 +11,53 @@ export async function GET(req: NextRequest) {
 
   const tenantId = (session.user as any).tenantId;
 
-  const campaigns = await prisma.outreachCampaign.findMany({
-    where: { tenantId },
-    orderBy: { createdAt: 'desc' },
-    include: {
-      account: {
-        select: { id: true, name: true, senderEmail: true },
+  try {
+    const campaigns = await prisma.outreachCampaign.findMany({
+      where: { tenantId },
+      orderBy: { createdAt: 'desc' },
+      include: {
+        account: {
+          select: { id: true, name: true, senderEmail: true },
+        },
+        _count: {
+          select: { leads: true },
+        },
+        leads: {
+          select: { status: true, verifyStatus: true },
+        },
       },
-      _count: {
-        select: { leads: true },
-      },
-      leads: {
-        select: { status: true, verifyStatus: true },
-      },
-    },
-  });
+    });
 
-  const formatted = campaigns.map((c) => {
-    const totalLeads = c._count.leads;
-    const verifiedSafe = c.leads.filter((l) => l.verifyStatus === 'SAFE').length;
-    const dispatched = c.leads.filter((l) => l.status === 'DISPATCHED' || l.status === 'CONVERTED' || l.status === 'REPLIED').length;
-    const converted = c.leads.filter((l) => l.status === 'CONVERTED').length;
+    const formatted = campaigns.map((c) => {
+      const totalLeads = c._count.leads;
+      const verifiedSafe = c.leads.filter((l) => l.verifyStatus === 'SAFE').length;
+      const dispatched = c.leads.filter((l) => l.status === 'DISPATCHED' || l.status === 'CONVERTED' || l.status === 'REPLIED').length;
+      const converted = c.leads.filter((l) => l.status === 'CONVERTED').length;
 
-    return {
-      id: c.id,
-      name: c.name,
-      targetRole: c.targetRole,
-      targetLocation: c.targetLocation,
-      targetIndustry: c.targetIndustry,
-      searchQuery: c.searchQuery,
-      status: c.status,
-      createdAt: c.createdAt,
-      account: c.account,
-      metrics: {
-        totalLeads,
-        verifiedSafe,
-        dispatched,
-        converted,
-      },
-    };
-  });
+      return {
+        id: c.id,
+        name: c.name,
+        targetRole: c.targetRole,
+        targetLocation: c.targetLocation,
+        targetIndustry: c.targetIndustry,
+        searchQuery: c.searchQuery,
+        status: c.status,
+        createdAt: c.createdAt,
+        account: c.account,
+        metrics: {
+          totalLeads,
+          verifiedSafe,
+          dispatched,
+          converted,
+        },
+      };
+    });
 
-  return NextResponse.json(formatted);
+    return NextResponse.json(formatted);
+  } catch (error: any) {
+    console.error('[API OUTREACH GET CAMPAIGNS ERROR]', error);
+    return NextResponse.json({ error: error.message || 'Failed to fetch campaigns' }, { status: 500 });
+  }
 }
 
 export async function POST(req: NextRequest) {

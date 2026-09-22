@@ -35,6 +35,7 @@ interface CampaignDetail {
   account?: {
     senderEmail: string;
     senderName: string;
+    smtpUser?: string;
   };
   leads: Lead[];
 }
@@ -52,11 +53,36 @@ export default function CampaignWorkspacePage({
   const [error, setError] = useState('');
   const [actionLoading, setActionLoading] = useState('');
   const [actionMessage, setActionMessage] = useState('');
+  const [actionError, setActionError] = useState('');
+  const [rowLoading, setRowLoading] = useState<Record<string, boolean>>({});
+
+  // Pagination & Filtering
+  const [currentPage, setCurrentPage] = useState(1);
+  const pageSize = 15;
+  const [filterStatus, setFilterStatus] = useState('ALL');
 
   // Selected Lead for Draft Review Modal
   const [selectedLead, setSelectedLead] = useState<Lead | null>(null);
   const [editSubject, setEditSubject] = useState('');
   const [editBody, setEditBody] = useState('');
+  const [editEmail, setEditEmail] = useState('');
+  const [savingDraft, setSavingDraft] = useState(false);
+  const [sendingSingleTest, setSendingSingleTest] = useState(false);
+
+  // Manual Custom Lead Modal State
+  const [isAddLeadOpen, setIsAddLeadOpen] = useState(false);
+  const [customName, setCustomName] = useState('Salman Test Recipient');
+  const [customEmail, setCustomEmail] = useState('salmanajawe@gmail.com');
+  const [customCompany, setCustomCompany] = useState('My Enterprise');
+  const [customRole, setCustomRole] = useState('Director');
+  const [addingCustomLead, setAddingCustomLead] = useState(false);
+
+  // Direct Test Email Modal State
+  const [isTestSendOpen, setIsTestSendOpen] = useState(false);
+  const [testTargetEmail, setTestTargetEmail] = useState('salmanajawe@gmail.com');
+  const [testSubject, setTestSubject] = useState('');
+  const [testContent, setTestContent] = useState('');
+  const [sendingTestDirect, setSendingTestDirect] = useState(false);
 
   useEffect(() => {
     fetchCampaign();
@@ -67,8 +93,8 @@ export default function CampaignWorkspacePage({
     setError('');
     try {
       const res = await fetch(`/api/outreach/campaigns/${campaignId}`);
-      if (!res.ok) throw new Error('Failed to load campaign');
       const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to load campaign');
       setCampaign(data);
     } catch (err: any) {
       setError(err.message || 'Connection error');
@@ -81,6 +107,7 @@ export default function CampaignWorkspacePage({
   async function handleSourceLeads() {
     setActionLoading('scrape');
     setActionMessage('');
+    setActionError('');
     try {
       const res = await fetch(`/api/outreach/campaigns/${campaignId}/scrape`, {
         method: 'POST',
@@ -89,75 +116,107 @@ export default function CampaignWorkspacePage({
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Failed to source leads');
-      setActionMessage(`Successfully sourced ${data.count} new leads via Outscraper.`);
+      setActionMessage(`Successfully sourced ${data.count} new leads.`);
       await fetchCampaign();
     } catch (err: any) {
-      setActionMessage(`Error: ${err.message}`);
+      setActionError(`Source error: ${err.message}`);
     } finally {
       setActionLoading('');
     }
   }
 
-  // 2. Verify Emails via Reoon
-  async function handleVerifyEmails() {
-    setActionLoading('verify');
+  // 2. Verify Emails via Reoon (Batch or Single)
+  async function handleVerifyEmails(leadId?: string) {
+    if (leadId) {
+      setRowLoading((prev) => ({ ...prev, [leadId]: true }));
+    } else {
+      setActionLoading('verify');
+    }
     setActionMessage('');
+    setActionError('');
     try {
       const res = await fetch(`/api/outreach/campaigns/${campaignId}/verify`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(leadId ? { leadIds: [leadId] } : {}),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Failed to verify emails');
-      setActionMessage(`Email verification complete: ${data.safeCount} safe mailboxes verified.`);
+      setActionMessage(leadId ? 'Lead mailbox deliverability verified.' : `Email verification complete: ${data.safeCount} safe mailboxes.`);
       await fetchCampaign();
     } catch (err: any) {
-      setActionMessage(`Error: ${err.message}`);
+      setActionError(`Verification error: ${err.message}`);
     } finally {
-      setActionLoading('');
+      if (leadId) {
+        setRowLoading((prev) => ({ ...prev, [leadId]: false }));
+      } else {
+        setActionLoading('');
+      }
     }
   }
 
-  // 3. Generate AI Cold Email Drafts
-  async function handleGenerateDrafts() {
-    setActionLoading('draft');
+  // 3. Generate AI Cold Email Drafts (Batch or Single)
+  async function handleGenerateDrafts(leadId?: string) {
+    if (leadId) {
+      setRowLoading((prev) => ({ ...prev, [leadId]: true }));
+    } else {
+      setActionLoading('draft');
+    }
     setActionMessage('');
+    setActionError('');
     try {
       const res = await fetch(`/api/outreach/campaigns/${campaignId}/draft`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(leadId ? { leadIds: [leadId] } : {}),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Failed to generate drafts');
-      setActionMessage(`AI Copywriting complete: ${data.draftsCreated} personalized drafts generated.`);
+      setActionMessage(leadId ? 'AI personalized draft regenerated.' : `AI Copywriting complete: ${data.draftsCreated} drafts generated.`);
       await fetchCampaign();
     } catch (err: any) {
-      setActionMessage(`Error: ${err.message}`);
+      setActionError(`Draft error: ${err.message}`);
     } finally {
-      setActionLoading('');
+      if (leadId) {
+        setRowLoading((prev) => ({ ...prev, [leadId]: false }));
+      } else {
+        setActionLoading('');
+      }
     }
   }
 
-  // 4. Batch Dispatch Emails
-  async function handleDispatchEmails() {
-    if (!confirm('Are you ready to dispatch personalized cold emails to all verified leads with ready drafts?')) {
-      return;
+  // 4. Batch or Single Dispatch Emails
+  async function handleDispatchEmails(leadId?: string) {
+    const confirmMsg = leadId
+      ? 'Send email to this prospect now?'
+      : 'Are you ready to dispatch personalized cold emails to all leads with ready drafts?';
+    if (!confirm(confirmMsg)) return;
+
+    if (leadId) {
+      setRowLoading((prev) => ({ ...prev, [leadId]: true }));
+    } else {
+      setActionLoading('dispatch');
     }
-    setActionLoading('dispatch');
     setActionMessage('');
+    setActionError('');
     try {
       const res = await fetch(`/api/outreach/campaigns/${campaignId}/dispatch`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(leadId ? { leadIds: [leadId] } : {}),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Failed to dispatch emails');
-      setActionMessage(`Batch dispatch executed: ${data.dispatchedCount} emails sent successfully.`);
+      setActionMessage(leadId ? 'Email dispatched successfully.' : `Batch dispatch executed: ${data.dispatchedCount} emails sent successfully.`);
       await fetchCampaign();
     } catch (err: any) {
-      setActionMessage(`Error: ${err.message}`);
+      setActionError(`Dispatch error: ${err.message}`);
     } finally {
-      setActionLoading('');
+      if (leadId) {
+        setRowLoading((prev) => ({ ...prev, [leadId]: false }));
+      } else {
+        setActionLoading('');
+      }
     }
   }
 
@@ -176,19 +235,177 @@ export default function CampaignWorkspacePage({
     }
   }
 
+  // 6. Export Campaign Leads to CSV
+  function handleExportCsv() {
+    if (!campaign?.leads || campaign.leads.length === 0) return;
+    const headers = ['Full Name', 'Job Title', 'Company', 'Email', 'Deliverability', 'Status', 'Draft Subject', 'LinkedIn URL'];
+    const rows = campaign.leads.map((l) => [
+      `"${l.fullName.replace(/"/g, '""')}"`,
+      `"${(l.jobTitle || '').replace(/"/g, '""')}"`,
+      `"${(l.companyName || '').replace(/"/g, '""')}"`,
+      `"${(l.email || '').replace(/"/g, '""')}"`,
+      `"${l.verifyStatus || 'UNVERIFIED'}"`,
+      `"${l.status}"`,
+      `"${(l.aiDraftSubject || '').replace(/"/g, '""')}"`,
+      `"${(l.linkedinUrl || '').replace(/"/g, '""')}"`,
+    ]);
+    const csvContent = 'data:text/csv;charset=utf-8,' + [headers.join(','), ...rows.map((r) => r.join(','))].join('\n');
+    const encodedUri = encodeURI(csvContent);
+    const link = document.createElement('a');
+    link.setAttribute('href', encodedUri);
+    link.setAttribute('download', `${campaign.name.toLowerCase().replace(/[^a-z0-9]/g, '_')}_leads.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  }
+
+  // 7. Add Custom / Test Lead
+  async function handleAddCustomLead(e: React.FormEvent) {
+    e.preventDefault();
+    if (!customName.trim() || !customEmail.trim()) {
+      alert('Name and Email are required.');
+      return;
+    }
+    setAddingCustomLead(true);
+    try {
+      const res = await fetch(`/api/outreach/campaigns/${campaignId}/leads`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          fullName: customName.trim(),
+          email: customEmail.trim().toLowerCase(),
+          companyName: customCompany.trim() || 'Custom Org',
+          jobTitle: customRole.trim() || 'Director',
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to add lead');
+      setIsAddLeadOpen(false);
+      setActionMessage(`Custom test lead "${customName}" (${customEmail}) added with AI draft!`);
+      await fetchCampaign();
+    } catch (err: any) {
+      alert(`Add Lead error: ${err.message}`);
+    } finally {
+      setAddingCustomLead(false);
+    }
+  }
+
+  // 8. Direct Live Test Send
+  async function handleSendDirectTest(e?: React.FormEvent) {
+    if (e) e.preventDefault();
+    if (!testTargetEmail.trim()) {
+      alert('Target recipient email is required.');
+      return;
+    }
+    setSendingTestDirect(true);
+    setActionMessage('');
+    setActionError('');
+    try {
+      const res = await fetch(`/api/outreach/campaigns/${campaignId}/test-send`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          targetEmail: testTargetEmail.trim(),
+          subject: testSubject.trim() || undefined,
+          content: testContent.trim() || undefined,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Test send failed');
+      setIsTestSendOpen(false);
+      setActionMessage(`✅ Test email successfully dispatched directly to ${data.recipient}! Check your inbox/spam folder.`);
+    } catch (err: any) {
+      setActionError(`Test Send failed: ${err.message}`);
+    } finally {
+      setSendingTestDirect(false);
+    }
+  }
+
   function openDraftModal(lead: Lead) {
     setSelectedLead(lead);
     setEditSubject(lead.aiDraftSubject || '');
     setEditBody(lead.aiDraftBody || '');
+    setEditEmail(lead.email || '');
   }
 
   async function saveEditedDraft() {
     if (!selectedLead) return;
+    setSavingDraft(true);
     try {
-      // Update local state and trigger refresh
+      const res = await fetch(`/api/outreach/leads/${selectedLead.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          aiDraftSubject: editSubject.trim(),
+          aiDraftBody: editBody.trim(),
+          email: editEmail.trim() || undefined,
+        }),
+      });
+      if (!res.ok) throw new Error('Failed to save draft changes');
+
+      // Update local state
+      setCampaign((prev) => {
+        if (!prev) return null;
+        return {
+          ...prev,
+          leads: prev.leads.map((l) =>
+            l.id === selectedLead.id
+              ? {
+                  ...l,
+                  aiDraftSubject: editSubject.trim(),
+                  aiDraftBody: editBody.trim(),
+                  email: editEmail.trim() || l.email,
+                }
+              : l
+          ),
+        };
+      });
       setSelectedLead(null);
-      setActionMessage('Draft updated successfully.');
-    } catch {}
+      setActionMessage('Draft details updated successfully.');
+    } catch (err: any) {
+      alert(`Save draft error: ${err.message}`);
+    } finally {
+      setSavingDraft(false);
+    }
+  }
+
+  async function handleSendSingleLeadNow() {
+    if (!selectedLead) return;
+    setSendingSingleTest(true);
+    try {
+      // First save draft updates if any
+      await fetch(`/api/outreach/leads/${selectedLead.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          aiDraftSubject: editSubject.trim(),
+          aiDraftBody: editBody.trim(),
+          email: editEmail.trim() || undefined,
+        }),
+      });
+
+      // Dispatch directly to this lead's updated email
+      const res = await fetch(`/api/outreach/campaigns/${campaignId}/test-send`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          targetEmail: editEmail.trim() || selectedLead.email,
+          subject: editSubject.trim(),
+          content: editBody.trim(),
+          leadId: selectedLead.id,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to dispatch email');
+
+      setSelectedLead(null);
+      setActionMessage(`✅ Email dispatched successfully to ${data.recipient}!`);
+      await fetchCampaign();
+    } catch (err: any) {
+      alert(`Dispatch Error: ${err.message}`);
+    } finally {
+      setSendingSingleTest(false);
+    }
   }
 
   if (loading) {
@@ -203,18 +420,37 @@ export default function CampaignWorkspacePage({
     return (
       <div className="p-8 text-center space-y-3 max-w-7xl mx-auto">
         <p className="text-sm font-semibold text-slate-800">Campaign Not Found</p>
-        <Link href="/dashboard/outreach" className="text-xs font-semibold text-primary-600 hover:underline">
-          ← Return to Outreach List
-        </Link>
+        {error && <p className="text-xs text-red-500 max-w-md mx-auto">{error}</p>}
+        <div className="pt-2 flex items-center justify-center gap-3">
+          <button
+            onClick={() => fetchCampaign()}
+            className="px-3.5 py-1.5 bg-primary-600 hover:bg-primary-700 text-white text-xs font-semibold rounded-xl"
+          >
+            Retry Loading
+          </button>
+          <Link href="/dashboard/outreach" className="px-3.5 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold rounded-xl">
+            ← Return to Outreach List
+          </Link>
+        </div>
       </div>
     );
   }
 
-  const leads = campaign.leads || [];
-  const safeLeads = leads.filter((l) => l.verifyStatus === 'SAFE').length;
-  const readyDrafts = leads.filter((l) => l.status === 'DRAFT_READY' || l.status === 'APPROVED').length;
-  const dispatchedLeads = leads.filter((l) => l.status === 'DISPATCHED' || l.status === 'CONVERTED').length;
-  const convertedLeads = leads.filter((l) => l.status === 'CONVERTED').length;
+  const allLeads = campaign.leads || [];
+  const safeLeads = allLeads.filter((l) => l.verifyStatus === 'SAFE').length;
+  const readyDrafts = allLeads.filter((l) => l.status === 'DRAFT_READY' || l.status === 'APPROVED').length;
+  const dispatchedLeads = allLeads.filter((l) => l.status === 'DISPATCHED' || l.status === 'CONVERTED').length;
+  const convertedLeads = allLeads.filter((l) => l.status === 'CONVERTED').length;
+
+  const filteredLeads = allLeads.filter((l) => {
+    if (filterStatus === 'SAFE') return l.verifyStatus === 'SAFE';
+    if (filterStatus === 'DRAFT_READY') return l.status === 'DRAFT_READY' || l.status === 'APPROVED';
+    if (filterStatus === 'DISPATCHED') return l.status === 'DISPATCHED' || l.status === 'CONVERTED';
+    return true;
+  });
+
+  const totalPages = Math.ceil(filteredLeads.length / pageSize) || 1;
+  const paginatedLeads = filteredLeads.slice((currentPage - 1) * pageSize, currentPage * pageSize);
 
   return (
     <div className="p-4 sm:p-6 lg:p-8 space-y-6 max-w-7xl mx-auto">
@@ -237,22 +473,46 @@ export default function CampaignWorkspacePage({
             <p className="text-xs text-slate-500 mt-1">
               Target: <span className="font-semibold text-slate-700">{campaign.targetRole || 'Executives'}</span> in{' '}
               <span className="font-semibold text-slate-700">{campaign.targetLocation || 'Global'}</span> • Sender:{' '}
-              <span className="font-semibold text-slate-700">{campaign.account?.senderEmail || 'Default Mailer'}</span>
+              <span className="font-semibold text-slate-700">{campaign.account?.senderEmail || 'Admin Connected SMTP'}</span>
             </p>
           </div>
 
           {/* Action Toolbar */}
           <div className="flex flex-wrap items-center gap-2">
             <button
+              onClick={() => setIsTestSendOpen(true)}
+              className="px-3 py-2 bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-300 text-xs font-bold rounded-xl transition-colors flex items-center gap-1.5 shadow-2xs"
+              title="Kirim email percobaan langsung ke inbox pribadi Anda (misal salmanajawe@gmail.com)"
+            >
+              <span>⚡</span>
+              <span>Test Send to My Email</span>
+            </button>
+            <button
+              onClick={() => setIsAddLeadOpen(true)}
+              className="px-3 py-2 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-300 text-xs font-bold rounded-xl transition-colors flex items-center gap-1.5 shadow-2xs"
+              title="Tambahkan email target khusus/pribadi sebagai lead kampanye"
+            >
+              <span>➕</span>
+              <span>Add Custom Lead</span>
+            </button>
+            <button
+              onClick={handleExportCsv}
+              className="px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold rounded-xl transition-colors flex items-center gap-1.5"
+              title="Export leads to CSV"
+            >
+              <span>📊</span>
+              <span>Export CSV</span>
+            </button>
+            <button
               onClick={handleSourceLeads}
               disabled={Boolean(actionLoading)}
               className="px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-800 text-xs font-semibold rounded-xl transition-colors disabled:opacity-50 flex items-center gap-1.5"
             >
               <span>{actionLoading === 'scrape' ? '⏳' : '🔍'}</span>
-              <span>Source More Leads</span>
+              <span>Source More</span>
             </button>
             <button
-              onClick={handleVerifyEmails}
+              onClick={() => handleVerifyEmails()}
               disabled={Boolean(actionLoading)}
               className="px-3 py-2 bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200/60 text-xs font-semibold rounded-xl transition-colors disabled:opacity-50 flex items-center gap-1.5"
             >
@@ -260,7 +520,7 @@ export default function CampaignWorkspacePage({
               <span>Verify Mailboxes</span>
             </button>
             <button
-              onClick={handleGenerateDrafts}
+              onClick={() => handleGenerateDrafts()}
               disabled={Boolean(actionLoading)}
               className="px-3 py-2 bg-purple-50 hover:bg-purple-100 text-purple-700 border border-purple-200/60 text-xs font-semibold rounded-xl transition-colors disabled:opacity-50 flex items-center gap-1.5"
             >
@@ -268,7 +528,7 @@ export default function CampaignWorkspacePage({
               <span>Generate AI Drafts</span>
             </button>
             <button
-              onClick={handleDispatchEmails}
+              onClick={() => handleDispatchEmails()}
               disabled={Boolean(actionLoading) || readyDrafts === 0}
               className="px-4 py-2 bg-primary-600 hover:bg-primary-700 text-white text-xs font-semibold rounded-xl shadow-xs transition-colors disabled:opacity-50 flex items-center gap-1.5"
             >
@@ -278,11 +538,19 @@ export default function CampaignWorkspacePage({
           </div>
         </div>
 
-        {/* Action Status Banner */}
+        {/* Action Status Banners */}
         {actionMessage && (
-          <div className="p-3 bg-emerald-50 border border-emerald-200 text-xs font-medium text-emerald-800 rounded-xl flex items-center justify-between">
+          <div className="p-3.5 bg-emerald-50 border border-emerald-200 text-xs font-medium text-emerald-900 rounded-xl flex items-center justify-between">
             <span>{actionMessage}</span>
-            <button onClick={() => setActionMessage('')} className="text-emerald-600 hover:text-emerald-900 font-bold">
+            <button onClick={() => setActionMessage('')} className="text-emerald-700 hover:text-emerald-950 font-bold ml-2">
+              ✕
+            </button>
+          </div>
+        )}
+        {actionError && (
+          <div className="p-3.5 bg-red-50 border border-red-200 text-xs font-medium text-red-900 rounded-xl flex items-center justify-between">
+            <span>{actionError}</span>
+            <button onClick={() => setActionError('')} className="text-red-700 hover:text-red-950 font-bold ml-2">
               ✕
             </button>
           </div>
@@ -291,22 +559,34 @@ export default function CampaignWorkspacePage({
 
       {/* Progress Funnel Tiles */}
       <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
-        <div className="bg-white p-4 rounded-xl border border-slate-200/80 shadow-xs">
-          <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">1. Sourced</p>
-          <p className="text-xl font-bold text-slate-900 mt-1">{leads.length}</p>
-        </div>
-        <div className="bg-white p-4 rounded-xl border border-slate-200/80 shadow-xs">
-          <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">2. Safe Mailboxes</p>
-          <p className="text-xl font-bold text-blue-600 mt-1">{safeLeads}</p>
-        </div>
-        <div className="bg-white p-4 rounded-xl border border-slate-200/80 shadow-xs">
-          <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">3. AI Drafts Ready</p>
-          <p className="text-xl font-bold text-purple-600 mt-1">{readyDrafts}</p>
-        </div>
-        <div className="bg-white p-4 rounded-xl border border-slate-200/80 shadow-xs">
-          <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">4. Dispatched</p>
-          <p className="text-xl font-bold text-indigo-600 mt-1">{dispatchedLeads}</p>
-        </div>
+        <button
+          onClick={() => { setFilterStatus('ALL'); setCurrentPage(1); }}
+          className={`p-4 rounded-xl border text-left transition-all ${filterStatus === 'ALL' ? 'bg-slate-900 text-white border-slate-900' : 'bg-white border-slate-200/80'}`}
+        >
+          <p className={`text-[10px] font-bold uppercase tracking-wider ${filterStatus === 'ALL' ? 'text-slate-300' : 'text-slate-400'}`}>1. Sourced</p>
+          <p className="text-xl font-bold mt-1">{allLeads.length}</p>
+        </button>
+        <button
+          onClick={() => { setFilterStatus('SAFE'); setCurrentPage(1); }}
+          className={`p-4 rounded-xl border text-left transition-all ${filterStatus === 'SAFE' ? 'bg-blue-600 text-white border-blue-600' : 'bg-white border-slate-200/80'}`}
+        >
+          <p className={`text-[10px] font-bold uppercase tracking-wider ${filterStatus === 'SAFE' ? 'text-blue-100' : 'text-slate-400'}`}>2. Safe Mailboxes</p>
+          <p className={`text-xl font-bold mt-1 ${filterStatus === 'SAFE' ? 'text-white' : 'text-blue-600'}`}>{safeLeads}</p>
+        </button>
+        <button
+          onClick={() => { setFilterStatus('DRAFT_READY'); setCurrentPage(1); }}
+          className={`p-4 rounded-xl border text-left transition-all ${filterStatus === 'DRAFT_READY' ? 'bg-purple-600 text-white border-purple-600' : 'bg-white border-slate-200/80'}`}
+        >
+          <p className={`text-[10px] font-bold uppercase tracking-wider ${filterStatus === 'DRAFT_READY' ? 'text-purple-100' : 'text-slate-400'}`}>3. AI Drafts Ready</p>
+          <p className={`text-xl font-bold mt-1 ${filterStatus === 'DRAFT_READY' ? 'text-white' : 'text-purple-600'}`}>{readyDrafts}</p>
+        </button>
+        <button
+          onClick={() => { setFilterStatus('DISPATCHED'); setCurrentPage(1); }}
+          className={`p-4 rounded-xl border text-left transition-all ${filterStatus === 'DISPATCHED' ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white border-slate-200/80'}`}
+        >
+          <p className={`text-[10px] font-bold uppercase tracking-wider ${filterStatus === 'DISPATCHED' ? 'text-indigo-100' : 'text-slate-400'}`}>4. Dispatched</p>
+          <p className={`text-xl font-bold mt-1 ${filterStatus === 'DISPATCHED' ? 'text-white' : 'text-indigo-600'}`}>{dispatchedLeads}</p>
+        </button>
         <div className="bg-white p-4 rounded-xl border border-slate-200/80 shadow-xs col-span-2 lg:col-span-1">
           <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">5. CRM Converted</p>
           <p className="text-xl font-bold text-emerald-600 mt-1">{convertedLeads}</p>
@@ -317,9 +597,9 @@ export default function CampaignWorkspacePage({
       <div className="bg-white rounded-2xl border border-slate-200/80 shadow-xs overflow-hidden">
         <div className="p-4 border-b border-slate-100 flex items-center justify-between">
           <div>
-            <h2 className="text-sm font-bold text-slate-900">Lead Staging & Verification Workspace</h2>
+            <h2 className="text-sm font-bold text-slate-900">Lead Staging & Deliverability Matrix</h2>
             <p className="text-[11px] text-slate-400 mt-0.5">
-              Review enriched contacts, verify mailbox deliverables, and preview personalized AI messages.
+              Showing {filteredLeads.length} leads (Filter: {filterStatus})
             </p>
           </div>
           <button
@@ -330,9 +610,9 @@ export default function CampaignWorkspacePage({
           </button>
         </div>
 
-        {leads.length === 0 ? (
+        {allLeads.length === 0 ? (
           <div className="p-12 text-center text-xs text-slate-400">
-            No leads sourced yet for this campaign. Click &quot;Source More Leads&quot; to begin.
+            No leads sourced yet for this campaign. Click &quot;Source More&quot; or &quot;Add Custom Lead&quot; to begin.
           </div>
         ) : (
           <div className="overflow-x-auto">
@@ -348,10 +628,11 @@ export default function CampaignWorkspacePage({
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
-                {leads.map((lead) => {
+                {paginatedLeads.map((lead) => {
                   const isSafe = lead.verifyStatus === 'SAFE';
                   const isRisky = lead.verifyStatus === 'RISKY';
                   const isInvalid = lead.verifyStatus === 'INVALID';
+                  const isRowBusy = rowLoading[lead.id];
 
                   return (
                     <tr key={lead.id} className="hover:bg-slate-50/60 transition-colors">
@@ -364,37 +645,50 @@ export default function CampaignWorkspacePage({
                               href={lead.linkedinUrl}
                               target="_blank"
                               rel="noreferrer"
-                              className="text-blue-600 hover:text-blue-800 text-[11px]"
+                              className="text-blue-500 hover:text-blue-700 text-[10px]"
                               title="Open LinkedIn Profile"
                             >
                               🔗
                             </a>
                           )}
                         </div>
-                        <p className="text-[11px] text-slate-500">
+                        <p className="text-[11px] text-slate-500 mt-0.5">
                           {lead.jobTitle} • <span className="font-medium text-slate-700">{lead.companyName}</span>
                         </p>
                       </td>
 
                       {/* Email */}
-                      <td className="px-4 py-3.5 font-mono text-[11px] text-slate-700">
-                        {lead.email || <span className="text-slate-400 italic">Not discovered</span>}
+                      <td className="px-4 py-3.5 font-mono text-[11px] text-slate-800">
+                        {lead.email ? (
+                          <div className="flex items-center gap-1.5">
+                            <span>{lead.email}</span>
+                            <button
+                              onClick={() => openDraftModal(lead)}
+                              className="text-slate-400 hover:text-primary-600 text-[10px]"
+                              title="Edit Email Address"
+                            >
+                              ✏️
+                            </button>
+                          </div>
+                        ) : (
+                          <span className="text-slate-400 italic">Not found yet</span>
+                        )}
                       </td>
 
-                      {/* Deliverability Badge */}
+                      {/* Deliverability */}
                       <td className="px-4 py-3.5 text-center">
                         {isSafe && (
-                          <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
-                            🟢 Safe ({lead.verifyScore}%)
+                          <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800">
+                            🟢 Safe ({lead.verifyScore || 95}%)
                           </span>
                         )}
                         {isRisky && (
-                          <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-50 text-amber-700 border border-amber-200">
-                            🟡 Risky ({lead.verifyScore}%)
+                          <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-800">
+                            🟡 Risky
                           </span>
                         )}
                         {isInvalid && (
-                          <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-red-50 text-red-700 border border-red-200">
+                          <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-red-100 text-red-800">
                             🔴 Invalid
                           </span>
                         )}
@@ -438,12 +732,30 @@ export default function CampaignWorkspacePage({
 
                       {/* Actions */}
                       <td className="px-4 py-3.5 text-right space-x-1.5 whitespace-nowrap">
+                        <button
+                          onClick={() => handleGenerateDrafts(lead.id)}
+                          disabled={isRowBusy}
+                          className="px-2 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 text-[11px] font-semibold rounded-lg transition-colors"
+                          title="Generate/Re-generate AI draft for this lead"
+                        >
+                          {isRowBusy ? '⏳' : '🤖 Draft'}
+                        </button>
                         {lead.aiDraftSubject && (
                           <button
                             onClick={() => openDraftModal(lead)}
                             className="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 text-[11px] font-semibold rounded-lg transition-colors"
                           >
-                            Preview
+                            Review / Test
+                          </button>
+                        )}
+                        {lead.aiDraftSubject && lead.email && (
+                          <button
+                            onClick={() => handleDispatchEmails(lead.id)}
+                            disabled={isRowBusy}
+                            className="px-2.5 py-1 bg-primary-50 hover:bg-primary-100 text-primary-700 border border-primary-200 text-[11px] font-bold rounded-lg transition-colors"
+                            title="Send email to this prospect now"
+                          >
+                            ✉️ Send
                           </button>
                         )}
                         {lead.status === 'CONVERTED' ? (
@@ -467,7 +779,188 @@ export default function CampaignWorkspacePage({
             </table>
           </div>
         )}
+
+        {/* Pagination Footer */}
+        {totalPages > 1 && (
+          <div className="p-4 border-t border-slate-100 flex items-center justify-between text-xs text-slate-500">
+            <span>
+              Page {currentPage} of {totalPages}
+            </span>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setCurrentPage((p) => Math.max(p - 1, 1))}
+                disabled={currentPage === 1}
+                className="px-3 py-1 bg-slate-100 hover:bg-slate-200 rounded-lg disabled:opacity-40 font-semibold"
+              >
+                Previous
+              </button>
+              <button
+                onClick={() => setCurrentPage((p) => Math.min(p + 1, totalPages))}
+                disabled={currentPage === totalPages}
+                className="px-3 py-1 bg-slate-100 hover:bg-slate-200 rounded-lg disabled:opacity-40 font-semibold"
+              >
+                Next
+              </button>
+            </div>
+          </div>
+        )}
       </div>
+
+      {/* Add Custom Lead Modal */}
+      {isAddLeadOpen && (
+        <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-xl border border-slate-200 space-y-4">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <div>
+                <h3 className="text-sm font-bold text-slate-900">Add Custom / Test Lead</h3>
+                <p className="text-xs text-slate-500">Tambahkan target email spesifik untuk tes dispatch real.</p>
+              </div>
+              <button onClick={() => setIsAddLeadOpen(false)} className="text-slate-400 hover:text-slate-600">
+                ✕
+              </button>
+            </div>
+
+            <form onSubmit={handleAddCustomLead} className="space-y-3">
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">Target Recipient Email *</label>
+                <input
+                  type="email"
+                  required
+                  value={customEmail}
+                  onChange={(e) => setCustomEmail(e.target.value)}
+                  placeholder="e.g. salmanajawe@gmail.com"
+                  className="w-full px-3 py-2 border border-slate-300 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-primary-500 font-mono text-slate-800"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">Prospect Full Name *</label>
+                <input
+                  type="text"
+                  required
+                  value={customName}
+                  onChange={(e) => setCustomName(e.target.value)}
+                  placeholder="e.g. Salman Test"
+                  className="w-full px-3 py-2 border border-slate-300 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-primary-500 text-slate-800"
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">Company</label>
+                  <input
+                    type="text"
+                    value={customCompany}
+                    onChange={(e) => setCustomCompany(e.target.value)}
+                    placeholder="e.g. Acme Corp"
+                    className="w-full px-3 py-2 border border-slate-300 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-primary-500 text-slate-800"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">Job Title</label>
+                  <input
+                    type="text"
+                    value={customRole}
+                    onChange={(e) => setCustomRole(e.target.value)}
+                    placeholder="e.g. CTO / Founder"
+                    className="w-full px-3 py-2 border border-slate-300 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-primary-500 text-slate-800"
+                  />
+                </div>
+              </div>
+
+              <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => setIsAddLeadOpen(false)}
+                  className="px-3 py-2 text-xs text-slate-600 hover:bg-slate-100 rounded-lg"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={addingCustomLead}
+                  className="px-4 py-2 text-xs bg-emerald-600 text-white font-semibold rounded-lg hover:bg-emerald-700 disabled:opacity-50"
+                >
+                  {addingCustomLead ? 'Adding...' : 'Add Lead & Generate AI Draft'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Direct Test Email Modal */}
+      {isTestSendOpen && (
+        <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-2xl max-w-lg w-full p-6 shadow-xl border border-slate-200 space-y-4">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <div>
+                <h3 className="text-sm font-bold text-slate-900">⚡ Test Outreach Dispatch Directly</h3>
+                <p className="text-xs text-slate-500">Kirim email outreach live langsung ke inbox email pribadi Anda untuk uji coba SMTP.</p>
+              </div>
+              <button onClick={() => setIsTestSendOpen(false)} className="text-slate-400 hover:text-slate-600">
+                ✕
+              </button>
+            </div>
+
+            <form onSubmit={handleSendDirectTest} className="space-y-3">
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">Recipient Target Email *</label>
+                <input
+                  type="email"
+                  required
+                  value={testTargetEmail}
+                  onChange={(e) => setTestTargetEmail(e.target.value)}
+                  placeholder="salmanajawe@gmail.com"
+                  className="w-full px-3 py-2 border border-slate-300 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-primary-500 font-mono text-slate-800"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">Subject (Optional)</label>
+                <input
+                  type="text"
+                  value={testSubject}
+                  onChange={(e) => setTestSubject(e.target.value)}
+                  placeholder={`[Test Outreach] Partnership proposal from ${campaign.name}`}
+                  className="w-full px-3 py-2 border border-slate-300 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-primary-500 text-slate-800"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">Email Body Content (Optional)</label>
+                <textarea
+                  rows={5}
+                  value={testContent}
+                  onChange={(e) => setTestContent(e.target.value)}
+                  placeholder="Tulis pesan uji coba atau kosongkan untuk menggunakan template default AI."
+                  className="w-full px-3 py-2 border border-slate-300 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-primary-500 text-slate-800"
+                />
+              </div>
+
+              <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => setIsTestSendOpen(false)}
+                  className="px-3 py-2 text-xs text-slate-600 hover:bg-slate-100 rounded-lg"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={sendingTestDirect}
+                  className="px-4 py-2 text-xs bg-amber-600 text-white font-bold rounded-lg hover:bg-amber-700 disabled:opacity-50 flex items-center gap-1.5"
+                >
+                  {sendingTestDirect ? (
+                    <>
+                      <span className="animate-spin">🔄</span>
+                      <span>Dispatching via SMTP...</span>
+                    </>
+                  ) : (
+                    <span>Dispatch Test Email Now ✉️</span>
+                  )}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
 
       {/* Draft Review & Edit Modal */}
       {selectedLead && (
@@ -477,7 +970,7 @@ export default function CampaignWorkspacePage({
               <div>
                 <h3 className="text-sm font-bold text-slate-900">Personalized AI Cold Email</h3>
                 <p className="text-xs text-slate-500">
-                  Recipient: <span className="font-semibold text-slate-700">{selectedLead.fullName}</span> ({selectedLead.email})
+                  Recipient: <span className="font-semibold text-slate-700">{selectedLead.fullName}</span>
                 </p>
               </div>
               <button
@@ -489,6 +982,18 @@ export default function CampaignWorkspacePage({
             </div>
 
             <div className="space-y-3">
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">
+                  Recipient Target Email (Ganti ke email Anda jika ingin uji coba terima di inbox)
+                </label>
+                <input
+                  type="email"
+                  value={editEmail}
+                  onChange={(e) => setEditEmail(e.target.value)}
+                  placeholder="e.g. salmanajawe@gmail.com"
+                  className="w-full px-3 py-2 border border-slate-300 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-primary-500 font-mono text-slate-800"
+                />
+              </div>
               <div>
                 <label className="block text-xs font-semibold text-slate-700 mb-1">Subject Line</label>
                 <input
@@ -523,14 +1028,23 @@ export default function CampaignWorkspacePage({
                   onClick={() => setSelectedLead(null)}
                   className="px-3 py-1.5 text-xs text-slate-600 hover:bg-slate-100 rounded-lg"
                 >
-                  Close
+                  Cancel
                 </button>
                 <button
                   type="button"
+                  disabled={savingDraft}
                   onClick={saveEditedDraft}
-                  className="px-4 py-1.5 text-xs bg-primary-600 text-white font-semibold rounded-lg hover:bg-primary-700"
+                  className="px-3 py-1.5 text-xs bg-slate-200 text-slate-800 font-semibold rounded-lg hover:bg-slate-300 disabled:opacity-50"
                 >
-                  Save Draft
+                  {savingDraft ? 'Saving...' : 'Save Draft'}
+                </button>
+                <button
+                  type="button"
+                  disabled={sendingSingleTest || !editEmail}
+                  onClick={handleSendSingleLeadNow}
+                  className="px-4 py-1.5 text-xs bg-primary-600 text-white font-bold rounded-lg hover:bg-primary-700 disabled:opacity-50 flex items-center gap-1"
+                >
+                  {sendingSingleTest ? 'Sending...' : '✉️ Send Live to This Email'}
                 </button>
               </div>
             </div>

@@ -16,21 +16,26 @@ export async function GET(
   const campaignId = resolvedParams.id;
   const tenantId = (session.user as any).tenantId;
 
-  const campaign = await prisma.outreachCampaign.findFirst({
-    where: { id: campaignId, tenantId },
-    include: {
-      account: true,
-      leads: {
-        orderBy: { createdAt: 'desc' },
+  try {
+    const campaign = await prisma.outreachCampaign.findFirst({
+      where: { id: campaignId, tenantId },
+      include: {
+        account: true,
+        leads: {
+          orderBy: { createdAt: 'desc' },
+        },
       },
-    },
-  });
+    });
 
-  if (!campaign) {
-    return NextResponse.json({ error: 'Campaign not found' }, { status: 404 });
+    if (!campaign) {
+      return NextResponse.json({ error: 'Campaign not found' }, { status: 404 });
+    }
+
+    return NextResponse.json(campaign);
+  } catch (error: any) {
+    console.error('[API OUTREACH GET CAMPAIGN BY ID ERROR]', error);
+    return NextResponse.json({ error: error.message || 'Failed to fetch campaign' }, { status: 500 });
   }
-
-  return NextResponse.json(campaign);
 }
 
 export async function PATCH(
