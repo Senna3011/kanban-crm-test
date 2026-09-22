@@ -29,6 +29,7 @@ export const emailPollQueue = new Queue('email-poll', { connection });
 export const aiProcessQueue = new Queue('ai-process', { connection });
 export const autoAdvanceQueue = new Queue('auto-advance', { connection });
 export const notificationQueue = new Queue('notification', { connection });
+export const outreachDispatchQueue = new Queue('outreach-dispatch', { connection });
 
 // Queue names enum
 export const QueueNames = {
@@ -36,4 +37,5 @@ export const QueueNames = {
   AI_PROCESS: 'ai-process',
   AUTO_ADVANCE: 'auto-advance',
   NOTIFICATION: 'notification',
+  OUTREACH_DISPATCH: 'outreach-dispatch',
 } as const;

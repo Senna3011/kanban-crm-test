@@ -13,6 +13,7 @@ export interface GenerateColdEmailParams {
 export interface ColdEmailDraftResult {
   subject: string;
   body: string;
+  isAiGenerated: boolean;
 }
 
 export async function generatePersonalizedColdEmail(
@@ -25,6 +26,10 @@ export async function generatePersonalizedColdEmail(
     : '';
 
   try {
+    if (!apiKey) {
+      throw new Error('No AI API key configured');
+    }
+
     const response = await fetch(endpoint, {
       method: 'POST',
       headers: {
@@ -75,12 +80,14 @@ Craft an authentic, value-focused introductory cold email.`,
     return {
       subject: parsed.subject || `Quick question regarding ${params.companyName || 'growth initiatives'}`,
       body: parsed.body || generateFallbackBody(params),
+      isAiGenerated: true,
     };
   } catch (error) {
-    console.error('[OUTREACH AI] Generation error, applying high-conversion template:', error);
+    console.warn('[OUTREACH AI] Generation fallback applied:', error);
     return {
       subject: `Exploring strategic collaboration with ${params.companyName || 'your team'}`,
       body: generateFallbackBody(params),
+      isAiGenerated: false,
     };
   }
 }

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/server/auth';
 import prisma from '@/lib/prisma';
+import { outreachDispatchQueue } from '@/../queue';
 import { dispatchColdEmail } from '@/lib/outreach-dispatcher';
 
 export async function POST(
@@ -19,6 +20,7 @@ export async function POST(
 
   const campaign = await prisma.outreachCampaign.findFirst({
     where: { id: campaignId, tenantId },
+    include: { account: true },
   });
 
   if (!campaign) {
@@ -33,25 +35,52 @@ export async function POST(
       campaignId: campaign.id,
       ...(leadIds && leadIds.length > 0 ? { id: { in: leadIds } } : {}),
       email: { not: null },
+      status: { notIn: ['DISPATCHED', 'CONVERTED', 'REPLIED'] },
     },
   });
 
-  const results = [];
-  for (let i = 0; i < leads.length; i++) {
-    const lead = leads[i];
-    const result = await dispatchColdEmail({
-      leadId: lead.id,
-      tenantId,
+  if (leads.length === 0) {
+    return NextResponse.json({
+      success: true,
+      message: 'No pending leads ready for dispatch.',
+      queuedCount: 0,
+      dispatchedCount: 0,
     });
-    results.push({ leadId: lead.id, email: lead.email, ...result });
+  }
 
-    // Stagger email dispatch to avoid burst rate-limiting and protect sender domain reputation
-    if (i < leads.length - 1 && result.success) {
-      await new Promise((resolve) => setTimeout(resolve, 1500));
+  let enqueuedCount = 0;
+  let fallbackSyncCount = 0;
+
+  try {
+    // Enqueue jobs to BullMQ background queue with staggered delays
+    for (let i = 0; i < leads.length; i++) {
+      const lead = leads[i];
+      await outreachDispatchQueue.add(
+        'outreach_dispatch',
+        {
+          type: 'outreach_dispatch',
+          tenantId,
+          leadId: lead.id,
+        },
+        {
+          delay: i * 2000, // Stagger 2s per lead
+          attempts: 2,
+          backoff: { type: 'exponential', delay: 5000 },
+          removeOnComplete: true,
+        }
+      );
+      enqueuedCount++;
+    }
+  } catch (queueError) {
+    console.warn('[OUTREACH DISPATCH] Queue unavailable, falling back to direct dispatch:', queueError);
+    for (let i = 0; i < leads.length; i++) {
+      const lead = leads[i];
+      await dispatchColdEmail({ leadId: lead.id, tenantId });
+      fallbackSyncCount++;
     }
   }
 
-  // Update campaign status to RUNNING if not already
+  // Update campaign status to RUNNING
   await prisma.outreachCampaign.update({
     where: { id: campaign.id },
     data: { status: 'RUNNING' },
@@ -59,8 +88,10 @@ export async function POST(
 
   return NextResponse.json({
     success: true,
-    dispatchedCount: results.filter((r) => r.success).length,
-    failedCount: results.filter((r) => !r.success).length,
-    results,
+    message: enqueuedCount > 0
+      ? `Successfully queued ${enqueuedCount} emails to background dispatcher.`
+      : `Dispatched ${fallbackSyncCount} emails directly.`,
+    queuedCount: enqueuedCount || fallbackSyncCount,
+    dispatchedCount: fallbackSyncCount,
   });
 }

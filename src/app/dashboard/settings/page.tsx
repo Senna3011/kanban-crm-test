@@ -28,6 +28,25 @@ export default async function SettingsPage() {
 
       <AiStatusBanner />
 
+      {/* Outreach Engine Banner */}
+      <div className="p-4 bg-gradient-to-r from-primary-50 to-indigo-50 border border-primary-200/80 rounded-2xl flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 shadow-2xs">
+        <div>
+          <div className="flex items-center gap-1.5">
+            <span className="text-base">🚀</span>
+            <h3 className="text-sm font-bold text-slate-900">Outreach Sender Accounts & API Keys</h3>
+          </div>
+          <p className="text-xs text-slate-600 mt-0.5">
+            Manage dedicated outbound cold mailboxes, Apify LinkedIn scrapers, and Reoon deliverability API tokens.
+          </p>
+        </div>
+        <Link
+          href="/dashboard/outreach/settings"
+          className="px-4 py-2 bg-primary-600 hover:bg-primary-700 text-white text-xs font-semibold rounded-xl transition-colors whitespace-nowrap self-start sm:self-auto shadow-2xs"
+        >
+          Manage Outreach Accounts →
+        </Link>
+      </div>
+
       {/* Role Banner if Member */}
       {!isAdmin && (
         <div className="p-4 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-600 flex items-center justify-between">

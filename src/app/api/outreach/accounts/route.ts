@@ -25,9 +25,8 @@ export async function GET(req: NextRequest) {
       dailyLimit: true,
       sentToday: true,
       isActive: true,
-      outscraperApiKey: true,
-      reoonApiKey: true,
       createdAt: true,
+      updatedAt: true,
     },
   });
 
@@ -52,8 +51,6 @@ export async function POST(req: NextRequest) {
       smtpPort,
       smtpUser,
       smtpPass,
-      outscraperApiKey,
-      reoonApiKey,
       dailyLimit,
     } = body;
 
@@ -71,24 +68,20 @@ export async function POST(req: NextRequest) {
       update: {
         name: name?.trim() || 'Outreach Sender',
         senderName: senderName?.trim() || 'Outreach Team',
-        smtpHost: smtpHost || 'smtp.zoho.com',
+        smtpHost: smtpHost?.trim() || 'smtp.zoho.com',
         smtpPort: Number(smtpPort) || 465,
-        smtpUser: smtpUser || senderEmail,
+        smtpUser: smtpUser?.trim() || senderEmail.trim().toLowerCase(),
         ...(smtpPass ? { smtpPass } : {}),
-        ...(outscraperApiKey !== undefined ? { outscraperApiKey } : {}),
-        ...(reoonApiKey !== undefined ? { reoonApiKey } : {}),
         dailyLimit: Number(dailyLimit) || 50,
       },
       create: {
         name: name?.trim() || 'Outreach Sender',
         senderName: senderName?.trim() || 'Outreach Team',
         senderEmail: senderEmail.trim().toLowerCase(),
-        smtpHost: smtpHost || 'smtp.zoho.com',
+        smtpHost: smtpHost?.trim() || 'smtp.zoho.com',
         smtpPort: Number(smtpPort) || 465,
-        smtpUser: smtpUser || senderEmail,
+        smtpUser: smtpUser?.trim() || senderEmail.trim().toLowerCase(),
         smtpPass: smtpPass || null,
-        outscraperApiKey: outscraperApiKey || null,
-        reoonApiKey: reoonApiKey || null,
         dailyLimit: Number(dailyLimit) || 50,
         tenantId,
       },

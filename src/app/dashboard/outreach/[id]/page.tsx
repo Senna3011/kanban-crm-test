@@ -20,6 +20,7 @@ interface Lead {
   errorMessage?: string;
   sentAt?: string;
   convertedCardId?: string;
+  metadata?: Record<string, any> | null;
   createdAt: string;
 }
 
@@ -764,9 +765,24 @@ export default function CampaignWorkspacePage({
 
                       {/* Status */}
                       <td className="px-4 py-3.5 text-center">
-                        <span className="inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-semibold bg-slate-100 text-slate-700">
+                        <span
+                          className={`inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-semibold ${
+                            lead.status === 'FAILED'
+                              ? 'bg-red-100 text-red-800'
+                              : lead.status === 'DISPATCHED'
+                              ? 'bg-indigo-100 text-indigo-800'
+                              : lead.status === 'CONVERTED'
+                              ? 'bg-emerald-100 text-emerald-800'
+                              : 'bg-slate-100 text-slate-700'
+                          }`}
+                        >
                           {lead.status.replace('_', ' ')}
                         </span>
+                        {lead.status === 'FAILED' && lead.errorMessage && (
+                          <p className="text-[9px] text-red-600 mt-0.5 max-w-[140px] mx-auto truncate" title={lead.errorMessage}>
+                            ⚠️ {lead.errorMessage}
+                          </p>
+                        )}
                         {lead.sentAt && (
                           <p className="text-[9px] text-slate-400 mt-0.5">
                             Sent {new Date(lead.sentAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
@@ -781,9 +797,16 @@ export default function CampaignWorkspacePage({
                             onClick={() => openDraftModal(lead)}
                             className="text-left group hover:text-primary-600 block"
                           >
-                            <p className="font-semibold text-slate-800 group-hover:text-primary-600 truncate text-[11px]">
-                              {lead.aiDraftSubject}
-                            </p>
+                            <div className="flex items-center gap-1.5">
+                              <p className="font-semibold text-slate-800 group-hover:text-primary-600 truncate text-[11px]">
+                                {lead.aiDraftSubject}
+                              </p>
+                              {lead.metadata?.isAiGenerated === false && (
+                                <span className="px-1.5 py-0.2 text-[9px] bg-amber-100 text-amber-800 rounded font-semibold whitespace-nowrap" title="Generated from standard template (AI fallback)">
+                                  Template
+                                </span>
+                              )}
+                            </div>
                             <p className="text-[10px] text-slate-400 truncate mt-0.5">
                               {lead.aiDraftBody?.slice(0, 70)}...
                             </p>

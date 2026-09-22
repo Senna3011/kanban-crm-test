@@ -3,6 +3,7 @@ import { decrypt } from '../src/lib/encryption';
 import { getValidZohoAccessToken } from '../src/lib/zoho-oauth';
 import { EmailAdapter } from '../channels/email';
 import { aiProcessQueue } from '../queue';
+import { convertOutreachLeadToKanbanCard } from '../src/lib/outreach-dispatcher';
 
 const emailAdapter = new EmailAdapter();
 
@@ -123,6 +124,40 @@ async function pollFolder(imapConfig: Record<string, string>, folder: string, te
       if (configUser && senderEmail === configUser) {
         console.log(`[IMAP Poller] Skipping outbound email: ${msg.subject} (from ${msg.fromEmail})`);
         continue;
+      }
+
+      // Outreach Auto Reply Detection: Check if sender is an outreach lead waiting for response
+      if (senderEmail) {
+        try {
+          const outreachLead = await prisma.outreachLead.findFirst({
+            where: {
+              campaign: { tenantId },
+              email: { equals: senderEmail, mode: 'insensitive' },
+              status: { in: ['DISPATCHED', 'APPROVED'] },
+            },
+            include: { campaign: true },
+          });
+
+          if (outreachLead) {
+            console.log(`[IMAP Poller] Outreach reply matched: "${msg.fromEmail}" for campaign "${outreachLead.campaign.name}"`);
+            await prisma.outreachLead.update({
+              where: { id: outreachLead.id },
+              data: {
+                status: 'REPLIED',
+                repliedAt: new Date(),
+              },
+            });
+            const convertResult = await convertOutreachLeadToKanbanCard({
+              leadId: outreachLead.id,
+              tenantId,
+              replySubject: msg.subject,
+              replyBody: msg.bodyText,
+            });
+            console.log(`[IMAP Poller] Auto-converted outreach lead to Kanban card: ${convertResult.cardId}`);
+          }
+        } catch (outreachErr: any) {
+          console.warn('[IMAP Poller] Outreach reply detection check error:', outreachErr?.message);
+        }
       }
 
       // Skip reply emails — if this is a reply to an existing thread, don't create new card

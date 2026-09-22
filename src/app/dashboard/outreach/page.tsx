@@ -76,13 +76,22 @@ export default function OutreachDashboardPage() {
             Discover LinkedIn leads, verify business deliverability, generate AI personalized drafts, and dispatch campaigns.
           </p>
         </div>
-        <Link
-          href="/dashboard/outreach/new"
-          className="inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-primary-600 hover:bg-primary-700 text-white text-xs font-semibold rounded-xl shadow-xs transition-colors"
-        >
-          <span>+</span>
-          <span>Create New Campaign</span>
-        </Link>
+        <div className="flex items-center gap-2">
+          <Link
+            href="/dashboard/outreach/settings"
+            className="inline-flex items-center justify-center gap-1.5 px-3.5 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-800 text-xs font-semibold rounded-xl transition-colors border border-slate-200/80"
+          >
+            <span>⚙️</span>
+            <span>Sender Accounts</span>
+          </Link>
+          <Link
+            href="/dashboard/outreach/new"
+            className="inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-primary-600 hover:bg-primary-700 text-white text-xs font-semibold rounded-xl shadow-xs transition-colors"
+          >
+            <span>+</span>
+            <span>Create New Campaign</span>
+          </Link>
+        </div>
       </div>
 
       {/* Aggregate Stats */}

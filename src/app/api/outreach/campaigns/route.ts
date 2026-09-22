@@ -12,27 +12,56 @@ export async function GET(req: NextRequest) {
   const tenantId = (session.user as any).tenantId;
 
   try {
-    const campaigns = await prisma.outreachCampaign.findMany({
-      where: { tenantId },
-      orderBy: { createdAt: 'desc' },
-      include: {
-        account: {
-          select: { id: true, name: true, senderEmail: true },
+    const [campaigns, leadStatusGroups, safeStatusGroups] = await Promise.all([
+      prisma.outreachCampaign.findMany({
+        where: { tenantId },
+        orderBy: { createdAt: 'desc' },
+        include: {
+          account: {
+            select: { id: true, name: true, senderEmail: true },
+          },
+          _count: {
+            select: { leads: true },
+          },
         },
-        _count: {
-          select: { leads: true },
-        },
-        leads: {
-          select: { status: true, verifyStatus: true },
-        },
-      },
-    });
+      }),
+      prisma.outreachLead.groupBy({
+        by: ['campaignId', 'status'],
+        where: { campaign: { tenantId } },
+        _count: { id: true },
+      }),
+      prisma.outreachLead.groupBy({
+        by: ['campaignId'],
+        where: { campaign: { tenantId }, verifyStatus: 'SAFE' },
+        _count: { id: true },
+      }),
+    ]);
+
+    // Map aggregated metrics per campaign
+    const safeCountMap = new Map<string, number>();
+    for (const item of safeStatusGroups) {
+      safeCountMap.set(item.campaignId, item._count.id);
+    }
+
+    const dispatchedMap = new Map<string, number>();
+    const convertedMap = new Map<string, number>();
+
+    for (const item of leadStatusGroups) {
+      const cId = item.campaignId;
+      const count = item._count.id;
+      if (['DISPATCHED', 'CONVERTED', 'REPLIED'].includes(item.status)) {
+        dispatchedMap.set(cId, (dispatchedMap.get(cId) || 0) + count);
+      }
+      if (item.status === 'CONVERTED') {
+        convertedMap.set(cId, (convertedMap.get(cId) || 0) + count);
+      }
+    }
 
     const formatted = campaigns.map((c) => {
       const totalLeads = c._count.leads;
-      const verifiedSafe = c.leads.filter((l) => l.verifyStatus === 'SAFE').length;
-      const dispatched = c.leads.filter((l) => l.status === 'DISPATCHED' || l.status === 'CONVERTED' || l.status === 'REPLIED').length;
-      const converted = c.leads.filter((l) => l.status === 'CONVERTED').length;
+      const verifiedSafe = safeCountMap.get(c.id) || 0;
+      const dispatched = dispatchedMap.get(c.id) || 0;
+      const converted = convertedMap.get(c.id) || 0;
 
       return {
         id: c.id,
@@ -76,15 +105,28 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Campaign name is required' }, { status: 400 });
     }
 
-    // Verify accountId belongs to OutreachAccountConfig to prevent Foreign Key violation
+    // Verify accountId belongs to OutreachAccountConfig
     let validAccountId: string | null = null;
-    if (accountId && typeof accountId === 'string') {
+    if (!accountId || typeof accountId !== 'string') {
+      const defaultAccount = await prisma.outreachAccountConfig.findFirst({
+        where: { tenantId, isActive: true },
+      });
+      if (!defaultAccount) {
+        return NextResponse.json({
+          error: 'No Outreach Sender Account configured. Please create an Outreach Sender Account in Settings first.',
+        }, { status: 400 });
+      }
+      validAccountId = defaultAccount.id;
+    } else {
       const existingAccount = await prisma.outreachAccountConfig.findFirst({
         where: { id: accountId, tenantId },
       });
-      if (existingAccount) {
-        validAccountId = existingAccount.id;
+      if (!existingAccount) {
+        return NextResponse.json({
+          error: 'Selected Outreach Sender Account not found or unauthorized. Please choose a valid account.',
+        }, { status: 400 });
       }
+      validAccountId = existingAccount.id;
     }
 
     const campaign = await prisma.outreachCampaign.create({

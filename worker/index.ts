@@ -5,9 +5,24 @@ import { processEmailPoll } from './imap-poller';
 import { processAutoAdvance } from './auto-advance';
 import { processNotification } from './notification';
 import { processAIClassify, processAIDraft } from './ai-processor';
+import { processOutreachDispatch } from './outreach-dispatch';
 import { startSchedulers } from './scheduler';
 
 console.log('[Worker] Starting all workers...');
+
+// Outreach dispatch worker
+new Worker(
+  QueueNames.OUTREACH_DISPATCH,
+  async (job) => processOutreachDispatch(job.data),
+  {
+    connection,
+    concurrency: 2,
+    limiter: {
+      max: 1,
+      duration: 1500, // 1 email per 1.5s rate-limit
+    },
+  }
+);
 
 // Email poll worker
 new Worker(

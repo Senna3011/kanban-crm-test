@@ -37,3 +37,9 @@ export interface NotificationJob {
   title: string;
   body?: string;
 }
+
+export interface OutreachDispatchJob {
+  type: 'outreach_dispatch';
+  tenantId: string;
+  leadId: string;
+}

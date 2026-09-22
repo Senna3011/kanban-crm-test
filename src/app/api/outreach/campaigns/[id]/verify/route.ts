@@ -72,7 +72,9 @@ export async function POST(
           ? 'VERIFIED_SAFE'
           : verifyStatus === 'RISKY'
           ? 'VERIFIED_RISKY'
-          : 'INVALID';
+          : verifyStatus === 'INVALID'
+          ? 'INVALID'
+          : lead.status;
 
       const updated = await prisma.outreachLead.update({
         where: { id: lead.id },

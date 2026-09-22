@@ -4,6 +4,8 @@ import { authOptions } from '@/server/auth';
 import prisma from '@/lib/prisma';
 import { generatePersonalizedColdEmail } from '@/lib/outreach-ai';
 
+const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
 export async function POST(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> | { id: string } }
@@ -19,6 +21,7 @@ export async function POST(
 
   const campaign = await prisma.outreachCampaign.findFirst({
     where: { id: campaignId, tenantId },
+    include: { account: true },
   });
 
   if (!campaign) {
@@ -29,43 +32,27 @@ export async function POST(
     const body = await req.json();
     const { fullName, email, companyName, jobTitle, location, linkedinUrl } = body;
 
-    if (!fullName || !email) {
-      return NextResponse.json({ error: 'Full name and email are required' }, { status: 400 });
+    if (!fullName || typeof fullName !== 'string' || !fullName.trim()) {
+      return NextResponse.json({ error: 'Full name is required' }, { status: 400 });
     }
 
-    // Auto generate AI draft if campaign instructions exist
-    let aiDraftSubject: string | undefined;
-    let aiDraftBody: string | undefined;
-
-    try {
-      const tenant = await prisma.tenant.findUnique({
-        where: { id: tenantId },
-        select: { companyInfo: true, name: true },
-      });
-      let companyContext = '';
-      if (tenant?.companyInfo) {
-        try {
-          const parsed = JSON.parse(tenant.companyInfo);
-          companyContext = parsed.customPrompt || parsed.products || '';
-        } catch {}
-      }
-
-      const generated = await generatePersonalizedColdEmail({
-        prospectName: fullName,
-        jobTitle: jobTitle || 'Decision Maker',
-        companyName: companyName || 'Enterprise Partner',
-        senderName: 'Outreach Manager',
-        senderCompany: tenant?.name || 'Our Company',
-        customInstructions: campaign.promptInstructions || 'Personalized introductory cold email',
-      });
-
-      aiDraftSubject = generated.subject;
-      aiDraftBody = generated.body;
-    } catch (e) {
-      console.warn('[MANUAL LEAD] AI draft auto-generation fallback:', e);
-      aiDraftSubject = `Exploring collaboration with ${companyName || 'your team'}`;
-      aiDraftBody = `Hi ${fullName.split(' ')[0] || 'there'},\n\nI came across your profile and would love to connect to discuss how we can support ${companyName || 'your business'}.\n\nBest regards,\nOutreach Team`;
+    if (!email || typeof email !== 'string' || !EMAIL_REGEX.test(email.trim())) {
+      return NextResponse.json({ error: 'A valid email address is required (e.g. name@domain.com)' }, { status: 400 });
     }
+
+    const tenant = await prisma.tenant.findUnique({
+      where: { id: tenantId },
+      select: { name: true },
+    });
+
+    const generated = await generatePersonalizedColdEmail({
+      prospectName: fullName.trim(),
+      jobTitle: jobTitle?.trim() || 'Decision Maker',
+      companyName: companyName?.trim() || 'Enterprise Partner',
+      senderName: campaign.account?.senderName || 'Outreach Manager',
+      senderCompany: tenant?.name || 'Our Company',
+      customInstructions: campaign.promptInstructions || 'Personalized introductory cold email',
+    });
 
     const newLead = await prisma.outreachLead.create({
       data: {
@@ -78,11 +65,16 @@ export async function POST(
         jobTitle: jobTitle?.trim() || 'Business Leader',
         location: location?.trim() || 'Indonesia',
         linkedinUrl: linkedinUrl?.trim() || `https://linkedin.com/in/${email.split('@')[0]}`,
-        verifyStatus: 'SAFE',
-        verifyScore: 99,
-        aiDraftSubject,
-        aiDraftBody,
+        verifyStatus: 'UNVERIFIED',
+        verifyScore: 0,
+        aiDraftSubject: generated.subject,
+        aiDraftBody: generated.body,
         status: 'DRAFT_READY',
+        metadata: {
+          isAiGenerated: generated.isAiGenerated,
+          source: 'manual_lead',
+          createdAt: new Date().toISOString(),
+        },
       },
     });
 

@@ -65,6 +65,11 @@ export async function POST(
         aiDraftSubject: draft.subject,
         aiDraftBody: draft.body,
         status: 'DRAFT_READY',
+        metadata: {
+          ...(typeof lead.metadata === 'object' && lead.metadata !== null ? lead.metadata : {}),
+          isAiGenerated: draft.isAiGenerated,
+          draftedAt: new Date().toISOString(),
+        },
       },
     });
 

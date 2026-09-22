@@ -4,10 +4,15 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 
-interface EmailAccountOption {
+interface OutreachAccountOption {
   id: string;
   name: string;
+  senderName: string;
+  senderEmail: string;
+  smtpHost: string;
+  smtpPort: number;
   smtpUser: string;
+  isActive: boolean;
 }
 
 export default function NewOutreachCampaignPage() {
@@ -26,28 +31,35 @@ export default function NewOutreachCampaignPage() {
   const [loadingStep, setLoadingStep] = useState('');
   const [error, setError] = useState('');
 
-  // Available Mailbox accounts (from CRM & Outreach settings)
-  const [mailAccounts, setMailAccounts] = useState<EmailAccountOption[]>([]);
+  // Available Outreach Mailbox accounts (from Outreach Account Configs)
+  const [outreachAccounts, setOutreachAccounts] = useState<OutreachAccountOption[]>([]);
   const [selectedAccountId, setSelectedAccountId] = useState<string>('');
+  const [accountsLoaded, setAccountsLoaded] = useState(false);
 
   useEffect(() => {
-    fetch('/api/email-configs')
+    fetch('/api/outreach/accounts')
       .then((r) => r.json())
       .then((data) => {
-        if (Array.isArray(data)) {
-          setMailAccounts(data);
-          if (data.length > 0) {
-            setSelectedAccountId(data[0].id);
-          }
+        const list = Array.isArray(data) ? data : data.accounts || [];
+        setOutreachAccounts(list);
+        const activeAcc = list.find((a: any) => a.isActive) || list[0];
+        if (activeAcc) {
+          setSelectedAccountId(activeAcc.id);
         }
       })
-      .catch(() => {});
+      .catch((e) => console.error('Failed to load accounts:', e))
+      .finally(() => setAccountsLoaded(true));
   }, []);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!name.trim()) {
       setError('Please provide a campaign name.');
+      return;
+    }
+
+    if (!selectedAccountId) {
+      setError('You must select a valid Outreach Sender Mailbox. Please create one in Outreach Settings first.');
       return;
     }
 
@@ -67,7 +79,7 @@ export default function NewOutreachCampaignPage() {
           targetIndustry: targetIndustry.trim(),
           searchQuery: searchQuery.trim() || undefined,
           promptInstructions: promptInstructions.trim(),
-          accountId: selectedAccountId || undefined,
+          accountId: selectedAccountId,
         }),
       });
 
@@ -93,13 +105,13 @@ export default function NewOutreachCampaignPage() {
       });
 
       if (!scrapeRes.ok) {
-        console.warn('Initial lead scraping warning on campaign creation');
+        const scrapeErr = await scrapeRes.json().catch(() => ({}));
+        console.warn('Initial lead scraping warning:', scrapeErr.error);
       }
 
-      // 3. If Test Recipient Email is provided, add it as a primary verified lead
+      // 3. If Test Recipient Email is provided, add it as a primary lead
       if (testRecipientEmail.trim()) {
         try {
-          setLoadingStep('Seeding test recipient lead...');
           await fetch(`/api/outreach/campaigns/${campaign.id}/leads`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -116,7 +128,6 @@ export default function NewOutreachCampaignPage() {
         }
       }
 
-      setLoadingStep('Redirecting to campaign workspace...');
       // Navigate to campaign workspace
       router.push(`/dashboard/outreach/${campaign.id}`);
     } catch (err: any) {
@@ -142,6 +153,23 @@ export default function NewOutreachCampaignPage() {
           </p>
         </div>
       </div>
+
+      {accountsLoaded && outreachAccounts.length === 0 && (
+        <div className="p-4 bg-amber-50 border border-amber-200 rounded-2xl flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 text-amber-900 text-xs">
+          <div className="flex items-center gap-2">
+            <span className="text-lg">⚠️</span>
+            <span>
+              <strong>No Outreach Sender Accounts Configured:</strong> You need at least one verified sender mailbox before launching an outreach campaign.
+            </span>
+          </div>
+          <Link
+            href="/dashboard/outreach/settings"
+            className="px-3.5 py-1.5 bg-amber-600 hover:bg-amber-700 text-white font-bold rounded-xl whitespace-nowrap self-start sm:self-auto"
+          >
+            Configure Sender Account →
+          </Link>
+        </div>
+      )}
 
       <form onSubmit={handleSubmit} className="bg-white p-6 rounded-2xl border border-slate-200/80 shadow-xs space-y-6">
         {error && (
@@ -171,21 +199,22 @@ export default function NewOutreachCampaignPage() {
             </div>
             <div>
               <label className="block text-xs font-semibold text-slate-700 mb-1">
-                Sender Mailbox (Email Account for Dispatch)
+                Sender Mailbox (Email Account for Dispatch) <span className="text-red-500">*</span>
               </label>
               <select
+                required
                 value={selectedAccountId}
                 onChange={(e) => setSelectedAccountId(e.target.value)}
                 className="w-full px-3.5 py-2.5 border border-slate-300 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-primary-500 bg-white"
               >
-                {mailAccounts.length > 0 ? (
-                  mailAccounts.map((acc) => (
+                {outreachAccounts.length > 0 ? (
+                  outreachAccounts.map((acc) => (
                     <option key={acc.id} value={acc.id}>
-                      {acc.name} ({acc.smtpUser})
+                      {acc.name} ({acc.senderEmail})
                     </option>
                   ))
                 ) : (
-                  <option value="">Default Connected Business Mailbox</option>
+                  <option value="">-- No Outreach Mailbox Found --</option>
                 )}
               </select>
             </div>
@@ -195,7 +224,7 @@ export default function NewOutreachCampaignPage() {
         {/* Target Prospecting Criteria */}
         <div className="space-y-4">
           <h2 className="text-sm font-bold text-slate-900 border-b border-slate-100 pb-2">
-            2. Target Lead Parameters (LinkedIn Sourcing)
+            2. Target Lead Parameters (LinkedIn Sourcing via Apify)
           </h2>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
@@ -252,8 +281,7 @@ export default function NewOutreachCampaignPage() {
               className="w-full px-3.5 py-2.5 border border-slate-300 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-primary-500"
             />
           </div>
-
-          <div className="p-3.5 bg-amber-50 border border-amber-200 rounded-xl space-y-1.5">
+          <div className="p-3 bg-amber-50/70 border border-amber-200/80 rounded-xl space-y-1">
             <label className="block text-xs font-bold text-amber-900">
               Direct Target / Test Recipient Email (Optional)
             </label>
@@ -299,13 +327,13 @@ export default function NewOutreachCampaignPage() {
           </Link>
           <button
             type="submit"
-            disabled={loading}
+            disabled={loading || outreachAccounts.length === 0}
             className="px-6 py-2.5 bg-primary-600 hover:bg-primary-700 text-white text-xs font-semibold rounded-xl shadow-xs transition-colors disabled:opacity-50 flex items-center gap-2"
           >
             {loading ? (
               <>
-                <span className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                <span>{loadingStep || 'Creating & Sourcing Leads...'}</span>
+                <span className="animate-spin">🔄</span>
+                <span>{loadingStep || 'Creating Campaign...'}</span>
               </>
             ) : (
               <span>Create Campaign & Source Leads →</span>

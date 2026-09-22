@@ -1,6 +1,6 @@
 export interface ReoonVerifyResult {
   email: string;
-  status: 'SAFE' | 'RISKY' | 'INVALID';
+  status: 'SAFE' | 'RISKY' | 'INVALID' | 'UNVERIFIED';
   score: number;
   reason?: string;
   isDisposable?: boolean;
@@ -21,7 +21,7 @@ export async function verifyEmailAddress(
 ): Promise<ReoonVerifyResult> {
   const key = apiKey || process.env.REOON_API_KEY;
 
-  if (!email || !email.includes('@')) {
+  if (!email || !email.includes('@') || !email.includes('.')) {
     return {
       email,
       status: 'INVALID',
@@ -31,8 +31,14 @@ export async function verifyEmailAddress(
   }
 
   if (!key) {
-    console.warn('[REOON] No API key configured. Executing realistic corporate deliverability verification.');
-    return calculateAccurateDeliverability(email);
+    return {
+      email,
+      status: 'UNVERIFIED',
+      score: 0,
+      reason: 'Verifikasi tidak dilakukan — Reoon API key belum diatur di Outreach Settings',
+      isDisposable: false,
+      isFree: false,
+    };
   }
 
   try {
@@ -47,20 +53,28 @@ export async function verifyEmailAddress(
     });
 
     if (!response.ok) {
-      console.error(`[REOON] Verification HTTP error: ${response.status}`);
-      return calculateAccurateDeliverability(email);
+      const errText = await response.text();
+      console.error(`[REOON] Verification HTTP error ${response.status}: ${errText}`);
+      return {
+        email,
+        status: 'UNVERIFIED',
+        score: 0,
+        reason: `Reoon API responded with status ${response.status}: ${errText || 'Verification failed'}`,
+      };
     }
 
     const json = await response.json();
     const rawStatus = (json.status || '').toLowerCase();
 
-    let status: 'SAFE' | 'RISKY' | 'INVALID' = 'SAFE';
+    let status: 'SAFE' | 'RISKY' | 'INVALID' | 'UNVERIFIED' = 'SAFE';
     if (rawStatus === 'valid' || rawStatus === 'safe') {
       status = 'SAFE';
     } else if (rawStatus === 'catch_all' || rawStatus === 'risky' || rawStatus === 'unknown') {
       status = 'RISKY';
-    } else {
+    } else if (rawStatus === 'invalid' || rawStatus === 'disabled') {
       status = 'INVALID';
+    } else {
+      status = 'UNVERIFIED';
     }
 
     return {
@@ -73,19 +87,28 @@ export async function verifyEmailAddress(
     };
   } catch (error: any) {
     console.error('[REOON] Exception during verification:', error);
-    return calculateAccurateDeliverability(email);
+    return {
+      email,
+      status: 'UNVERIFIED',
+      score: 0,
+      reason: `Verification exception: ${error.message || 'Network error'}`,
+    };
   }
 }
 
 export async function findProspectEmail(
   params: ReoonFindParams
-): Promise<{ email: string | null; status: 'SAFE' | 'RISKY' | 'INVALID' | 'UNVERIFIED'; score: number }> {
+): Promise<{ email: string | null; status: 'SAFE' | 'RISKY' | 'INVALID' | 'UNVERIFIED'; score: number; reason?: string }> {
   const cleanFirst = params.firstName.toLowerCase().replace(/[^a-z0-9]/g, '');
   const cleanLast = params.lastName.toLowerCase().replace(/[^a-z0-9]/g, '');
-  const domain = params.companyDomain || (params.companyName ? `${params.companyName.toLowerCase().replace(/[^a-z0-9]/g, '')}.com` : 'enterprise.com');
+  const domain = params.companyDomain || (params.companyName ? `${params.companyName.toLowerCase().replace(/[^a-z0-9]/g, '')}.com` : null);
 
   if (!cleanFirst && !cleanLast) {
-    return { email: null, status: 'INVALID', score: 0 };
+    return { email: null, status: 'INVALID', score: 0, reason: 'First or last name is missing' };
+  }
+
+  if (!domain) {
+    return { email: null, status: 'INVALID', score: 0, reason: 'Company domain could not be resolved' };
   }
 
   // Realistic corporate email pattern: first.last@domain.com
@@ -96,39 +119,6 @@ export async function findProspectEmail(
     email: candidateEmail,
     status: verification.status,
     score: verification.score,
-  };
-}
-
-function calculateAccurateDeliverability(email: string): ReoonVerifyResult {
-  const parts = email.split('@');
-  const user = parts[0]?.toLowerCase() || '';
-  const domain = parts[1]?.toLowerCase() || '';
-
-  const disposableDomains = ['tempmail.com', 'throwaway.email', 'mailinator.com', '10minutemail.com', 'example.com', 'test.com', 'fake.com'];
-  if (disposableDomains.includes(domain) || user.includes('spam') || user.includes('fake')) {
-    return { email, status: 'INVALID', score: 5, reason: 'Disposable or non-routable domain detected', isDisposable: true };
-  }
-
-  // High-authority enterprise domains get 95-98% deliverability score
-  let score = 92;
-  if (domain.endsWith('.com') || domain.endsWith('.io') || domain.endsWith('.ai')) {
-    score = 96;
-  } else if (domain.endsWith('.org') || domain.endsWith('.edu')) {
-    score = 98;
-  }
-
-  // Check for catch-all potential
-  const isGeneric = ['gmail.com', 'yahoo.com', 'outlook.com', 'hotmail.com'].includes(domain);
-  if (isGeneric) {
-    score = 88;
-  }
-
-  return {
-    email,
-    status: 'SAFE',
-    score,
-    isDisposable: false,
-    isFree: isGeneric,
-    reason: 'MX records validated & SMTP mailbox handshake active (High Deliverability)',
+    reason: verification.reason,
   };
 }

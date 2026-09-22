@@ -252,6 +252,13 @@ model Invitation {
   @@unique([tenantId, email])
 }
 
+enum OutreachCampaignStatus {
+  DRAFT
+  RUNNING
+  PAUSED
+  COMPLETED
+}
+
 enum OutreachLeadStatus {
   SCRAPED
   VERIFYING
@@ -275,7 +282,7 @@ model OutreachAccountConfig {
   smtpPort        Int      @default(465)
   smtpUser        String
   smtpPass        String?
-  outscraperApiKey String?
+  apifyApiToken   String?
   reoonApiKey     String?
   dailyLimit      Int      @default(50)
   sentToday       Int      @default(0)
@@ -300,7 +307,7 @@ model OutreachCampaign {
   targetIndustry   String?
   searchQuery      String?
   promptInstructions String?              @db.Text
-  status           String                 @default("DRAFT") // DRAFT, RUNNING, PAUSED, COMPLETED
+  status           OutreachCampaignStatus @default(DRAFT)
   createdAt        DateTime               @default(now())
   updatedAt        DateTime               @updatedAt
 

@@ -29,11 +29,11 @@ export async function dispatchColdEmail(params: DispatchLeadEmailParams): Promis
   }
 
   if (!lead.email) {
-    return { success: false, error: 'Lead does not have a verified email address' };
+    return { success: false, error: 'Lead does not have a valid email address' };
   }
 
   if (!lead.aiDraftBody || !lead.aiDraftSubject) {
-    return { success: false, error: 'Lead draft email is not generated' };
+    return { success: false, error: 'Lead draft email is not generated yet' };
   }
 
   // Check suppression list
@@ -59,10 +59,9 @@ export async function dispatchColdEmail(params: DispatchLeadEmailParams): Promis
 
   const account = lead.campaign.account;
 
-  // Daily rate limit enforcement
+  // Daily rate limit enforcement with atomic conditional update
   if (account) {
     const isSameDay = new Date(account.lastResetDate).toDateString() === new Date().toDateString();
-    const currentSent = isSameDay ? account.sentToday : 0;
 
     if (!isSameDay) {
       await prisma.outreachAccountConfig.update({
@@ -71,7 +70,17 @@ export async function dispatchColdEmail(params: DispatchLeadEmailParams): Promis
       });
     }
 
-    if (currentSent >= account.dailyLimit) {
+    const atomicUpdate = await prisma.outreachAccountConfig.updateMany({
+      where: {
+        id: account.id,
+        sentToday: { lt: account.dailyLimit },
+      },
+      data: {
+        sentToday: { increment: 1 },
+      },
+    });
+
+    if (atomicUpdate.count === 0) {
       await prisma.outreachLead.update({
         where: { id: lead.id },
         data: {
@@ -85,7 +94,7 @@ export async function dispatchColdEmail(params: DispatchLeadEmailParams): Promis
 
   // Check fallback to active Tenant EmailConfig if OutreachAccountConfig is not explicitly configured
   let smtpHost = account?.smtpHost || process.env.SMTP_HOST;
-  let smtpPort = account?.smtpPort || (process.env.SMTP_PORT ? Number(process.env.SMTP_PORT) : undefined);
+  let smtpPort = account?.smtpPort || (process.env.SMTP_PORT ? Number(process.env.SMTP_PORT) : 465);
   let smtpUser = account?.smtpUser || process.env.SMTP_USER;
   let smtpPass = account?.smtpPass || process.env.SMTP_PASS;
   let senderEmail = account?.senderEmail || smtpUser;
@@ -110,12 +119,20 @@ export async function dispatchColdEmail(params: DispatchLeadEmailParams): Promis
     }
   }
 
-  // Set defaults if still empty
-  smtpHost = smtpHost || 'smtp.zoho.com';
-  smtpPort = smtpPort || 465;
-  smtpUser = smtpUser || '';
-  smtpPass = smtpPass || '';
-  senderEmail = senderEmail || smtpUser || 'outreach@jetdigitalpro.com';
+  if (!smtpUser || !smtpPass) {
+    const errorMsg = 'Tidak ada mailbox SMTP aktif untuk pengiriman. Atur di Outreach Account Settings.';
+    await prisma.outreachLead.update({
+      where: { id: lead.id },
+      data: {
+        status: 'FAILED',
+        errorMessage: errorMsg,
+      },
+    });
+    return {
+      success: false,
+      error: errorMsg,
+    };
+  }
 
   // Compliant footer with unsubscribe option
   const unsubscribeUrl = `${process.env.NEXTAUTH_URL || 'http://localhost:3099'}/api/outreach/unsubscribe?email=${encodeURIComponent(lead.email)}&t=${params.tenantId}`;
@@ -128,22 +145,6 @@ export async function dispatchColdEmail(params: DispatchLeadEmailParams): Promis
       You received this message from ${senderName}. If you would like to stop receiving these emails, please <a href="${unsubscribeUrl}" style="color: #6366f1; text-decoration: underline;">unsubscribe here</a>.
     </p>
   </div>`;
-
-  if (!smtpUser || !smtpPass) {
-    // If SMTP credentials are not yet configured, simulate successful dispatch in sandbox mode
-    console.warn(`[OUTREACH DISPATCH] Sandbox mode: Simulated dispatch to ${lead.email}`);
-    await prisma.outreachLead.update({
-      where: { id: lead.id },
-      data: {
-        status: 'DISPATCHED',
-        sentAt: new Date(),
-      },
-    });
-    return {
-      success: true,
-      messageId: `<simulated-${Date.now()}@sandbox.outreach>`,
-    };
-  }
 
   try {
     const transporter = nodemailer.createTransport({
@@ -178,17 +179,9 @@ export async function dispatchColdEmail(params: DispatchLeadEmailParams): Promis
       data: {
         status: 'DISPATCHED',
         sentAt: new Date(),
+        errorMessage: null,
       },
     });
-
-    if (account) {
-      await prisma.outreachAccountConfig.update({
-        where: { id: account.id },
-        data: {
-          sentToday: { increment: 1 },
-        },
-      });
-    }
 
     return {
       success: true,
@@ -226,6 +219,16 @@ export async function convertOutreachLeadToKanbanCard(params: {
 
   if (!lead) {
     throw new Error('Outreach lead not found');
+  }
+
+  // Idempotency guard: Return existing card if already converted
+  if (lead.status === 'CONVERTED' && lead.convertedCardId) {
+    const existingCard = await prisma.card.findUnique({
+      where: { id: lead.convertedCardId },
+    });
+    if (existingCard) {
+      return { cardId: existingCard.id };
+    }
   }
 
   // Find or use the primary board and "Leads" column
