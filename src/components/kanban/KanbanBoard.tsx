@@ -6,6 +6,7 @@ import KanbanColumn from './KanbanColumn';
 import KanbanCard from './KanbanCard';
 import CardDetailPanel from './CardDetailPanel';
 import ColumnSettings from './ColumnSettings';
+import ConfirmDialog, { type ConfirmDialogVariant } from '@/components/ui/ConfirmDialog';
 import { composeAndSendEmail } from '@/server/actions/compose';
 import toast, { Toaster } from 'react-hot-toast';
 import type { ColumnData, CardData } from '@/types';
@@ -33,6 +34,22 @@ export default function KanbanBoard() {
   const [filterMode, setFilterMode] = useState<FilterMode>('all');
   const [globalSortMode, setGlobalSortMode] = useState<'default' | 'unreads' | 'date'>('default');
   const searchInputRef = useRef<HTMLInputElement>(null);
+
+  // SweetAlert2 style ConfirmDialog state
+  const [confirmDialog, setConfirmDialog] = useState<{
+    isOpen: boolean;
+    title: string;
+    message: string;
+    confirmText?: string;
+    variant?: ConfirmDialogVariant;
+    isLoading?: boolean;
+    onConfirm: () => void | Promise<void>;
+  }>({
+    isOpen: false,
+    title: '',
+    message: '',
+    onConfirm: () => {},
+  });
 
   // New Outbound Compose Modal State
   const [showComposeModal, setShowComposeModal] = useState(false);
@@ -311,28 +328,39 @@ export default function KanbanBoard() {
     }
   }
 
-  async function handleDeleteCard(cardId: string) {
-    if (!confirm('Delete this card? This will also archive the email in Zoho.')) return;
-    let wasUnread = false;
-    columns.forEach((col) => {
-      const card = col.cards.find((c) => c.id === cardId);
-      if (card && card.status === 'unread') wasUnread = true;
+  function handleDeleteCard(cardId: string) {
+    setConfirmDialog({
+      isOpen: true,
+      title: 'Delete Single Card?',
+      message: 'Delete this prospect card? This will also archive the email.',
+      confirmText: 'Delete Card',
+      variant: 'danger',
+      onConfirm: async () => {
+        let wasUnread = false;
+        columns.forEach((col) => {
+          const card = col.cards.find((c) => c.id === cardId);
+          if (card && card.status === 'unread') wasUnread = true;
+        });
+        setColumns((prev) =>
+          prev.map((col) => ({
+            ...col,
+            cards: col.cards.filter((c) => c.id !== cardId),
+          }))
+        );
+        if (selectedCard?.id === cardId) setSelectedCard(null);
+        if (wasUnread) setTotalUnread((prev) => Math.max(0, prev - 1));
+
+        setConfirmDialog((prev) => ({ ...prev, isOpen: false }));
+
+        try {
+          await fetch(`/api/cards/${cardId}`, { method: 'DELETE' });
+          toast.success('Card deleted successfully');
+        } catch {
+          toast.error('Failed to delete card');
+          fetchColumns();
+        }
+      },
     });
-    setColumns((prev) =>
-      prev.map((col) => ({
-        ...col,
-        cards: col.cards.filter((c) => c.id !== cardId),
-      }))
-    );
-    if (selectedCard?.id === cardId) setSelectedCard(null);
-    if (wasUnread) setTotalUnread((prev) => Math.max(0, prev - 1));
-    try {
-      await fetch(`/api/cards/${cardId}`, { method: 'DELETE' });
-      toast.success('Card deleted');
-    } catch {
-      toast.error('Failed to delete card');
-      fetchColumns();
-    }
   }
 
   function handleToggleSelect(cardId: string) {
@@ -373,39 +401,50 @@ export default function KanbanBoard() {
     fetchColumns();
   }
 
-  async function handleBulkDelete() {
+  function handleBulkDelete() {
     if (selectedIds.size === 0) return;
     const count = selectedIds.size;
-    if (!confirm(`Delete ${count} selected card(s)? This will also archive the emails.`)) return;
-    setBulkDeleting(true);
 
-    const idsToDelete = Array.from(selectedIds);
-    // Optimistic state update
-    setColumns((prev) =>
-      prev.map((col) => ({
-        ...col,
-        cards: col.cards.filter((c) => !selectedIds.has(c.id)),
-      }))
-    );
-    if (selectedCard && selectedIds.has(selectedCard.id)) setSelectedCard(null);
+    setConfirmDialog({
+      isOpen: true,
+      title: `Delete ${count} Selected Cards?`,
+      message: `Delete ${count} selected cards? All associated email threads will be archived.`,
+      confirmText: `Delete ${count} Cards`,
+      variant: 'danger',
+      onConfirm: async () => {
+        setBulkDeleting(true);
+        setConfirmDialog((prev) => ({ ...prev, isLoading: true }));
 
-    try {
-      const res = await fetch('/api/cards', {
-        method: 'DELETE',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ cardIds: idsToDelete }),
-      });
-      if (!res.ok) throw new Error('Bulk delete failed');
-      const data = await res.json();
-      toast.success(`${data.count || count} card(s) deleted`);
-    } catch {
-      toast.error('Failed to delete cards');
-      fetchColumns();
-    } finally {
-      setBulkDeleting(false);
-      setSelectedIds(new Set());
-      setSelectionMode(false);
-    }
+        const idsToDelete = Array.from(selectedIds);
+        // Optimistic state update
+        setColumns((prev) =>
+          prev.map((col) => ({
+            ...col,
+            cards: col.cards.filter((c) => !selectedIds.has(c.id)),
+          }))
+        );
+        if (selectedCard && selectedIds.has(selectedCard.id)) setSelectedCard(null);
+
+        try {
+          const res = await fetch('/api/cards', {
+            method: 'DELETE',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ cardIds: idsToDelete }),
+          });
+          if (!res.ok) throw new Error('Bulk delete failed');
+          const data = await res.json();
+          toast.success(`${data.count || count} card(s) deleted`);
+        } catch {
+          toast.error('Failed to delete cards');
+          fetchColumns();
+        } finally {
+          setBulkDeleting(false);
+          setSelectedIds(new Set());
+          setSelectionMode(false);
+          setConfirmDialog((prev) => ({ ...prev, isOpen: false, isLoading: false }));
+        }
+      },
+    });
   }
 
   async function handleSync() {
@@ -427,20 +466,30 @@ export default function KanbanBoard() {
     }
   }
 
-  async function handleReclassify() {
-    if (!confirm('Re-run AI classification on pending cards? Cards may move between columns.')) return;
-    setReclassifying(true);
-    try {
-      const res = await fetch('/api/reclassify', { method: 'POST' });
-      if (!res.ok) throw new Error('Reclassify failed');
-      const data = await res.json();
-      toast.success(`Reclassified ${data.reclassified} of ${data.total} cards`);
-      fetchColumns();
-    } catch (err: any) {
-      toast.error(err.message || 'Reclassify failed');
-    } finally {
-      setReclassifying(false);
-    }
+  function handleReclassify() {
+    setConfirmDialog({
+      isOpen: true,
+      title: 'Run AI Reclassification?',
+      message: 'Re-run AI classification on all pending cards? Cards may automatically move between pipeline columns.',
+      confirmText: 'Start AI Reclassify',
+      variant: 'warning',
+      onConfirm: async () => {
+        setReclassifying(true);
+        setConfirmDialog((prev) => ({ ...prev, isLoading: true }));
+        try {
+          const res = await fetch('/api/reclassify', { method: 'POST' });
+          if (!res.ok) throw new Error('Reclassify failed');
+          const data = await res.json();
+          toast.success(`Reclassified ${data.reclassified || 0} cards`);
+          fetchColumns();
+        } catch (err: any) {
+          toast.error(err.message || 'Reclassify failed');
+        } finally {
+          setReclassifying(false);
+          setConfirmDialog((prev) => ({ ...prev, isOpen: false, isLoading: false }));
+        }
+      },
+    });
   }
 
   // Calculate statistics
@@ -1015,6 +1064,18 @@ export default function KanbanBoard() {
           </div>
         </div>
       )}
+
+      {/* SweetAlert2 Style Confirmation Dialog */}
+      <ConfirmDialog
+        isOpen={confirmDialog.isOpen}
+        title={confirmDialog.title}
+        message={confirmDialog.message}
+        confirmText={confirmDialog.confirmText}
+        variant={confirmDialog.variant}
+        isLoading={confirmDialog.isLoading}
+        onConfirm={confirmDialog.onConfirm}
+        onCancel={() => setConfirmDialog((prev) => ({ ...prev, isOpen: false }))}
+      />
     </div>
   );
 }

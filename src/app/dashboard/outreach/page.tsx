@@ -2,6 +2,8 @@
 
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
+import ConfirmDialog, { type ConfirmDialogVariant } from '@/components/ui/ConfirmDialog';
+import toast, { Toaster } from 'react-hot-toast';
 
 interface CampaignItem {
   id: string;
@@ -28,6 +30,23 @@ export default function OutreachDashboardPage() {
   const [error, setError] = useState('');
   const [deletingId, setDeletingId] = useState<string | null>(null);
 
+  // SweetAlert2 style ConfirmDialog state
+  const [confirmDialog, setConfirmDialog] = useState<{
+    isOpen: boolean;
+    title: string;
+    message: string;
+    confirmText?: string;
+    cancelText?: string;
+    variant?: ConfirmDialogVariant;
+    isLoading?: boolean;
+    onConfirm: () => void | Promise<void>;
+  }>({
+    isOpen: false,
+    title: '',
+    message: '',
+    onConfirm: () => {},
+  });
+
   useEffect(() => {
     fetchCampaigns();
   }, []);
@@ -47,20 +66,28 @@ export default function OutreachDashboardPage() {
     }
   }
 
-  async function handleDeleteCampaign(id: string, name: string) {
-    if (!confirm(`Are you sure you want to delete campaign "${name}" and all its leads? This action cannot be undone.`)) {
-      return;
-    }
-    setDeletingId(id);
-    try {
-      const res = await fetch(`/api/outreach/campaigns/${id}`, { method: 'DELETE' });
-      if (!res.ok) throw new Error('Failed to delete campaign');
-      setCampaigns((prev) => prev.filter((c) => c.id !== id));
-    } catch (err: any) {
-      alert(`Delete error: ${err.message}`);
-    } finally {
-      setDeletingId(null);
-    }
+  function handleDeleteCampaign(id: string, name: string) {
+    setConfirmDialog({
+      isOpen: true,
+      title: `Delete Campaign "${name}"?`,
+      message: `Delete campaign '${name}' and all scraped leads? Dispatched history will be lost.`,
+      confirmText: 'Delete Campaign',
+      variant: 'danger',
+      onConfirm: async () => {
+        setDeletingId(id);
+        setConfirmDialog((prev) => ({ ...prev, isOpen: false }));
+        try {
+          const res = await fetch(`/api/outreach/campaigns/${id}`, { method: 'DELETE' });
+          if (!res.ok) throw new Error('Failed to delete campaign');
+          setCampaigns((prev) => prev.filter((c) => c.id !== id));
+          toast.success('Campaign deleted successfully');
+        } catch (err: any) {
+          toast.error(`Delete error: ${err.message}`);
+        } finally {
+          setDeletingId(null);
+        }
+      },
+    });
   }
 
   return (
@@ -245,6 +272,18 @@ export default function OutreachDashboardPage() {
           </div>
         )}
       </div>
+
+      {/* SweetAlert2 Style Confirm Dialog */}
+      <ConfirmDialog
+        isOpen={confirmDialog.isOpen}
+        title={confirmDialog.title}
+        message={confirmDialog.message}
+        confirmText={confirmDialog.confirmText}
+        variant="danger"
+        isLoading={Boolean(deletingId)}
+        onConfirm={confirmDialog.onConfirm}
+        onCancel={() => setConfirmDialog((prev) => ({ ...prev, isOpen: false }))}
+      />
     </div>
   );
 }

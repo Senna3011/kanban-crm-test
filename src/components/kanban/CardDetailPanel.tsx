@@ -3,6 +3,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import type { CardData, ActivityLogData, DraftData } from '@/types';
 import Button from '@/components/ui/Button';
+import ConfirmDialog, { type ConfirmDialogVariant } from '@/components/ui/ConfirmDialog';
 import { sendDraft } from '@/server/actions/draft';
 import toast, { Toaster } from 'react-hot-toast';
 
@@ -359,6 +360,22 @@ export default function CardDetailPanel({ card, onClose }: Props) {
   const [isMaximized, setIsMaximized] = useState(false);
   const [replyExpanded, setReplyExpanded] = useState(false);
 
+  // SweetAlert2 style ConfirmDialog state
+  const [confirmDialog, setConfirmDialog] = useState<{
+    isOpen: boolean;
+    title: string;
+    message: string;
+    confirmText?: string;
+    variant?: ConfirmDialogVariant;
+    isLoading?: boolean;
+    onConfirm: () => void | Promise<void>;
+  }>({
+    isOpen: false,
+    title: '',
+    message: '',
+    onConfirm: () => {},
+  });
+
   // Initialize draft immediately
   useEffect(() => {
     setDraftBody(
@@ -515,20 +532,30 @@ export default function CardDetailPanel({ card, onClose }: Props) {
     }
   }
 
-  async function handleDelete() {
-    if (!confirm('Delete this card permanently?')) return;
-    setDeleting(true);
-    try {
-      const res = await fetch(`/api/cards/${card.id}`, { method: 'DELETE' });
-      if (!res.ok) throw new Error('Failed to delete');
-      toast.success('Card deleted');
-      window.dispatchEvent(new Event('board-refresh'));
-      onClose();
-    } catch (e: any) {
-      toast.error(e.message || 'Delete failed');
-    } finally {
-      setDeleting(false);
-    }
+  function handleDelete() {
+    setConfirmDialog({
+      isOpen: true,
+      title: 'Delete Email Card?',
+      message: 'Permanently delete this email card from your pipeline? All associated activity logs and draft history will be archived.',
+      confirmText: 'Delete Card',
+      variant: 'danger',
+      onConfirm: async () => {
+        setDeleting(true);
+        setConfirmDialog((prev) => ({ ...prev, isLoading: true }));
+        try {
+          const res = await fetch(`/api/cards/${card.id}`, { method: 'DELETE' });
+          if (!res.ok) throw new Error('Failed to delete');
+          toast.success('Card deleted');
+          window.dispatchEvent(new Event('board-refresh'));
+          onClose();
+        } catch (e: any) {
+          toast.error(e.message || 'Delete failed');
+        } finally {
+          setDeleting(false);
+          setConfirmDialog((prev) => ({ ...prev, isOpen: false, isLoading: false }));
+        }
+      },
+    });
   }
 
   async function handleToggleUnread() {
@@ -548,35 +575,47 @@ export default function CardDetailPanel({ card, onClose }: Props) {
     }
   }
 
-  async function handleNotALead() {
-    try {
-      const cardRes = await fetch(`/api/cards/${card.id}`);
-      const cardInfo = await cardRes.json();
-      const boardId = cardInfo.column?.boardId;
-      if (!boardId) {
-        toast.error('Board not found');
-        return;
-      }
+  function handleNotALead() {
+    setConfirmDialog({
+      isOpen: true,
+      title: 'Mark as Not a Lead?',
+      message: 'Move this card to General? It will be marked as non-sales inquiry.',
+      confirmText: 'Move to General',
+      variant: 'info',
+      onConfirm: async () => {
+        setConfirmDialog((prev) => ({ ...prev, isLoading: true }));
+        try {
+          const cardRes = await fetch(`/api/cards/${card.id}`);
+          const cardInfo = await cardRes.json();
+          const boardId = cardInfo.column?.boardId;
+          if (!boardId) {
+            toast.error('Board not found');
+            return;
+          }
 
-      const columnsRes = await fetch(`/api/columns?boardId=${boardId}`);
-      const columns = await columnsRes.json();
-      const generalCol = columns.find((c: any) => c.title === 'General');
-      if (!generalCol) {
-        toast.error('General column not found');
-        return;
-      }
+          const columnsRes = await fetch(`/api/columns?boardId=${boardId}`);
+          const columns = await columnsRes.json();
+          const generalCol = columns.find((c: any) => c.title === 'General');
+          if (!generalCol) {
+            toast.error('General column not found');
+            return;
+          }
 
-      await fetch(`/api/cards/${card.id}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ columnId: generalCol.id }),
-      });
-      toast.success('Moved to General — marked as not a lead', { duration: 2000 });
-      window.dispatchEvent(new Event('board-refresh'));
-      setTimeout(() => onClose(), 100);
-    } catch (e: any) {
-      toast.error(e.message || 'Failed to move');
-    }
+          await fetch(`/api/cards/${card.id}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ columnId: generalCol.id }),
+          });
+          toast.success('Moved to General — marked as not a lead', { duration: 2000 });
+          window.dispatchEvent(new Event('board-refresh'));
+          setTimeout(() => onClose(), 100);
+        } catch (e: any) {
+          toast.error(e.message || 'Failed to move');
+        } finally {
+          setConfirmDialog((prev) => ({ ...prev, isOpen: false, isLoading: false }));
+        }
+      },
+    });
   }
 
   const columnName = cardData?.column?.title || '';
@@ -977,6 +1016,18 @@ export default function CardDetailPanel({ card, onClose }: Props) {
             )}
           </div>
         )}
+
+        {/* SweetAlert2 Style Confirm Dialog */}
+        <ConfirmDialog
+          isOpen={confirmDialog.isOpen}
+          title={confirmDialog.title}
+          message={confirmDialog.message}
+          confirmText={confirmDialog.confirmText}
+          variant={confirmDialog.variant}
+          isLoading={confirmDialog.isLoading}
+          onConfirm={confirmDialog.onConfirm}
+          onCancel={() => setConfirmDialog((prev) => ({ ...prev, isOpen: false }))}
+        />
       </div>
     </div>
   );

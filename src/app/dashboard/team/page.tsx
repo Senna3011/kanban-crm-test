@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useSession } from 'next-auth/react';
 import { toast, Toaster } from 'react-hot-toast';
+import ConfirmDialog, { type ConfirmDialogVariant } from '@/components/ui/ConfirmDialog';
 import {
   getTenantUsers,
   createTenantUser,
@@ -73,6 +74,23 @@ export default function TeamPage() {
   const [resetUserTarget, setResetUserTarget] = useState<UserItem | null>(null);
   const [resetNewPassword, setResetNewPassword] = useState('');
   const [savingResetPassword, setSavingResetPassword] = useState(false);
+
+  // SweetAlert2-style Confirm Dialog State
+  const [confirmDialog, setConfirmDialog] = useState<{
+    isOpen: boolean;
+    title: string;
+    message: string;
+    confirmText?: string;
+    cancelText?: string;
+    variant?: ConfirmDialogVariant;
+    isLoading?: boolean;
+    onConfirm: () => void | Promise<void>;
+  }>({
+    isOpen: false,
+    title: '',
+    message: '',
+    onConfirm: () => {},
+  });
 
   async function loadData() {
     setLoading(true);
@@ -150,15 +168,26 @@ export default function TeamPage() {
     }
   };
 
-  const handleDeleteUser = async (userId: string, email: string) => {
-    if (!confirm(`Delete user ${email} from workspace?`)) return;
-    try {
-      await deleteTenantUser(userId);
-      toast.success('User deleted successfully.');
-      loadData();
-    } catch (err: any) {
-      toast.error(err?.message || 'Failed to delete user.');
-    }
+  const handleDeleteUser = (userId: string, email: string) => {
+    setConfirmDialog({
+      isOpen: true,
+      title: 'Remove Team Member?',
+      message: `Remove ${email} from your workspace? They will lose access to all boards and settings immediately.`,
+      confirmText: 'Remove User',
+      variant: 'danger',
+      onConfirm: async () => {
+        setConfirmDialog((prev) => ({ ...prev, isLoading: true }));
+        try {
+          await deleteTenantUser(userId);
+          toast.success('User deleted successfully.');
+          loadData();
+        } catch (err: any) {
+          toast.error(err?.message || 'Failed to delete user.');
+        } finally {
+          setConfirmDialog((prev) => ({ ...prev, isOpen: false, isLoading: false }));
+        }
+      },
+    });
   };
 
   const handleRoleChange = async (userId: string, newRole: 'admin' | 'member') => {
@@ -171,15 +200,26 @@ export default function TeamPage() {
     }
   };
 
-  const handleRevokeInvite = async (inviteId: string) => {
-    if (!confirm('Cancel this invitation?')) return;
-    try {
-      await revokeInvitation(inviteId);
-      toast.success('Invitation revoked.');
-      loadData();
-    } catch (err: any) {
-      toast.error(err?.message || 'Failed to revoke invitation.');
-    }
+  const handleRevokeInvite = (inviteId: string) => {
+    setConfirmDialog({
+      isOpen: true,
+      title: 'Revoke Invitation Link?',
+      message: 'Cancel this pending invitation link? Anyone with this link will no longer be able to join the workspace.',
+      confirmText: 'Revoke Invitation',
+      variant: 'warning',
+      onConfirm: async () => {
+        setConfirmDialog((prev) => ({ ...prev, isLoading: true }));
+        try {
+          await revokeInvitation(inviteId);
+          toast.success('Invitation revoked.');
+          loadData();
+        } catch (err: any) {
+          toast.error(err?.message || 'Failed to revoke invitation.');
+        } finally {
+          setConfirmDialog((prev) => ({ ...prev, isOpen: false, isLoading: false }));
+        }
+      },
+    });
   };
 
   const handleSaveBoardAccess = async () => {
@@ -225,6 +265,19 @@ export default function TeamPage() {
   return (
     <div className="max-w-5xl space-y-6 pb-12">
       <Toaster position="top-right" />
+
+      {/* SweetAlert2 Style Confirm Dialog */}
+      <ConfirmDialog
+        isOpen={confirmDialog.isOpen}
+        title={confirmDialog.title}
+        message={confirmDialog.message}
+        confirmText={confirmDialog.confirmText}
+        cancelText={confirmDialog.cancelText}
+        variant={confirmDialog.variant}
+        isLoading={confirmDialog.isLoading}
+        onConfirm={confirmDialog.onConfirm}
+        onCancel={() => setConfirmDialog((prev) => ({ ...prev, isOpen: false }))}
+      />
 
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">

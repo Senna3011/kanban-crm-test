@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import Input from '@/components/ui/Input';
 import Button from '@/components/ui/Button';
+import ConfirmDialog, { type ConfirmDialogVariant } from '@/components/ui/ConfirmDialog';
 import { saveEmailConfig, deleteEmailConfig, testImapConnection, testSmtpConnection } from '@/server/actions/email-config';
 import toast from 'react-hot-toast';
 
@@ -90,7 +91,25 @@ export default function EmailConfigForm({ initial, boards = [], isNew = false }:
   const [hasSavedPasswords] = useState(Boolean(initial?.imapUser));
   const [testing, setTesting] = useState<'imap' | 'smtp' | 'all' | null>(null);
   const [saving, setSaving] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const [status, setStatus] = useState<{ imap?: string; smtp?: string }>({});
+
+  // SweetAlert2-styled Confirm Dialog State
+  const [confirmDialog, setConfirmDialog] = useState<{
+    isOpen: boolean;
+    title: string;
+    message: string;
+    confirmText?: string;
+    cancelText?: string;
+    variant?: ConfirmDialogVariant;
+    isLoading?: boolean;
+    onConfirm: () => void | Promise<void>;
+  }>({
+    isOpen: false,
+    title: '',
+    message: '',
+    onConfirm: () => {},
+  });
 
   function applyPreset(presetKey: string, silent = false) {
     setSelectedPreset(presetKey);
@@ -226,16 +245,32 @@ export default function EmailConfigForm({ initial, boards = [], isNew = false }:
     }
   }
 
-  async function handleDelete() {
+  function handleDelete() {
     if (!form.id) return;
-    if (!confirm('Delete this email configuration?')) return;
-    try {
-      await deleteEmailConfig(form.id);
-      toast.success('Email configuration deleted.');
-      window.location.reload();
-    } catch (error: any) {
-      toast.error(error?.message || 'Failed to delete configuration.');
-    }
+    const mailboxEmail = form.imapUser || form.smtpUser || form.name || 'this account';
+
+    setConfirmDialog({
+      isOpen: true,
+      title: 'Disconnect Mailbox Connection?',
+      message: `Disconnect mailbox '${mailboxEmail}'? Inbound sync and automated processing for this address will stop immediately.`,
+      confirmText: 'Disconnect Mailbox',
+      variant: 'danger',
+      onConfirm: async () => {
+        if (!form.id) return;
+        setDeleting(true);
+        setConfirmDialog((prev) => ({ ...prev, isLoading: true }));
+        try {
+          await deleteEmailConfig(form.id);
+          toast.success('Email configuration deleted.');
+          window.location.reload();
+        } catch (error: any) {
+          toast.error(error?.message || 'Failed to delete configuration.');
+        } finally {
+          setDeleting(false);
+          setConfirmDialog((prev) => ({ ...prev, isOpen: false, isLoading: false }));
+        }
+      },
+    });
   }
 
   const updateField = (field: keyof EmailValues, value: string | number) => setForm((prev) => ({ ...prev, [field]: value }));
@@ -244,6 +279,19 @@ export default function EmailConfigForm({ initial, boards = [], isNew = false }:
 
   return (
     <div className="space-y-4">
+      {/* SweetAlert2 Style Confirm Dialog */}
+      <ConfirmDialog
+        isOpen={confirmDialog.isOpen}
+        title={confirmDialog.title}
+        message={confirmDialog.message}
+        confirmText={confirmDialog.confirmText}
+        cancelText={confirmDialog.cancelText}
+        variant={confirmDialog.variant}
+        isLoading={confirmDialog.isLoading}
+        onConfirm={confirmDialog.onConfirm}
+        onCancel={() => setConfirmDialog((prev) => ({ ...prev, isOpen: false }))}
+      />
+
       {/* 1-Click Provider Presets Selector */}
       <div className="p-3.5 bg-slate-50 border border-slate-200/90 rounded-xl space-y-2">
         <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider">

@@ -2,6 +2,8 @@
 
 import { useEffect, useState, use } from 'react';
 import Link from 'next/link';
+import ConfirmDialog, { type ConfirmDialogVariant } from '@/components/ui/ConfirmDialog';
+import toast, { Toaster } from 'react-hot-toast';
 
 interface Lead {
   id: string;
@@ -53,8 +55,6 @@ export default function CampaignWorkspacePage({
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [actionLoading, setActionLoading] = useState('');
-  const [actionMessage, setActionMessage] = useState('');
-  const [actionError, setActionError] = useState('');
   const [rowLoading, setRowLoading] = useState<Record<string, boolean>>({});
   const [exportingCsv, setExportingCsv] = useState(false);
 
@@ -87,6 +87,23 @@ export default function CampaignWorkspacePage({
   const [testContent, setTestContent] = useState('');
   const [sendingTestDirect, setSendingTestDirect] = useState(false);
 
+  // SweetAlert2-styled Confirm Dialog State
+  const [confirmDialog, setConfirmDialog] = useState<{
+    isOpen: boolean;
+    title: string;
+    message: string;
+    confirmText?: string;
+    cancelText?: string;
+    variant?: ConfirmDialogVariant;
+    isLoading?: boolean;
+    onConfirm: () => void | Promise<void>;
+  }>({
+    isOpen: false,
+    title: '',
+    message: '',
+    onConfirm: () => {},
+  });
+
   useEffect(() => {
     fetchCampaign();
   }, [campaignId]);
@@ -109,8 +126,6 @@ export default function CampaignWorkspacePage({
   // 1. Source More Leads
   async function handleSourceLeads() {
     setActionLoading('scrape');
-    setActionMessage('');
-    setActionError('');
     try {
       const res = await fetch(`/api/outreach/campaigns/${campaignId}/scrape`, {
         method: 'POST',
@@ -119,10 +134,10 @@ export default function CampaignWorkspacePage({
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Failed to source leads');
-      setActionMessage(`Successfully sourced ${data.count} new leads via Apify.`);
+      toast.success(`Successfully sourced ${data.count} new leads via Apify.`);
       await fetchCampaign();
     } catch (err: any) {
-      setActionError(`Source error: ${err.message}`);
+      toast.error(`Source error: ${err.message}`);
     } finally {
       setActionLoading('');
     }
@@ -135,8 +150,6 @@ export default function CampaignWorkspacePage({
     } else {
       setActionLoading('verify');
     }
-    setActionMessage('');
-    setActionError('');
     try {
       const res = await fetch(`/api/outreach/campaigns/${campaignId}/verify`, {
         method: 'POST',
@@ -145,10 +158,10 @@ export default function CampaignWorkspacePage({
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Failed to verify emails');
-      setActionMessage(leadId ? 'Lead mailbox deliverability verified.' : `Email verification complete: ${data.safeCount} safe mailboxes.`);
+      toast.success(leadId ? 'Lead mailbox deliverability verified.' : `Email verification complete: ${data.safeCount} safe mailboxes.`);
       await fetchCampaign();
     } catch (err: any) {
-      setActionError(`Verification error: ${err.message}`);
+      toast.error(`Verification error: ${err.message}`);
     } finally {
       if (leadId) {
         setRowLoading((prev) => ({ ...prev, [`${leadId}-verify`]: false }));
@@ -165,8 +178,6 @@ export default function CampaignWorkspacePage({
     } else {
       setActionLoading('draft');
     }
-    setActionMessage('');
-    setActionError('');
     try {
       const res = await fetch(`/api/outreach/campaigns/${campaignId}/draft`, {
         method: 'POST',
@@ -175,10 +186,10 @@ export default function CampaignWorkspacePage({
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Failed to generate drafts');
-      setActionMessage(leadId ? 'AI personalized draft regenerated.' : `AI Copywriting complete: ${data.draftsCreated} drafts generated.`);
+      toast.success(leadId ? 'AI personalized draft regenerated.' : `AI Copywriting complete: ${data.draftsCreated} drafts generated.`);
       await fetchCampaign();
     } catch (err: any) {
-      setActionError(`Draft error: ${err.message}`);
+      toast.error(`Draft error: ${err.message}`);
     } finally {
       if (leadId) {
         setRowLoading((prev) => ({ ...prev, [`${leadId}-draft`]: false }));
@@ -188,57 +199,81 @@ export default function CampaignWorkspacePage({
     }
   }
 
-  // 4. Batch or Single Dispatch Emails
-  async function handleDispatchEmails(leadId?: string) {
-    const confirmMsg = leadId
-      ? 'Send email to this prospect now?'
-      : 'Are you ready to dispatch personalized cold emails to all leads with ready drafts?';
-    if (!confirm(confirmMsg)) return;
+  // 4. Batch or Single Dispatch Emails with SweetAlert2 style confirmation
+  function handleDispatchEmails(leadId?: string) {
+    const isSingle = Boolean(leadId);
+    const targetLead = isSingle ? campaign?.leads.find((l) => l.id === leadId) : null;
+    const recipientInfo = targetLead ? `to "${targetLead.fullName}" (${targetLead.email})` : `to ${readyDrafts} verified prospects`;
 
-    if (leadId) {
-      setRowLoading((prev) => ({ ...prev, [`${leadId}-send`]: true }));
-    } else {
-      setActionLoading('dispatch');
-    }
-    setActionMessage('');
-    setActionError('');
-    try {
-      const res = await fetch(`/api/outreach/campaigns/${campaignId}/dispatch`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(leadId ? { leadIds: [leadId] } : {}),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Failed to dispatch emails');
-      setActionMessage(leadId ? 'Email dispatched successfully.' : `Batch dispatch executed: ${data.dispatchedCount} emails sent successfully.`);
-      await fetchCampaign();
-    } catch (err: any) {
-      setActionError(`Dispatch error: ${err.message}`);
-    } finally {
-      if (leadId) {
-        setRowLoading((prev) => ({ ...prev, [`${leadId}-send`]: false }));
-      } else {
-        setActionLoading('');
-      }
-    }
+    setConfirmDialog({
+      isOpen: true,
+      title: isSingle ? 'Dispatch Cold Email?' : `Launch Campaign to ${readyDrafts} Leads?`,
+      message: isSingle
+        ? `Are you ready to dispatch a cold email to "${targetLead?.fullName}" (${targetLead?.email})? This will consume daily sending quota.`
+        : `Dispatch cold email campaign to ${readyDrafts} verified safe leads? This will consume daily sending quota.`,
+      confirmText: isSingle ? 'Send Email Now' : 'Launch & Dispatch Campaign',
+      variant: 'primary',
+      onConfirm: async () => {
+        setConfirmDialog((prev) => ({ ...prev, isLoading: true }));
+        if (leadId) {
+          setRowLoading((prev) => ({ ...prev, [`${leadId}-send`]: true }));
+        } else {
+          setActionLoading('dispatch');
+        }
+        try {
+          const res = await fetch(`/api/outreach/campaigns/${campaignId}/dispatch`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(leadId ? { leadIds: [leadId] } : {}),
+          });
+          const data = await res.json();
+          if (!res.ok) throw new Error(data.error || 'Failed to dispatch emails');
+          toast.success(leadId ? 'Email dispatched successfully.' : `Batch dispatch executed: ${data.dispatchedCount} emails sent.`);
+          await fetchCampaign();
+        } catch (err: any) {
+          toast.error(`Dispatch error: ${err.message}`);
+        } finally {
+          setConfirmDialog((prev) => ({ ...prev, isOpen: false, isLoading: false }));
+          if (leadId) {
+            setRowLoading((prev) => ({ ...prev, [`${leadId}-send`]: false }));
+          } else {
+            setActionLoading('');
+          }
+        }
+      },
+    });
   }
 
-  // 5. Manual Push to Kanban CRM
-  async function handlePushToCrm(leadId: string) {
-    setRowLoading((prev) => ({ ...prev, [`${leadId}-push`]: true }));
-    try {
-      const res = await fetch(`/api/outreach/leads/${leadId}/push-to-crm`, {
-        method: 'POST',
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Failed to push lead to CRM');
-      setActionMessage(`Lead converted to Kanban CRM Card successfully.`);
-      await fetchCampaign();
-    } catch (err: any) {
-      alert(`Push to CRM failed: ${err.message}`);
-    } finally {
-      setRowLoading((prev) => ({ ...prev, [`${leadId}-push`]: false }));
-    }
+  // 5. Manual Push to Kanban CRM with SweetAlert2 style confirmation
+  function handlePushToCrm(leadId: string) {
+    const targetLead = campaign?.leads.find((l) => l.id === leadId);
+    const name = targetLead?.fullName || 'this lead';
+
+    setConfirmDialog({
+      isOpen: true,
+      title: `Push "${name}" to Kanban CRM?`,
+      message: 'This will convert the prospect into a new lead card on your primary Kanban CRM board in the "Leads" column.',
+      confirmText: 'Push to Kanban CRM',
+      variant: 'info',
+      onConfirm: async () => {
+        setConfirmDialog((prev) => ({ ...prev, isLoading: true }));
+        setRowLoading((prev) => ({ ...prev, [`${leadId}-push`]: true }));
+        try {
+          const res = await fetch(`/api/outreach/leads/${leadId}/push-to-crm`, {
+            method: 'POST',
+          });
+          const data = await res.json();
+          if (!res.ok) throw new Error(data.error || 'Failed to push lead to CRM');
+          toast.success(`"${name}" converted to Kanban CRM successfully!`);
+          await fetchCampaign();
+        } catch (err: any) {
+          toast.error(`Push to CRM failed: ${err.message}`);
+        } finally {
+          setConfirmDialog((prev) => ({ ...prev, isOpen: false, isLoading: false }));
+          setRowLoading((prev) => ({ ...prev, [`${leadId}-push`]: false }));
+        }
+      },
+    });
   }
 
   // 6. Export Campaign Leads to CSV
@@ -265,6 +300,7 @@ export default function CampaignWorkspacePage({
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
+      toast.success('Campaign leads exported to CSV');
     } finally {
       setExportingCsv(false);
     }
@@ -274,7 +310,7 @@ export default function CampaignWorkspacePage({
   async function handleAddCustomLead(e: React.FormEvent) {
     e.preventDefault();
     if (!customName.trim() || !customEmail.trim()) {
-      alert('Name and Email are required.');
+      toast.error('Name and Email are required.');
       return;
     }
     setAddingCustomLead(true);
@@ -292,10 +328,14 @@ export default function CampaignWorkspacePage({
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Failed to add lead');
       setIsAddLeadOpen(false);
-      setActionMessage(`Custom test lead "${customName}" (${customEmail}) added with AI draft!`);
+      setCustomName('');
+      setCustomEmail('');
+      setCustomCompany('');
+      setCustomRole('');
+      toast.success(`Custom lead "${customName}" added with AI draft!`);
       await fetchCampaign();
     } catch (err: any) {
-      alert(`Add Lead error: ${err.message}`);
+      toast.error(`Add Lead error: ${err.message}`);
     } finally {
       setAddingCustomLead(false);
     }
@@ -305,12 +345,10 @@ export default function CampaignWorkspacePage({
   async function handleSendDirectTest(e?: React.FormEvent) {
     if (e) e.preventDefault();
     if (!testTargetEmail.trim()) {
-      alert('Target recipient email is required.');
+      toast.error('Target recipient email is required.');
       return;
     }
     setSendingTestDirect(true);
-    setActionMessage('');
-    setActionError('');
     try {
       const res = await fetch(`/api/outreach/campaigns/${campaignId}/test-send`, {
         method: 'POST',
@@ -324,9 +362,9 @@ export default function CampaignWorkspacePage({
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Test send failed');
       setIsTestSendOpen(false);
-      setActionMessage(`✅ Test email successfully dispatched directly to ${data.recipient}! Check your inbox/spam folder.`);
+      toast.success(`Test email dispatched to ${data.recipient}! Check inbox.`);
     } catch (err: any) {
-      setActionError(`Test Send failed: ${err.message}`);
+      toast.error(`Test Send failed: ${err.message}`);
     } finally {
       setSendingTestDirect(false);
     }
@@ -372,9 +410,9 @@ export default function CampaignWorkspacePage({
         };
       });
       setSelectedLead(null);
-      setActionMessage('Draft details updated successfully.');
+      toast.success('Draft details updated successfully.');
     } catch (err: any) {
-      alert(`Save draft error: ${err.message}`);
+      toast.error(`Save draft error: ${err.message}`);
     } finally {
       setSavingDraft(false);
     }
@@ -410,10 +448,10 @@ export default function CampaignWorkspacePage({
       if (!res.ok) throw new Error(data.error || 'Failed to dispatch email');
 
       setSelectedLead(null);
-      setActionMessage(`✅ Email dispatched successfully to ${data.recipient}!`);
+      toast.success(`Email dispatched successfully to ${data.recipient}!`);
       await fetchCampaign();
     } catch (err: any) {
-      alert(`Dispatch Error: ${err.message}`);
+      toast.error(`Dispatch Error: ${err.message}`);
     } finally {
       setSendingSingleTest(false);
     }
@@ -466,6 +504,21 @@ export default function CampaignWorkspacePage({
 
   return (
     <div className="p-4 sm:p-6 lg:p-8 space-y-6 max-w-7xl mx-auto">
+      <Toaster position="top-right" />
+
+      {/* SweetAlert2 Style Confirm Modal */}
+      <ConfirmDialog
+        isOpen={confirmDialog.isOpen}
+        title={confirmDialog.title}
+        message={confirmDialog.message}
+        confirmText={confirmDialog.confirmText}
+        cancelText={confirmDialog.cancelText}
+        variant={confirmDialog.variant}
+        isLoading={confirmDialog.isLoading}
+        onConfirm={confirmDialog.onConfirm}
+        onCancel={() => setConfirmDialog((prev) => ({ ...prev, isOpen: false }))}
+      />
+
       {/* Top Breadcrumb & Campaign Header */}
       <div className="bg-white p-6 rounded-2xl border border-slate-200/80 shadow-xs space-y-4">
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
@@ -597,24 +650,6 @@ export default function CampaignWorkspacePage({
             </button>
           </div>
         </div>
-
-        {/* Action Status Banners */}
-        {actionMessage && (
-          <div className="p-3.5 bg-emerald-50 border border-emerald-200 text-xs font-medium text-emerald-900 rounded-xl flex items-center justify-between">
-            <span>{actionMessage}</span>
-            <button onClick={() => setActionMessage('')} className="text-emerald-700 hover:text-emerald-950 font-bold ml-2">
-              ✕
-            </button>
-          </div>
-        )}
-        {actionError && (
-          <div className="p-3.5 bg-red-50 border border-red-200 text-xs font-medium text-red-900 rounded-xl flex items-center justify-between">
-            <span>{actionError}</span>
-            <button onClick={() => setActionError('')} className="text-red-700 hover:text-red-950 font-bold ml-2">
-              ✕
-            </button>
-          </div>
-        )}
       </div>
 
       {/* Progress Funnel Tiles */}
@@ -765,24 +800,9 @@ export default function CampaignWorkspacePage({
 
                       {/* Status */}
                       <td className="px-4 py-3.5 text-center">
-                        <span
-                          className={`inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-semibold ${
-                            lead.status === 'FAILED'
-                              ? 'bg-red-100 text-red-800'
-                              : lead.status === 'DISPATCHED'
-                              ? 'bg-indigo-100 text-indigo-800'
-                              : lead.status === 'CONVERTED'
-                              ? 'bg-emerald-100 text-emerald-800'
-                              : 'bg-slate-100 text-slate-700'
-                          }`}
-                        >
+                        <span className="inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-semibold bg-slate-100 text-slate-700">
                           {lead.status.replace('_', ' ')}
                         </span>
-                        {lead.status === 'FAILED' && lead.errorMessage && (
-                          <p className="text-[9px] text-red-600 mt-0.5 max-w-[140px] mx-auto truncate" title={lead.errorMessage}>
-                            ⚠️ {lead.errorMessage}
-                          </p>
-                        )}
                         {lead.sentAt && (
                           <p className="text-[9px] text-slate-400 mt-0.5">
                             Sent {new Date(lead.sentAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
@@ -797,16 +817,9 @@ export default function CampaignWorkspacePage({
                             onClick={() => openDraftModal(lead)}
                             className="text-left group hover:text-primary-600 block"
                           >
-                            <div className="flex items-center gap-1.5">
-                              <p className="font-semibold text-slate-800 group-hover:text-primary-600 truncate text-[11px]">
-                                {lead.aiDraftSubject}
-                              </p>
-                              {lead.metadata?.isAiGenerated === false && (
-                                <span className="px-1.5 py-0.2 text-[9px] bg-amber-100 text-amber-800 rounded font-semibold whitespace-nowrap" title="Generated from standard template (AI fallback)">
-                                  Template
-                                </span>
-                              )}
-                            </div>
+                            <p className="font-semibold text-slate-800 group-hover:text-primary-600 truncate text-[11px]">
+                              {lead.aiDraftSubject}
+                            </p>
                             <p className="text-[10px] text-slate-400 truncate mt-0.5">
                               {lead.aiDraftBody?.slice(0, 70)}...
                             </p>
@@ -1144,15 +1157,7 @@ export default function CampaignWorkspacePage({
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 pt-3 border-t border-slate-100">
               <button
                 type="button"
-                onClick={async () => {
-                  setPushingToCrmModal(true);
-                  try {
-                    await handlePushToCrm(selectedLead.id);
-                    setSelectedLead(null);
-                  } finally {
-                    setPushingToCrmModal(false);
-                  }
-                }}
+                onClick={() => handlePushToCrm(selectedLead.id)}
                 disabled={pushingToCrmModal}
                 className="px-3 py-1.5 bg-indigo-50 text-indigo-700 hover:bg-indigo-100 text-xs font-semibold rounded-lg transition-colors inline-flex items-center gap-1.5 disabled:opacity-50"
               >

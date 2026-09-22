@@ -5,6 +5,7 @@ import { usePathname, useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { useSession } from 'next-auth/react';
 import clsx from 'clsx';
+import ConfirmDialog from '@/components/ui/ConfirmDialog';
 
 const navItems = [
   { href: '/dashboard', label: 'Board', icon: '📋' },
@@ -31,6 +32,17 @@ export default function Sidebar() {
   const [newBoardTitle, setNewBoardTitle] = useState('');
   const [creatingBoard, setCreatingBoard] = useState(false);
   const [boardError, setBoardError] = useState('');
+
+  // Delete Board Dialog State
+  const [deleteDialog, setDeleteDialog] = useState<{
+    isOpen: boolean;
+    board: BoardItem | null;
+    isLoading: boolean;
+  }>({
+    isOpen: false,
+    board: null,
+    isLoading: false,
+  });
 
   useEffect(() => {
     fetch('/api/boards')
@@ -146,19 +158,13 @@ export default function Sidebar() {
                 </button>
                 {isAdmin && boards.length > 1 && (
                   <button
-                    onClick={async (e) => {
+                    onClick={(e) => {
                       e.stopPropagation();
-                      if (!confirm(`Delete board "${board.title}" and all cards in it?`)) return;
-                      try {
-                        const res = await fetch(`/api/boards/${board.id}`, { method: 'DELETE' });
-                        if (res.ok) {
-                          const updated = boards.filter((b) => b.id !== board.id);
-                          setBoards(updated);
-                          if (activeBoard === board.id && updated.length > 0) {
-                            selectBoard(updated[0].id);
-                          }
-                        }
-                      } catch {}
+                      setDeleteDialog({
+                        isOpen: true,
+                        board,
+                        isLoading: false,
+                      });
                     }}
                     className="opacity-0 group-hover:opacity-100 hover:text-red-600 p-0.5 rounded transition text-[11px]"
                     title="Delete Board"
@@ -295,6 +301,35 @@ export default function Sidebar() {
           </div>
         </div>
       )}
+
+      {/* SweetAlert2 Style Confirm Dialog for Deleting Board */}
+      <ConfirmDialog
+        isOpen={deleteDialog.isOpen}
+        title={deleteDialog.board ? `Delete Pipeline Board '${deleteDialog.board.title}'?` : 'Delete Pipeline Board?'}
+        message={deleteDialog.board ? `Delete board '${deleteDialog.board.title}' and all cards inside it? This action cannot be undone.` : 'Delete this board and all cards inside it? This action cannot be undone.'}
+        confirmText="Delete Board"
+        variant="danger"
+        isLoading={deleteDialog.isLoading}
+        onCancel={() => setDeleteDialog((prev) => ({ ...prev, isOpen: false }))}
+        onConfirm={async () => {
+          if (!deleteDialog.board) return;
+          const boardToDelete = deleteDialog.board;
+          setDeleteDialog((prev) => ({ ...prev, isLoading: true }));
+          try {
+            const res = await fetch(`/api/boards/${boardToDelete.id}`, { method: 'DELETE' });
+            if (res.ok) {
+              const updated = boards.filter((b) => b.id !== boardToDelete.id);
+              setBoards(updated);
+              if (activeBoard === boardToDelete.id && updated.length > 0) {
+                selectBoard(updated[0].id);
+              }
+            }
+          } catch {
+          } finally {
+            setDeleteDialog({ isOpen: false, board: null, isLoading: false });
+          }
+        }}
+      />
     </>
   );
 }
