@@ -117,9 +117,11 @@ export default function OutreachDashboardPage() {
           <h2 className="text-sm font-bold text-slate-900">Active Campaigns</h2>
           <button
             onClick={fetchCampaigns}
-            className="text-xs text-slate-500 hover:text-slate-800 transition-colors flex items-center gap-1"
+            disabled={loading}
+            className="text-xs text-slate-500 hover:text-slate-800 transition-colors flex items-center gap-1.5 disabled:opacity-50"
           >
-            <span>🔄</span> Refresh
+            <span className={loading ? 'animate-spin' : ''}>🔄</span>
+            <span>{loading ? 'Refreshing...' : 'Refresh'}</span>
           </button>
         </div>
 
@@ -129,8 +131,11 @@ export default function OutreachDashboardPage() {
           </div>
         )}
 
-        {loading ? (
-          <div className="p-12 text-center text-xs text-slate-400">Loading outreach campaigns...</div>
+        {loading && campaigns.length === 0 ? (
+          <div className="p-12 text-center text-xs text-slate-500 space-y-2">
+            <div className="w-6 h-6 border-2 border-primary-600 border-t-transparent rounded-full animate-spin mx-auto" />
+            <p>Loading outreach campaigns...</p>
+          </div>
         ) : campaigns.length === 0 ? (
           <div className="p-12 text-center space-y-3">
             <div className="w-12 h-12 rounded-full bg-primary-50 text-primary-600 flex items-center justify-center mx-auto text-xl font-bold">
@@ -201,7 +206,7 @@ export default function OutreachDashboardPage() {
                     <td className="px-4 py-3.5 text-center font-semibold text-emerald-700">
                       {camp.metrics.converted}
                     </td>
-                    <td className="px-4 py-3.5 text-right space-x-2">
+                    <td className="px-4 py-3.5 text-right space-x-2 whitespace-nowrap">
                       <Link
                         href={`/dashboard/outreach/${camp.id}`}
                         className="inline-flex items-center px-3 py-1 bg-slate-100 hover:bg-primary-50 hover:text-primary-700 text-slate-700 text-xs font-semibold rounded-lg transition-colors"
@@ -214,7 +219,14 @@ export default function OutreachDashboardPage() {
                         className="inline-flex items-center px-2.5 py-1 text-red-600 hover:bg-red-50 text-xs font-semibold rounded-lg transition-colors disabled:opacity-50"
                         title="Delete Campaign"
                       >
-                        {deletingId === camp.id ? 'Deleting...' : '🗑️'}
+                        {deletingId === camp.id ? (
+                          <>
+                            <span className="w-2.5 h-2.5 border-2 border-red-600 border-t-transparent rounded-full animate-spin mr-1" />
+                            <span>Deleting...</span>
+                          </>
+                        ) : (
+                          <span>🗑️ Delete</span>
+                        )}
                       </button>
                     </td>
                   </tr>

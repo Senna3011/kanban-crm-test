@@ -55,6 +55,7 @@ export default function CampaignWorkspacePage({
   const [actionMessage, setActionMessage] = useState('');
   const [actionError, setActionError] = useState('');
   const [rowLoading, setRowLoading] = useState<Record<string, boolean>>({});
+  const [exportingCsv, setExportingCsv] = useState(false);
 
   // Pagination & Filtering
   const [currentPage, setCurrentPage] = useState(1);
@@ -68,13 +69,14 @@ export default function CampaignWorkspacePage({
   const [editEmail, setEditEmail] = useState('');
   const [savingDraft, setSavingDraft] = useState(false);
   const [sendingSingleTest, setSendingSingleTest] = useState(false);
+  const [pushingToCrmModal, setPushingToCrmModal] = useState(false);
 
-  // Manual Custom Lead Modal State
+  // Add Custom Lead Modal State
   const [isAddLeadOpen, setIsAddLeadOpen] = useState(false);
-  const [customName, setCustomName] = useState('Salman Test Recipient');
-  const [customEmail, setCustomEmail] = useState('salmanajawe@gmail.com');
-  const [customCompany, setCustomCompany] = useState('My Enterprise');
-  const [customRole, setCustomRole] = useState('Director');
+  const [customName, setCustomName] = useState('');
+  const [customEmail, setCustomEmail] = useState('');
+  const [customCompany, setCustomCompany] = useState('');
+  const [customRole, setCustomRole] = useState('');
   const [addingCustomLead, setAddingCustomLead] = useState(false);
 
   // Direct Test Email Modal State
@@ -116,7 +118,7 @@ export default function CampaignWorkspacePage({
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Failed to source leads');
-      setActionMessage(`Successfully sourced ${data.count} new leads.`);
+      setActionMessage(`Successfully sourced ${data.count} new leads via Apify.`);
       await fetchCampaign();
     } catch (err: any) {
       setActionError(`Source error: ${err.message}`);
@@ -128,7 +130,7 @@ export default function CampaignWorkspacePage({
   // 2. Verify Emails via Reoon (Batch or Single)
   async function handleVerifyEmails(leadId?: string) {
     if (leadId) {
-      setRowLoading((prev) => ({ ...prev, [leadId]: true }));
+      setRowLoading((prev) => ({ ...prev, [`${leadId}-verify`]: true }));
     } else {
       setActionLoading('verify');
     }
@@ -148,7 +150,7 @@ export default function CampaignWorkspacePage({
       setActionError(`Verification error: ${err.message}`);
     } finally {
       if (leadId) {
-        setRowLoading((prev) => ({ ...prev, [leadId]: false }));
+        setRowLoading((prev) => ({ ...prev, [`${leadId}-verify`]: false }));
       } else {
         setActionLoading('');
       }
@@ -158,7 +160,7 @@ export default function CampaignWorkspacePage({
   // 3. Generate AI Cold Email Drafts (Batch or Single)
   async function handleGenerateDrafts(leadId?: string) {
     if (leadId) {
-      setRowLoading((prev) => ({ ...prev, [leadId]: true }));
+      setRowLoading((prev) => ({ ...prev, [`${leadId}-draft`]: true }));
     } else {
       setActionLoading('draft');
     }
@@ -178,7 +180,7 @@ export default function CampaignWorkspacePage({
       setActionError(`Draft error: ${err.message}`);
     } finally {
       if (leadId) {
-        setRowLoading((prev) => ({ ...prev, [leadId]: false }));
+        setRowLoading((prev) => ({ ...prev, [`${leadId}-draft`]: false }));
       } else {
         setActionLoading('');
       }
@@ -193,7 +195,7 @@ export default function CampaignWorkspacePage({
     if (!confirm(confirmMsg)) return;
 
     if (leadId) {
-      setRowLoading((prev) => ({ ...prev, [leadId]: true }));
+      setRowLoading((prev) => ({ ...prev, [`${leadId}-send`]: true }));
     } else {
       setActionLoading('dispatch');
     }
@@ -213,7 +215,7 @@ export default function CampaignWorkspacePage({
       setActionError(`Dispatch error: ${err.message}`);
     } finally {
       if (leadId) {
-        setRowLoading((prev) => ({ ...prev, [leadId]: false }));
+        setRowLoading((prev) => ({ ...prev, [`${leadId}-send`]: false }));
       } else {
         setActionLoading('');
       }
@@ -222,6 +224,7 @@ export default function CampaignWorkspacePage({
 
   // 5. Manual Push to Kanban CRM
   async function handlePushToCrm(leadId: string) {
+    setRowLoading((prev) => ({ ...prev, [`${leadId}-push`]: true }));
     try {
       const res = await fetch(`/api/outreach/leads/${leadId}/push-to-crm`, {
         method: 'POST',
@@ -232,31 +235,38 @@ export default function CampaignWorkspacePage({
       await fetchCampaign();
     } catch (err: any) {
       alert(`Push to CRM failed: ${err.message}`);
+    } finally {
+      setRowLoading((prev) => ({ ...prev, [`${leadId}-push`]: false }));
     }
   }
 
   // 6. Export Campaign Leads to CSV
-  function handleExportCsv() {
+  async function handleExportCsv() {
     if (!campaign?.leads || campaign.leads.length === 0) return;
-    const headers = ['Full Name', 'Job Title', 'Company', 'Email', 'Deliverability', 'Status', 'Draft Subject', 'LinkedIn URL'];
-    const rows = campaign.leads.map((l) => [
-      `"${l.fullName.replace(/"/g, '""')}"`,
-      `"${(l.jobTitle || '').replace(/"/g, '""')}"`,
-      `"${(l.companyName || '').replace(/"/g, '""')}"`,
-      `"${(l.email || '').replace(/"/g, '""')}"`,
-      `"${l.verifyStatus || 'UNVERIFIED'}"`,
-      `"${l.status}"`,
-      `"${(l.aiDraftSubject || '').replace(/"/g, '""')}"`,
-      `"${(l.linkedinUrl || '').replace(/"/g, '""')}"`,
-    ]);
-    const csvContent = 'data:text/csv;charset=utf-8,' + [headers.join(','), ...rows.map((r) => r.join(','))].join('\n');
-    const encodedUri = encodeURI(csvContent);
-    const link = document.createElement('a');
-    link.setAttribute('href', encodedUri);
-    link.setAttribute('download', `${campaign.name.toLowerCase().replace(/[^a-z0-9]/g, '_')}_leads.csv`);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+    setExportingCsv(true);
+    try {
+      const headers = ['Full Name', 'Job Title', 'Company', 'Email', 'Deliverability', 'Status', 'Draft Subject', 'LinkedIn URL'];
+      const rows = campaign.leads.map((l) => [
+        `"${l.fullName.replace(/"/g, '""')}"`,
+        `"${(l.jobTitle || '').replace(/"/g, '""')}"`,
+        `"${(l.companyName || '').replace(/"/g, '""')}"`,
+        `"${(l.email || '').replace(/"/g, '""')}"`,
+        `"${l.verifyStatus || 'UNVERIFIED'}"`,
+        `"${l.status}"`,
+        `"${(l.aiDraftSubject || '').replace(/"/g, '""')}"`,
+        `"${(l.linkedinUrl || '').replace(/"/g, '""')}"`,
+      ]);
+      const csvContent = 'data:text/csv;charset=utf-8,' + [headers.join(','), ...rows.map((r) => r.join(','))].join('\n');
+      const encodedUri = encodeURI(csvContent);
+      const link = document.createElement('a');
+      link.setAttribute('href', encodedUri);
+      link.setAttribute('download', `${campaign.name.toLowerCase().replace(/[^a-z0-9]/g, '_')}_leads.csv`);
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    } finally {
+      setExportingCsv(false);
+    }
   }
 
   // 7. Add Custom / Test Lead
@@ -369,11 +379,11 @@ export default function CampaignWorkspacePage({
     }
   }
 
-  async function handleSendSingleLeadNow() {
+  async function sendSingleTestNow() {
     if (!selectedLead) return;
     setSendingSingleTest(true);
     try {
-      // First save draft updates if any
+      // Save draft first
       await fetch(`/api/outreach/leads/${selectedLead.id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
@@ -408,10 +418,11 @@ export default function CampaignWorkspacePage({
     }
   }
 
-  if (loading) {
+  if (loading && !campaign) {
     return (
-      <div className="p-8 text-center text-xs text-slate-400 max-w-7xl mx-auto">
-        Loading campaign workspace...
+      <div className="p-12 text-center text-xs text-slate-500 max-w-7xl mx-auto space-y-3">
+        <div className="w-8 h-8 border-3 border-primary-600 border-t-transparent rounded-full animate-spin mx-auto" />
+        <p className="font-medium">Loading campaign workspace...</p>
       </div>
     );
   }
@@ -477,19 +488,21 @@ export default function CampaignWorkspacePage({
             </p>
           </div>
 
-          {/* Action Toolbar */}
+          {/* Action Toolbar with Lazy Loading States */}
           <div className="flex flex-wrap items-center gap-2">
             <button
               onClick={() => setIsTestSendOpen(true)}
-              className="px-3 py-2 bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-300 text-xs font-bold rounded-xl transition-colors flex items-center gap-1.5 shadow-2xs"
-              title="Kirim email percobaan langsung ke inbox pribadi Anda (misal salmanajawe@gmail.com)"
+              disabled={Boolean(actionLoading) || loading}
+              className="px-3 py-2 bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-300 text-xs font-bold rounded-xl transition-colors flex items-center gap-1.5 shadow-2xs disabled:opacity-50"
+              title="Kirim email percobaan langsung ke inbox pribadi Anda"
             >
               <span>⚡</span>
               <span>Test Send to My Email</span>
             </button>
             <button
               onClick={() => setIsAddLeadOpen(true)}
-              className="px-3 py-2 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-300 text-xs font-bold rounded-xl transition-colors flex items-center gap-1.5 shadow-2xs"
+              disabled={Boolean(actionLoading) || loading}
+              className="px-3 py-2 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-300 text-xs font-bold rounded-xl transition-colors flex items-center gap-1.5 shadow-2xs disabled:opacity-50"
               title="Tambahkan email target khusus/pribadi sebagai lead kampanye"
             >
               <span>➕</span>
@@ -497,43 +510,89 @@ export default function CampaignWorkspacePage({
             </button>
             <button
               onClick={handleExportCsv}
-              className="px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold rounded-xl transition-colors flex items-center gap-1.5"
+              disabled={exportingCsv || Boolean(actionLoading) || loading}
+              className="px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold rounded-xl transition-colors flex items-center gap-1.5 disabled:opacity-50"
               title="Export leads to CSV"
             >
-              <span>📊</span>
-              <span>Export CSV</span>
+              {exportingCsv ? (
+                <>
+                  <span className="w-3.5 h-3.5 border-2 border-slate-700 border-t-transparent rounded-full animate-spin" />
+                  <span>Exporting...</span>
+                </>
+              ) : (
+                <>
+                  <span>📊</span>
+                  <span>Export CSV</span>
+                </>
+              )}
             </button>
             <button
               onClick={handleSourceLeads}
-              disabled={Boolean(actionLoading)}
+              disabled={Boolean(actionLoading) || loading}
               className="px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-800 text-xs font-semibold rounded-xl transition-colors disabled:opacity-50 flex items-center gap-1.5"
             >
-              <span>{actionLoading === 'scrape' ? '⏳' : '🔍'}</span>
-              <span>Source More</span>
+              {actionLoading === 'scrape' ? (
+                <>
+                  <span className="w-3.5 h-3.5 border-2 border-slate-800 border-t-transparent rounded-full animate-spin" />
+                  <span>Sourcing Leads...</span>
+                </>
+              ) : (
+                <>
+                  <span>🔍</span>
+                  <span>Source More</span>
+                </>
+              )}
             </button>
             <button
               onClick={() => handleVerifyEmails()}
-              disabled={Boolean(actionLoading)}
+              disabled={Boolean(actionLoading) || loading}
               className="px-3 py-2 bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200/60 text-xs font-semibold rounded-xl transition-colors disabled:opacity-50 flex items-center gap-1.5"
             >
-              <span>{actionLoading === 'verify' ? '⏳' : '🛡️'}</span>
-              <span>Verify Mailboxes</span>
+              {actionLoading === 'verify' ? (
+                <>
+                  <span className="w-3.5 h-3.5 border-2 border-blue-700 border-t-transparent rounded-full animate-spin" />
+                  <span>Verifying...</span>
+                </>
+              ) : (
+                <>
+                  <span>🛡️</span>
+                  <span>Verify Mailboxes</span>
+                </>
+              )}
             </button>
             <button
               onClick={() => handleGenerateDrafts()}
-              disabled={Boolean(actionLoading)}
+              disabled={Boolean(actionLoading) || loading}
               className="px-3 py-2 bg-purple-50 hover:bg-purple-100 text-purple-700 border border-purple-200/60 text-xs font-semibold rounded-xl transition-colors disabled:opacity-50 flex items-center gap-1.5"
             >
-              <span>{actionLoading === 'draft' ? '⏳' : '🤖'}</span>
-              <span>Generate AI Drafts</span>
+              {actionLoading === 'draft' ? (
+                <>
+                  <span className="w-3.5 h-3.5 border-2 border-purple-700 border-t-transparent rounded-full animate-spin" />
+                  <span>Drafting AI...</span>
+                </>
+              ) : (
+                <>
+                  <span>🤖</span>
+                  <span>Generate AI Drafts</span>
+                </>
+              )}
             </button>
             <button
               onClick={() => handleDispatchEmails()}
-              disabled={Boolean(actionLoading) || readyDrafts === 0}
+              disabled={Boolean(actionLoading) || readyDrafts === 0 || loading}
               className="px-4 py-2 bg-primary-600 hover:bg-primary-700 text-white text-xs font-semibold rounded-xl shadow-xs transition-colors disabled:opacity-50 flex items-center gap-1.5"
             >
-              <span>{actionLoading === 'dispatch' ? '⏳' : '✉️'}</span>
-              <span>Dispatch Emails ({readyDrafts})</span>
+              {actionLoading === 'dispatch' ? (
+                <>
+                  <span className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                  <span>Dispatching...</span>
+                </>
+              ) : (
+                <>
+                  <span>✉️</span>
+                  <span>Dispatch Emails ({readyDrafts})</span>
+                </>
+              )}
             </button>
           </div>
         </div>
@@ -561,28 +620,28 @@ export default function CampaignWorkspacePage({
       <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
         <button
           onClick={() => { setFilterStatus('ALL'); setCurrentPage(1); }}
-          className={`p-4 rounded-xl border text-left transition-all ${filterStatus === 'ALL' ? 'bg-slate-900 text-white border-slate-900' : 'bg-white border-slate-200/80'}`}
+          className={`p-4 rounded-xl border text-left transition-all ${filterStatus === 'ALL' ? 'bg-slate-900 text-white border-slate-900 shadow-xs' : 'bg-white border-slate-200/80 hover:border-slate-300'}`}
         >
           <p className={`text-[10px] font-bold uppercase tracking-wider ${filterStatus === 'ALL' ? 'text-slate-300' : 'text-slate-400'}`}>1. Sourced</p>
           <p className="text-xl font-bold mt-1">{allLeads.length}</p>
         </button>
         <button
           onClick={() => { setFilterStatus('SAFE'); setCurrentPage(1); }}
-          className={`p-4 rounded-xl border text-left transition-all ${filterStatus === 'SAFE' ? 'bg-blue-600 text-white border-blue-600' : 'bg-white border-slate-200/80'}`}
+          className={`p-4 rounded-xl border text-left transition-all ${filterStatus === 'SAFE' ? 'bg-blue-600 text-white border-blue-600 shadow-xs' : 'bg-white border-slate-200/80 hover:border-slate-300'}`}
         >
           <p className={`text-[10px] font-bold uppercase tracking-wider ${filterStatus === 'SAFE' ? 'text-blue-100' : 'text-slate-400'}`}>2. Safe Mailboxes</p>
           <p className={`text-xl font-bold mt-1 ${filterStatus === 'SAFE' ? 'text-white' : 'text-blue-600'}`}>{safeLeads}</p>
         </button>
         <button
           onClick={() => { setFilterStatus('DRAFT_READY'); setCurrentPage(1); }}
-          className={`p-4 rounded-xl border text-left transition-all ${filterStatus === 'DRAFT_READY' ? 'bg-purple-600 text-white border-purple-600' : 'bg-white border-slate-200/80'}`}
+          className={`p-4 rounded-xl border text-left transition-all ${filterStatus === 'DRAFT_READY' ? 'bg-purple-600 text-white border-purple-600 shadow-xs' : 'bg-white border-slate-200/80 hover:border-slate-300'}`}
         >
           <p className={`text-[10px] font-bold uppercase tracking-wider ${filterStatus === 'DRAFT_READY' ? 'text-purple-100' : 'text-slate-400'}`}>3. AI Drafts Ready</p>
           <p className={`text-xl font-bold mt-1 ${filterStatus === 'DRAFT_READY' ? 'text-white' : 'text-purple-600'}`}>{readyDrafts}</p>
         </button>
         <button
           onClick={() => { setFilterStatus('DISPATCHED'); setCurrentPage(1); }}
-          className={`p-4 rounded-xl border text-left transition-all ${filterStatus === 'DISPATCHED' ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white border-slate-200/80'}`}
+          className={`p-4 rounded-xl border text-left transition-all ${filterStatus === 'DISPATCHED' ? 'bg-indigo-600 text-white border-indigo-600 shadow-xs' : 'bg-white border-slate-200/80 hover:border-slate-300'}`}
         >
           <p className={`text-[10px] font-bold uppercase tracking-wider ${filterStatus === 'DISPATCHED' ? 'text-indigo-100' : 'text-slate-400'}`}>4. Dispatched</p>
           <p className={`text-xl font-bold mt-1 ${filterStatus === 'DISPATCHED' ? 'text-white' : 'text-indigo-600'}`}>{dispatchedLeads}</p>
@@ -604,9 +663,11 @@ export default function CampaignWorkspacePage({
           </div>
           <button
             onClick={fetchCampaign}
-            className="text-xs text-slate-500 hover:text-slate-800 transition-colors flex items-center gap-1"
+            disabled={loading}
+            className="text-xs text-slate-500 hover:text-slate-800 transition-colors flex items-center gap-1.5 disabled:opacity-50"
           >
-            <span>🔄</span> Refresh
+            <span className={loading ? 'animate-spin' : ''}>🔄</span>
+            <span>{loading ? 'Refreshing...' : 'Refresh'}</span>
           </button>
         </div>
 
@@ -632,7 +693,9 @@ export default function CampaignWorkspacePage({
                   const isSafe = lead.verifyStatus === 'SAFE';
                   const isRisky = lead.verifyStatus === 'RISKY';
                   const isInvalid = lead.verifyStatus === 'INVALID';
-                  const isRowBusy = rowLoading[lead.id];
+                  const isDrafting = rowLoading[`${lead.id}-draft`];
+                  const isSending = rowLoading[`${lead.id}-send`];
+                  const isPushing = rowLoading[`${lead.id}-push`];
 
                   return (
                     <tr key={lead.id} className="hover:bg-slate-50/60 transition-colors">
@@ -730,15 +793,25 @@ export default function CampaignWorkspacePage({
                         )}
                       </td>
 
-                      {/* Actions */}
+                      {/* Actions with Lazy Loading Spinners */}
                       <td className="px-4 py-3.5 text-right space-x-1.5 whitespace-nowrap">
                         <button
                           onClick={() => handleGenerateDrafts(lead.id)}
-                          disabled={isRowBusy}
-                          className="px-2 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 text-[11px] font-semibold rounded-lg transition-colors"
+                          disabled={isDrafting || isSending || isPushing}
+                          className="px-2 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 text-[11px] font-semibold rounded-lg transition-colors disabled:opacity-50 inline-flex items-center gap-1"
                           title="Generate/Re-generate AI draft for this lead"
                         >
-                          {isRowBusy ? '⏳' : '🤖 Draft'}
+                          {isDrafting ? (
+                            <>
+                              <span className="w-2.5 h-2.5 border-2 border-slate-700 border-t-transparent rounded-full animate-spin" />
+                              <span>Drafting...</span>
+                            </>
+                          ) : (
+                            <>
+                              <span>🤖</span>
+                              <span>Draft</span>
+                            </>
+                          )}
                         </button>
                         {lead.aiDraftSubject && (
                           <button
@@ -751,11 +824,21 @@ export default function CampaignWorkspacePage({
                         {lead.aiDraftSubject && lead.email && (
                           <button
                             onClick={() => handleDispatchEmails(lead.id)}
-                            disabled={isRowBusy}
-                            className="px-2.5 py-1 bg-primary-50 hover:bg-primary-100 text-primary-700 border border-primary-200 text-[11px] font-bold rounded-lg transition-colors"
+                            disabled={isDrafting || isSending || isPushing}
+                            className="px-2.5 py-1 bg-primary-50 hover:bg-primary-100 text-primary-700 border border-primary-200 text-[11px] font-bold rounded-lg transition-colors disabled:opacity-50 inline-flex items-center gap-1"
                             title="Send email to this prospect now"
                           >
-                            ✉️ Send
+                            {isSending ? (
+                              <>
+                                <span className="w-2.5 h-2.5 border-2 border-primary-700 border-t-transparent rounded-full animate-spin" />
+                                <span>Sending...</span>
+                              </>
+                            ) : (
+                              <>
+                                <span>✉️</span>
+                                <span>Send</span>
+                              </>
+                            )}
                           </button>
                         )}
                         {lead.status === 'CONVERTED' ? (
@@ -765,10 +848,21 @@ export default function CampaignWorkspacePage({
                         ) : (
                           <button
                             onClick={() => handlePushToCrm(lead.id)}
-                            className="px-2.5 py-1 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 text-[11px] font-bold rounded-lg transition-colors"
+                            disabled={isDrafting || isSending || isPushing}
+                            className="px-2.5 py-1 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 text-[11px] font-bold rounded-lg transition-colors disabled:opacity-50 inline-flex items-center gap-1"
                             title="Convert immediately to Kanban CRM Lead Card"
                           >
-                            + Push to CRM
+                            {isPushing ? (
+                              <>
+                                <span className="w-2.5 h-2.5 border-2 border-indigo-700 border-t-transparent rounded-full animate-spin" />
+                                <span>Pushing...</span>
+                              </>
+                            ) : (
+                              <>
+                                <span>+</span>
+                                <span>Push to CRM</span>
+                              </>
+                            )}
                           </button>
                         )}
                       </td>
@@ -850,17 +944,17 @@ export default function CampaignWorkspacePage({
                     type="text"
                     value={customCompany}
                     onChange={(e) => setCustomCompany(e.target.value)}
-                    placeholder="e.g. Acme Corp"
+                    placeholder="e.g. Test Org"
                     className="w-full px-3 py-2 border border-slate-300 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-primary-500 text-slate-800"
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1">Job Title</label>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">Job Role</label>
                   <input
                     type="text"
                     value={customRole}
                     onChange={(e) => setCustomRole(e.target.value)}
-                    placeholder="e.g. CTO / Founder"
+                    placeholder="e.g. Managing Director"
                     className="w-full px-3 py-2 border border-slate-300 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-primary-500 text-slate-800"
                   />
                 </div>
@@ -870,16 +964,23 @@ export default function CampaignWorkspacePage({
                 <button
                   type="button"
                   onClick={() => setIsAddLeadOpen(false)}
-                  className="px-3 py-2 text-xs text-slate-600 hover:bg-slate-100 rounded-lg"
+                  className="px-3.5 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-100 rounded-lg"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={addingCustomLead}
-                  className="px-4 py-2 text-xs bg-emerald-600 text-white font-semibold rounded-lg hover:bg-emerald-700 disabled:opacity-50"
+                  className="px-4 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold rounded-lg shadow-xs disabled:opacity-50 inline-flex items-center gap-1.5"
                 >
-                  {addingCustomLead ? 'Adding...' : 'Add Lead & Generate AI Draft'}
+                  {addingCustomLead ? (
+                    <>
+                      <span className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                      <span>Adding & Drafting...</span>
+                    </>
+                  ) : (
+                    <span>Add Lead & Generate AI Draft</span>
+                  )}
                 </button>
               </div>
             </form>
@@ -887,14 +988,17 @@ export default function CampaignWorkspacePage({
         </div>
       )}
 
-      {/* Direct Test Email Modal */}
+      {/* Direct Test Send Modal */}
       {isTestSendOpen && (
         <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4 z-50">
           <div className="bg-white rounded-2xl max-w-lg w-full p-6 shadow-xl border border-slate-200 space-y-4">
             <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-              <div>
-                <h3 className="text-sm font-bold text-slate-900">⚡ Test Outreach Dispatch Directly</h3>
-                <p className="text-xs text-slate-500">Kirim email outreach live langsung ke inbox email pribadi Anda untuk uji coba SMTP.</p>
+              <div className="flex items-center gap-2">
+                <span className="text-xl">⚡</span>
+                <div>
+                  <h3 className="text-sm font-bold text-slate-900">Direct Test Email Dispatcher</h3>
+                  <p className="text-xs text-slate-500">Kirim email pengujian langsung ke inbox pribadi Anda.</p>
+                </div>
               </div>
               <button onClick={() => setIsTestSendOpen(false)} className="text-slate-400 hover:text-slate-600">
                 ✕
@@ -903,33 +1007,33 @@ export default function CampaignWorkspacePage({
 
             <form onSubmit={handleSendDirectTest} className="space-y-3">
               <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">Recipient Target Email *</label>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">Send Directly To (Target Email) *</label>
                 <input
                   type="email"
                   required
                   value={testTargetEmail}
                   onChange={(e) => setTestTargetEmail(e.target.value)}
-                  placeholder="salmanajawe@gmail.com"
+                  placeholder="e.g. salmanajawe@gmail.com"
                   className="w-full px-3 py-2 border border-slate-300 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-primary-500 font-mono text-slate-800"
                 />
               </div>
               <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">Subject (Optional)</label>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">Email Subject (Optional)</label>
                 <input
                   type="text"
                   value={testSubject}
                   onChange={(e) => setTestSubject(e.target.value)}
-                  placeholder={`[Test Outreach] Partnership proposal from ${campaign.name}`}
+                  placeholder="Leave empty for auto-generated AI subject"
                   className="w-full px-3 py-2 border border-slate-300 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-primary-500 text-slate-800"
                 />
               </div>
               <div>
                 <label className="block text-xs font-semibold text-slate-700 mb-1">Email Body Content (Optional)</label>
                 <textarea
-                  rows={5}
+                  rows={4}
                   value={testContent}
                   onChange={(e) => setTestContent(e.target.value)}
-                  placeholder="Tulis pesan uji coba atau kosongkan untuk menggunakan template default AI."
+                  placeholder="Leave empty for auto-generated AI personalized cold outreach copy"
                   className="w-full px-3 py-2 border border-slate-300 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-primary-500 text-slate-800"
                 />
               </div>
@@ -938,22 +1042,22 @@ export default function CampaignWorkspacePage({
                 <button
                   type="button"
                   onClick={() => setIsTestSendOpen(false)}
-                  className="px-3 py-2 text-xs text-slate-600 hover:bg-slate-100 rounded-lg"
+                  className="px-3.5 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-100 rounded-lg"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={sendingTestDirect}
-                  className="px-4 py-2 text-xs bg-amber-600 text-white font-bold rounded-lg hover:bg-amber-700 disabled:opacity-50 flex items-center gap-1.5"
+                  className="px-4 py-1.5 bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold rounded-lg shadow-xs disabled:opacity-50 inline-flex items-center gap-1.5"
                 >
                   {sendingTestDirect ? (
                     <>
-                      <span className="animate-spin">🔄</span>
-                      <span>Dispatching via SMTP...</span>
+                      <span className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                      <span>Sending Test Email...</span>
                     </>
                   ) : (
-                    <span>Dispatch Test Email Now ✉️</span>
+                    <span>🚀 Send Test Email Now</span>
                   )}
                 </button>
               </div>
@@ -984,7 +1088,7 @@ export default function CampaignWorkspacePage({
             <div className="space-y-3">
               <div>
                 <label className="block text-xs font-semibold text-slate-700 mb-1">
-                  Recipient Target Email (Ganti ke email Anda jika ingin uji coba terima di inbox)
+                  Recipient Target Email (Ubah ke email pribadi Anda untuk tes)
                 </label>
                 <input
                   type="email"
@@ -1014,15 +1118,47 @@ export default function CampaignWorkspacePage({
               </div>
             </div>
 
-            <div className="flex items-center justify-between pt-3 border-t border-slate-100">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 pt-3 border-t border-slate-100">
               <button
                 type="button"
-                onClick={() => handlePushToCrm(selectedLead.id)}
-                className="px-3 py-1.5 bg-indigo-50 text-indigo-700 hover:bg-indigo-100 text-xs font-semibold rounded-lg transition-colors"
+                onClick={async () => {
+                  setPushingToCrmModal(true);
+                  try {
+                    await handlePushToCrm(selectedLead.id);
+                    setSelectedLead(null);
+                  } finally {
+                    setPushingToCrmModal(false);
+                  }
+                }}
+                disabled={pushingToCrmModal}
+                className="px-3 py-1.5 bg-indigo-50 text-indigo-700 hover:bg-indigo-100 text-xs font-semibold rounded-lg transition-colors inline-flex items-center gap-1.5 disabled:opacity-50"
               >
-                Push to Kanban CRM
+                {pushingToCrmModal ? (
+                  <>
+                    <span className="w-3 h-3 border-2 border-indigo-700 border-t-transparent rounded-full animate-spin" />
+                    <span>Converting...</span>
+                  </>
+                ) : (
+                  <span>Push to Kanban CRM</span>
+                )}
               </button>
               <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={sendSingleTestNow}
+                  disabled={sendingSingleTest || savingDraft}
+                  className="px-3 py-1.5 bg-primary-50 border border-primary-300 text-primary-700 hover:bg-primary-100 text-xs font-bold rounded-lg transition-colors inline-flex items-center gap-1.5 disabled:opacity-50"
+                  title="Kirim email ini langsung ke alamat email penerima di atas"
+                >
+                  {sendingSingleTest ? (
+                    <>
+                      <span className="w-3 h-3 border-2 border-primary-700 border-t-transparent rounded-full animate-spin" />
+                      <span>Sending Live...</span>
+                    </>
+                  ) : (
+                    <span>🚀 Send Live to this Lead</span>
+                  )}
+                </button>
                 <button
                   type="button"
                   onClick={() => setSelectedLead(null)}
@@ -1032,19 +1168,18 @@ export default function CampaignWorkspacePage({
                 </button>
                 <button
                   type="button"
-                  disabled={savingDraft}
+                  disabled={savingDraft || sendingSingleTest}
                   onClick={saveEditedDraft}
-                  className="px-3 py-1.5 text-xs bg-slate-200 text-slate-800 font-semibold rounded-lg hover:bg-slate-300 disabled:opacity-50"
+                  className="px-4 py-1.5 text-xs bg-primary-600 text-white font-semibold rounded-lg hover:bg-primary-700 disabled:opacity-50 inline-flex items-center gap-1.5"
                 >
-                  {savingDraft ? 'Saving...' : 'Save Draft'}
-                </button>
-                <button
-                  type="button"
-                  disabled={sendingSingleTest || !editEmail}
-                  onClick={handleSendSingleLeadNow}
-                  className="px-4 py-1.5 text-xs bg-primary-600 text-white font-bold rounded-lg hover:bg-primary-700 disabled:opacity-50 flex items-center gap-1"
-                >
-                  {sendingSingleTest ? 'Sending...' : '✉️ Send Live to This Email'}
+                  {savingDraft ? (
+                    <>
+                      <span className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                      <span>Saving...</span>
+                    </>
+                  ) : (
+                    <span>Save Draft</span>
+                  )}
                 </button>
               </div>
             </div>

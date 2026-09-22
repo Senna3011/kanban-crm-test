@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/server/auth';
 import prisma from '@/lib/prisma';
-import { searchLinkedInLeads } from '@/lib/outscraper';
+import { scrapeApifyLeads } from '@/lib/apify';
 
 export async function POST(
   req: NextRequest,
@@ -33,33 +33,41 @@ export async function POST(
     const location = body.location || campaign.targetLocation || undefined;
     const industry = body.industry || campaign.targetIndustry || undefined;
     const limit = Number(body.limit) || 10;
+    const linkedinUrls = Array.isArray(body.linkedinUrls) ? body.linkedinUrls : undefined;
 
-    const apiKey = campaign.account?.outscraperApiKey || process.env.OUTSCRAPER_API_KEY;
+    // Use account specific Apify token if configured, otherwise env default
+    const apiToken = process.env.APIFY_API_TOKEN;
+    const actorId = process.env.APIFY_ACTOR_ID || 'harvestapi/linkedin-profile-scraper';
 
-    const scrapedLeads = await searchLinkedInLeads({
+    const scrapedLeads = await scrapeApifyLeads({
       query,
       role,
       location,
       industry,
       limit,
-      apiKey,
+      linkedinUrls,
+      apiToken,
+      actorId,
     });
 
     const createdLeads = [];
     for (const lead of scrapedLeads) {
       const created = await prisma.outreachLead.create({
         data: {
-          fullName: lead.fullName,
-          firstName: lead.firstName,
-          lastName: lead.lastName,
-          jobTitle: lead.jobTitle,
-          companyName: lead.companyName,
-          companyDomain: lead.companyDomain,
-          linkedinUrl: lead.linkedinUrl,
-          location: lead.location,
+          fullName: String(lead.fullName || 'Executive Prospect'),
+          firstName: lead.firstName ? String(lead.firstName) : null,
+          lastName: lead.lastName ? String(lead.lastName) : null,
+          jobTitle: lead.jobTitle ? String(lead.jobTitle) : null,
+          companyName: lead.companyName ? String(lead.companyName) : null,
+          companyDomain: lead.companyDomain ? String(lead.companyDomain) : null,
+          linkedinUrl: lead.linkedinUrl ? String(lead.linkedinUrl) : null,
+          location: lead.location ? String(lead.location) : null,
+          email: lead.email ? String(lead.email) : null,
           status: 'SCRAPED',
           metadata: {
-            summary: lead.summary,
+            summary: lead.summary ? String(lead.summary) : undefined,
+            source: 'apify',
+            ...(lead.metadata || {}),
             scrapedAt: new Date().toISOString(),
           },
           campaignId: campaign.id,
@@ -74,7 +82,7 @@ export async function POST(
       leads: createdLeads,
     });
   } catch (error: any) {
-    console.error('[API OUTREACH SCRAPE] Error:', error);
-    return NextResponse.json({ error: error.message || 'Scraping failed' }, { status: 500 });
+    console.error('[API OUTREACH SCRAPE - APIFY] Error:', error);
+    return NextResponse.json({ error: error.message || 'Apify lead scraping failed' }, { status: 500 });
   }
 }

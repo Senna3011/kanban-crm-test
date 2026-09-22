@@ -20,6 +20,7 @@
     "@dnd-kit/sortable": "^8.0.0",
     "@dnd-kit/utilities": "^3.2.0",
     "@prisma/client": "^5.14.0",
+    "apify-client": "^2.25.0",
     "autoprefixer": "^10.4.0",
     "bcryptjs": "^2.4.3",
     "bullmq": "^5.7.0",

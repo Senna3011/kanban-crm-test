@@ -76,6 +76,17 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Campaign name is required' }, { status: 400 });
     }
 
+    // Verify accountId belongs to OutreachAccountConfig to prevent Foreign Key violation
+    let validAccountId: string | null = null;
+    if (accountId && typeof accountId === 'string') {
+      const existingAccount = await prisma.outreachAccountConfig.findFirst({
+        where: { id: accountId, tenantId },
+      });
+      if (existingAccount) {
+        validAccountId = existingAccount.id;
+      }
+    }
+
     const campaign = await prisma.outreachCampaign.create({
       data: {
         name: name.trim(),
@@ -85,7 +96,7 @@ export async function POST(req: NextRequest) {
         searchQuery: searchQuery?.trim() || null,
         promptInstructions: promptInstructions?.trim() || null,
         tenantId,
-        accountId: accountId || null,
+        accountId: validAccountId,
       },
       include: {
         account: true,

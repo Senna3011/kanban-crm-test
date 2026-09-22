@@ -23,6 +23,7 @@ export default function NewOutreachCampaignPage() {
   const [testRecipientEmail, setTestRecipientEmail] = useState('');
   const [leadCount, setLeadCount] = useState(10);
   const [loading, setLoading] = useState(false);
+  const [loadingStep, setLoadingStep] = useState('');
   const [error, setError] = useState('');
 
   // Available Mailbox accounts (from CRM & Outreach settings)
@@ -51,6 +52,7 @@ export default function NewOutreachCampaignPage() {
     }
 
     setLoading(true);
+    setLoadingStep('Creating campaign record...');
     setError('');
 
     try {
@@ -75,6 +77,7 @@ export default function NewOutreachCampaignPage() {
       }
 
       const campaign = await res.json();
+      setLoadingStep('Sourcing real LinkedIn profiles via Apify...');
 
       // 2. Automatically trigger lead scraping
       const scrapeRes = await fetch(`/api/outreach/campaigns/${campaign.id}/scrape`, {
@@ -96,6 +99,7 @@ export default function NewOutreachCampaignPage() {
       // 3. If Test Recipient Email is provided, add it as a primary verified lead
       if (testRecipientEmail.trim()) {
         try {
+          setLoadingStep('Seeding test recipient lead...');
           await fetch(`/api/outreach/campaigns/${campaign.id}/leads`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -112,11 +116,13 @@ export default function NewOutreachCampaignPage() {
         }
       }
 
+      setLoadingStep('Redirecting to campaign workspace...');
       // Navigate to campaign workspace
       router.push(`/dashboard/outreach/${campaign.id}`);
     } catch (err: any) {
       setError(err.message || 'An error occurred while creating the campaign.');
       setLoading(false);
+      setLoadingStep('');
     }
   }
 
@@ -246,7 +252,8 @@ export default function NewOutreachCampaignPage() {
               className="w-full px-3.5 py-2.5 border border-slate-300 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-primary-500"
             />
           </div>
-          <div className="p-3 bg-amber-50/70 border border-amber-200/80 rounded-xl space-y-1">
+
+          <div className="p-3.5 bg-amber-50 border border-amber-200 rounded-xl space-y-1.5">
             <label className="block text-xs font-bold text-amber-900">
               Direct Target / Test Recipient Email (Optional)
             </label>
@@ -297,8 +304,8 @@ export default function NewOutreachCampaignPage() {
           >
             {loading ? (
               <>
-                <span className="animate-spin">🔄</span>
-                <span>Creating & Sourcing Leads...</span>
+                <span className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                <span>{loadingStep || 'Creating & Sourcing Leads...'}</span>
               </>
             ) : (
               <span>Create Campaign & Source Leads →</span>
