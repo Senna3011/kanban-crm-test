@@ -4,7 +4,7 @@ import crypto from 'crypto';
 import bcrypt from 'bcryptjs';
 import prisma from '@/lib/prisma';
 import { requireAdmin, requireAuth } from '@/lib/auth-guards';
-import nodemailer from 'nodemailer';
+import nodemailer, { type Transporter } from 'nodemailer';
 import { decrypt } from '@/lib/encryption';
 import { getValidZohoAccessToken } from '@/lib/zoho-oauth';
 import { headers } from 'next/headers';
@@ -80,7 +80,7 @@ export async function createInvitation(data: { email: string; role?: 'admin' | '
     });
 
     if (config) {
-      let transporter: nodemailer.Transporter | null = null;
+      let transporter: Transporter | null = null;
       if (config.authType === 'oauth2' && config.accessToken) {
         const accessToken = await getValidZohoAccessToken(config.id);
         transporter = nodemailer.createTransport({
