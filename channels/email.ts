@@ -39,7 +39,7 @@ export class EmailAdapter implements ChannelAdapter {
 
       const messages: InboundMessage[] = [];
 
-      // Fetch all recent messages in the mailbox (up to last 150 messages or 60 days) to ensure no newsletter/notification is left behind
+      // Fetch all recent messages in the mailbox (up to last 200 messages or 60 days) to ensure no important client email is missed
       const since = new Date();
       since.setDate(since.getDate() - 60);
 

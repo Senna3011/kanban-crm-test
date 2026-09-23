@@ -58,6 +58,16 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Sender email is required' }, { status: 400 });
     }
 
+    let storedPass: string | null = null;
+    if (smtpPass && typeof smtpPass === 'string') {
+      try {
+        const { encrypt } = await import('@/lib/encryption');
+        storedPass = encrypt(smtpPass);
+      } catch {
+        storedPass = smtpPass;
+      }
+    }
+
     const account = await prisma.outreachAccountConfig.upsert({
       where: {
         tenantId_senderEmail: {
@@ -71,7 +81,7 @@ export async function POST(req: NextRequest) {
         smtpHost: smtpHost?.trim() || 'smtp.zoho.com',
         smtpPort: Number(smtpPort) || 465,
         smtpUser: smtpUser?.trim() || senderEmail.trim().toLowerCase(),
-        ...(smtpPass ? { smtpPass } : {}),
+        ...(storedPass ? { smtpPass: storedPass } : {}),
         dailyLimit: Number(dailyLimit) || 50,
       },
       create: {
@@ -81,7 +91,7 @@ export async function POST(req: NextRequest) {
         smtpHost: smtpHost?.trim() || 'smtp.zoho.com',
         smtpPort: Number(smtpPort) || 465,
         smtpUser: smtpUser?.trim() || senderEmail.trim().toLowerCase(),
-        smtpPass: smtpPass || null,
+        smtpPass: storedPass,
         dailyLimit: Number(dailyLimit) || 50,
         tenantId,
       },

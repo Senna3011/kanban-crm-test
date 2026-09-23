@@ -64,8 +64,11 @@ export async function dispatchColdEmail(params: DispatchLeadEmailParams): Promis
     const isSameDay = new Date(account.lastResetDate).toDateString() === new Date().toDateString();
 
     if (!isSameDay) {
-      await prisma.outreachAccountConfig.update({
-        where: { id: account.id },
+      await prisma.outreachAccountConfig.updateMany({
+        where: {
+          id: account.id,
+          lastResetDate: { lt: new Date(new Date().setHours(0, 0, 0, 0)) },
+        },
         data: { sentToday: 0, lastResetDate: new Date() },
       });
     }
@@ -92,11 +95,22 @@ export async function dispatchColdEmail(params: DispatchLeadEmailParams): Promis
     }
   }
 
+  // Resolve and decrypt account SMTP credentials if configured
+  let rawAccountPass = account?.smtpPass;
+  if (rawAccountPass) {
+    try {
+      const { decrypt } = await import('./encryption');
+      rawAccountPass = decrypt(rawAccountPass);
+    } catch {
+      // Kept as-is if already plaintext
+    }
+  }
+
   // Check fallback to active Tenant EmailConfig if OutreachAccountConfig is not explicitly configured
   let smtpHost = account?.smtpHost || process.env.SMTP_HOST;
   let smtpPort = account?.smtpPort || (process.env.SMTP_PORT ? Number(process.env.SMTP_PORT) : 465);
   let smtpUser = account?.smtpUser || process.env.SMTP_USER;
-  let smtpPass = account?.smtpPass || process.env.SMTP_PASS;
+  let smtpPass = rawAccountPass || process.env.SMTP_PASS;
   let senderEmail = account?.senderEmail || smtpUser;
   let senderName = account?.senderName || 'Outreach Team';
 

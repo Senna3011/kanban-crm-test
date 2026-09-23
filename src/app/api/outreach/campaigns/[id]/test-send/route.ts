@@ -36,11 +36,22 @@ export async function POST(
       return NextResponse.json({ error: 'Recipient target email is required' }, { status: 400 });
     }
 
+    // Resolve and decrypt account SMTP credentials if available
+    let rawAccountPass = campaign.account?.smtpPass;
+    if (rawAccountPass) {
+      try {
+        const { decrypt } = await import('@/lib/encryption');
+        rawAccountPass = decrypt(rawAccountPass);
+      } catch {
+        // Keep as-is if raw plaintext
+      }
+    }
+
     // Determine SMTP sender settings from Outreach Account or fallback to CRM active email config
     let smtpHost = campaign.account?.smtpHost || process.env.SMTP_HOST;
     let smtpPort = campaign.account?.smtpPort || (process.env.SMTP_PORT ? Number(process.env.SMTP_PORT) : 465);
     let smtpUser = campaign.account?.smtpUser || process.env.SMTP_USER;
-    let smtpPass = campaign.account?.smtpPass || process.env.SMTP_PASS;
+    let smtpPass = rawAccountPass || process.env.SMTP_PASS;
     let senderEmail = campaign.account?.senderEmail || smtpUser;
     let senderName = campaign.account?.senderName || 'Kanban CRM Outreach';
 

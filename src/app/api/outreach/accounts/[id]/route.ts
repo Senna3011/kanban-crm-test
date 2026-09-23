@@ -66,6 +66,17 @@ export async function PATCH(
 
   try {
     const body = await req.json();
+
+    let updatedPass = body.smtpPass;
+    if (updatedPass && typeof updatedPass === 'string' && updatedPass.trim() !== '') {
+      try {
+        const { encrypt } = await import('@/lib/encryption');
+        updatedPass = encrypt(updatedPass);
+      } catch {
+        // Keep as-is if encryption fails
+      }
+    }
+
     const updated = await prisma.outreachAccountConfig.update({
       where: { id: accountId },
       data: {
@@ -75,7 +86,7 @@ export async function PATCH(
         ...(body.smtpHost !== undefined && { smtpHost: body.smtpHost.trim() }),
         ...(body.smtpPort !== undefined && { smtpPort: Number(body.smtpPort) }),
         ...(body.smtpUser !== undefined && { smtpUser: body.smtpUser.trim() }),
-        ...(body.smtpPass !== undefined && body.smtpPass !== '' && { smtpPass: body.smtpPass }),
+        ...(body.smtpPass !== undefined && body.smtpPass !== '' && { smtpPass: updatedPass }),
         ...(body.apifyApiToken !== undefined && { apifyApiToken: body.apifyApiToken?.trim() || null }),
         ...(body.reoonApiKey !== undefined && { reoonApiKey: body.reoonApiKey?.trim() || null }),
         ...(body.dailyLimit !== undefined && { dailyLimit: Number(body.dailyLimit) }),
