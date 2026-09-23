@@ -7,11 +7,7 @@ import Link from 'next/link';
 interface OutreachAccountOption {
   id: string;
   name: string;
-  senderName: string;
   senderEmail: string;
-  smtpHost: string;
-  smtpPort: number;
-  smtpUser: string;
   isActive: boolean;
 }
 
@@ -25,16 +21,14 @@ export default function NewOutreachCampaignPage() {
   const [promptInstructions, setPromptInstructions] = useState(
     'Highlight our enterprise automation capabilities and offer a complimentary 10-minute architecture review.'
   );
-  const [testRecipientEmail, setTestRecipientEmail] = useState('');
   const [leadCount, setLeadCount] = useState(10);
   const [loading, setLoading] = useState(false);
   const [loadingStep, setLoadingStep] = useState('');
   const [error, setError] = useState('');
 
-  // Available Outreach Mailbox accounts (from Outreach Account Configs)
+  // Optional Outreach Mailbox accounts
   const [outreachAccounts, setOutreachAccounts] = useState<OutreachAccountOption[]>([]);
   const [selectedAccountId, setSelectedAccountId] = useState<string>('');
-  const [accountsLoaded, setAccountsLoaded] = useState(false);
 
   useEffect(() => {
     fetch('/api/outreach/accounts')
@@ -42,13 +36,12 @@ export default function NewOutreachCampaignPage() {
       .then((data) => {
         const list = Array.isArray(data) ? data : data.accounts || [];
         setOutreachAccounts(list);
-        const activeAcc = list.find((a: any) => a.isActive) || list[0];
+        const activeAcc = list.find((a: any) => a.isActive);
         if (activeAcc) {
           setSelectedAccountId(activeAcc.id);
         }
       })
-      .catch((e) => console.error('Failed to load accounts:', e))
-      .finally(() => setAccountsLoaded(true));
+      .catch((e) => console.error('Failed to load accounts:', e));
   }, []);
 
   async function handleSubmit(e: React.FormEvent) {
@@ -58,17 +51,12 @@ export default function NewOutreachCampaignPage() {
       return;
     }
 
-    if (!selectedAccountId) {
-      setError('You must select a valid Outreach Sender Mailbox. Please create one in Outreach Settings first.');
-      return;
-    }
-
     setLoading(true);
     setLoadingStep('Creating campaign record...');
     setError('');
 
     try {
-      // 1. Create Campaign with chosen sender mailbox
+      // 1. Create Campaign (accountId is optional)
       const res = await fetch('/api/outreach/campaigns', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -79,7 +67,7 @@ export default function NewOutreachCampaignPage() {
           targetIndustry: targetIndustry.trim(),
           searchQuery: searchQuery.trim() || undefined,
           promptInstructions: promptInstructions.trim(),
-          accountId: selectedAccountId,
+          accountId: selectedAccountId || undefined,
         }),
       });
 
@@ -109,25 +97,6 @@ export default function NewOutreachCampaignPage() {
         console.warn('Initial lead scraping warning:', scrapeErr.error);
       }
 
-      // 3. If Test Recipient Email is provided, add it as a primary lead
-      if (testRecipientEmail.trim()) {
-        try {
-          await fetch(`/api/outreach/campaigns/${campaign.id}/leads`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              fullName: 'Target Test Recipient',
-              email: testRecipientEmail.trim().toLowerCase(),
-              companyName: 'Test Target Org',
-              jobTitle: targetRole.trim() || 'Lead Decision Maker',
-              location: targetLocation.trim() || 'Indonesia',
-            }),
-          });
-        } catch (e) {
-          console.warn('Failed to seed test recipient lead:', e);
-        }
-      }
-
       // Navigate to campaign workspace
       router.push(`/dashboard/outreach/${campaign.id}`);
     } catch (err: any) {
@@ -149,27 +118,10 @@ export default function NewOutreachCampaignPage() {
           </Link>
           <h1 className="text-xl font-bold text-slate-900 tracking-tight">Create New Outreach Campaign</h1>
           <p className="text-xs text-slate-500 mt-0.5">
-            Configure your target market criteria, sender email account, and AI copywriting guidelines.
+            Discover LinkedIn leads, verify email deliverability, and push contacts into your Kanban CRM board.
           </p>
         </div>
       </div>
-
-      {accountsLoaded && outreachAccounts.length === 0 && (
-        <div className="p-4 bg-amber-50 border border-amber-200 rounded-2xl flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 text-amber-900 text-xs">
-          <div className="flex items-center gap-2">
-            <span className="text-lg">⚠️</span>
-            <span>
-              <strong>No Outreach Sender Accounts Configured:</strong> You need at least one verified sender mailbox before launching an outreach campaign.
-            </span>
-          </div>
-          <Link
-            href="/dashboard/outreach/settings"
-            className="px-3.5 py-1.5 bg-amber-600 hover:bg-amber-700 text-white font-bold rounded-xl whitespace-nowrap self-start sm:self-auto"
-          >
-            Configure Sender Account →
-          </Link>
-        </div>
-      )}
 
       <form onSubmit={handleSubmit} className="bg-white p-6 rounded-2xl border border-slate-200/80 shadow-xs space-y-6">
         {error && (
@@ -178,10 +130,10 @@ export default function NewOutreachCampaignPage() {
           </div>
         )}
 
-        {/* Campaign Basics & Mailbox Selector */}
+        {/* Campaign Basics & Optional Mailbox Selector */}
         <div className="space-y-4">
           <h2 className="text-sm font-bold text-slate-900 border-b border-slate-100 pb-2">
-            1. Campaign Details & Outbound Sender Account
+            1. Campaign Details
           </h2>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
@@ -191,7 +143,7 @@ export default function NewOutreachCampaignPage() {
               <input
                 type="text"
                 required
-                placeholder="e.g., Q4 US Tech Leadership Outreach"
+                placeholder="e.g., Q4 Tech Founders Jakarta"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 className="w-full px-3.5 py-2.5 border border-slate-300 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-primary-500"
@@ -199,24 +151,23 @@ export default function NewOutreachCampaignPage() {
             </div>
             <div>
               <label className="block text-xs font-semibold text-slate-700 mb-1">
-                Sender Mailbox (Email Account for Dispatch) <span className="text-red-500">*</span>
+                Sender Mailbox <span className="text-slate-400 font-normal">(Optional for cold email dispatch)</span>
               </label>
               <select
-                required
                 value={selectedAccountId}
                 onChange={(e) => setSelectedAccountId(e.target.value)}
                 className="w-full px-3.5 py-2.5 border border-slate-300 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-primary-500 bg-white"
               >
-                {outreachAccounts.length > 0 ? (
-                  outreachAccounts.map((acc) => (
-                    <option key={acc.id} value={acc.id}>
-                      {acc.name} ({acc.senderEmail})
-                    </option>
-                  ))
-                ) : (
-                  <option value="">-- No Outreach Mailbox Found --</option>
-                )}
+                <option value="">Direct Sourcing & Staging (No Sender Required)</option>
+                {outreachAccounts.map((acc) => (
+                  <option key={acc.id} value={acc.id}>
+                    {acc.name} ({acc.senderEmail})
+                  </option>
+                ))}
               </select>
+              <p className="text-[10px] text-slate-400 mt-1">
+                You can source leads and push them to Kanban CRM without configuring a sender.
+              </p>
             </div>
           </div>
         </div>
@@ -231,7 +182,7 @@ export default function NewOutreachCampaignPage() {
               <label className="block text-xs font-semibold text-slate-700 mb-1">Target Job Title / Role</label>
               <input
                 type="text"
-                placeholder="e.g., Chief Technology Officer, VP Sales"
+                placeholder="e.g., Chief Technology Officer, Founder, VP Sales"
                 value={targetRole}
                 onChange={(e) => setTargetRole(e.target.value)}
                 className="w-full px-3.5 py-2.5 border border-slate-300 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-primary-500"
@@ -241,7 +192,7 @@ export default function NewOutreachCampaignPage() {
               <label className="block text-xs font-semibold text-slate-700 mb-1">Target Geographic Location</label>
               <input
                 type="text"
-                placeholder="e.g., United States, London, Singapore"
+                placeholder="e.g., Singapore, Jakarta, United States"
                 value={targetLocation}
                 onChange={(e) => setTargetLocation(e.target.value)}
                 className="w-full px-3.5 py-2.5 border border-slate-300 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-primary-500"
@@ -281,27 +232,12 @@ export default function NewOutreachCampaignPage() {
               className="w-full px-3.5 py-2.5 border border-slate-300 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-primary-500"
             />
           </div>
-          <div className="p-3 bg-amber-50/70 border border-amber-200/80 rounded-xl space-y-1">
-            <label className="block text-xs font-bold text-amber-900">
-              Direct Target / Test Recipient Email (Optional)
-            </label>
-            <input
-              type="email"
-              placeholder="e.g., salmanajawe@gmail.com (to test real email delivery to your inbox)"
-              value={testRecipientEmail}
-              onChange={(e) => setTestRecipientEmail(e.target.value)}
-              className="w-full px-3.5 py-2 border border-amber-300 rounded-lg text-xs focus:outline-none focus:ring-2 focus:ring-amber-500 bg-white"
-            />
-            <p className="text-[11px] text-amber-700">
-              Jika diisi, email ini akan otomatis dibuatkan lead khusus dan AI draft agar Anda bisa langsung tes kirim email real ke inbox Anda.
-            </p>
-          </div>
         </div>
 
         {/* AI Copywriting Directives */}
         <div className="space-y-4">
           <h2 className="text-sm font-bold text-slate-900 border-b border-slate-100 pb-2">
-            3. AI Copywriting Directives
+            3. AI Copywriting Directives (Optional)
           </h2>
           <div>
             <label className="block text-xs font-semibold text-slate-700 mb-1">
@@ -327,7 +263,7 @@ export default function NewOutreachCampaignPage() {
           </Link>
           <button
             type="submit"
-            disabled={loading || outreachAccounts.length === 0}
+            disabled={loading}
             className="px-6 py-2.5 bg-primary-600 hover:bg-primary-700 text-white text-xs font-semibold rounded-xl shadow-xs transition-colors disabled:opacity-50 flex items-center gap-2"
           >
             {loading ? (

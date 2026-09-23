@@ -39,12 +39,6 @@ export async function POST(
     const apiToken = campaign.account?.apifyApiToken || process.env.APIFY_API_TOKEN || process.env.APIFY_API_KEY;
     const actorId = process.env.APIFY_ACTOR_ID || 'harvestapi/linkedin-profile-scraper';
 
-    if (!apiToken) {
-      return NextResponse.json({
-        error: 'Apify API Token belum diatur. Silakan atur Apify API Token di menu Outreach Settings agar pencarian profil LinkedIn dapat berjalan.',
-      }, { status: 400 });
-    }
-
     const scrapedLeads = await scrapeApifyLeads({
       query,
       role,

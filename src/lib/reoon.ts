@@ -1,6 +1,6 @@
 export interface ReoonVerifyResult {
   email: string;
-  status: 'SAFE' | 'RISKY' | 'INVALID' | 'UNVERIFIED';
+  status: 'SAFE' | 'RISKY' | 'INVALID' | 'DISPOSABLE' | 'UNVERIFIED';
   score: number;
   reason?: string;
   isDisposable?: boolean;
@@ -21,12 +21,14 @@ export async function verifyEmailAddress(
 ): Promise<ReoonVerifyResult> {
   const key = apiKey || process.env.REOON_API_KEY;
 
-  if (!email || !email.includes('@') || !email.includes('.')) {
+  if (!email || !email.includes('@')) {
     return {
       email,
       status: 'INVALID',
       score: 0,
-      reason: 'Malformed email address syntax',
+      reason: 'Sintaks alamat email tidak valid',
+      isDisposable: false,
+      isFree: false,
     };
   }
 
@@ -65,9 +67,14 @@ export async function verifyEmailAddress(
 
     const json = await response.json();
     const rawStatus = (json.status || '').toLowerCase();
+    const isDisposable = Boolean(json.is_disposable);
 
-    let status: 'SAFE' | 'RISKY' | 'INVALID' | 'UNVERIFIED' = 'SAFE';
-    if (rawStatus === 'valid' || rawStatus === 'safe') {
+    let status: 'SAFE' | 'RISKY' | 'INVALID' | 'DISPOSABLE' | 'UNVERIFIED' = 'SAFE';
+    
+    // Explicitly categorize disposable emails as DISPOSABLE or INVALID
+    if (isDisposable || rawStatus === 'disposable') {
+      status = 'DISPOSABLE';
+    } else if (rawStatus === 'valid' || rawStatus === 'safe') {
       status = 'SAFE';
     } else if (rawStatus === 'catch_all' || rawStatus === 'risky' || rawStatus === 'unknown') {
       status = 'RISKY';
@@ -80,9 +87,9 @@ export async function verifyEmailAddress(
     return {
       email,
       status,
-      score: typeof json.score === 'number' ? json.score : (status === 'SAFE' ? 95 : status === 'RISKY' ? 60 : 10),
+      score: typeof json.score === 'number' ? json.score : (status === 'SAFE' ? 95 : status === 'RISKY' ? 60 : 0),
       reason: json.reason || json.message || undefined,
-      isDisposable: Boolean(json.is_disposable),
+      isDisposable,
       isFree: Boolean(json.is_free),
     };
   } catch (error: any) {
@@ -98,7 +105,7 @@ export async function verifyEmailAddress(
 
 export async function findProspectEmail(
   params: ReoonFindParams
-): Promise<{ email: string | null; status: 'SAFE' | 'RISKY' | 'INVALID' | 'UNVERIFIED'; score: number; reason?: string }> {
+): Promise<{ email: string | null; status: 'SAFE' | 'RISKY' | 'INVALID' | 'DISPOSABLE' | 'UNVERIFIED'; score: number; reason?: string }> {
   const cleanFirst = params.firstName.toLowerCase().replace(/[^a-z0-9]/g, '');
   const cleanLast = params.lastName.toLowerCase().replace(/[^a-z0-9]/g, '');
   const domain = params.companyDomain || (params.companyName ? `${params.companyName.toLowerCase().replace(/[^a-z0-9]/g, '')}.com` : null);
@@ -108,10 +115,9 @@ export async function findProspectEmail(
   }
 
   if (!domain) {
-    return { email: null, status: 'INVALID', score: 0, reason: 'Company domain could not be resolved' };
+    return { email: null, status: 'UNVERIFIED', score: 0, reason: 'Company domain not found' };
   }
 
-  // Realistic corporate email pattern: first.last@domain.com
   const candidateEmail = cleanLast ? `${cleanFirst}.${cleanLast}@${domain}` : `${cleanFirst}@${domain}`;
   const verification = await verifyEmailAddress(candidateEmail, params.apiKey);
 

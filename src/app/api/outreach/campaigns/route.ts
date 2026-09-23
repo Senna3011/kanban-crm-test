@@ -105,28 +105,15 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Campaign name is required' }, { status: 400 });
     }
 
-    // Verify accountId belongs to OutreachAccountConfig
+    // Optional accountId: link to OutreachAccountConfig if provided, otherwise allow null (zero blocker)
     let validAccountId: string | null = null;
-    if (!accountId || typeof accountId !== 'string') {
-      const defaultAccount = await prisma.outreachAccountConfig.findFirst({
-        where: { tenantId, isActive: true },
-      });
-      if (!defaultAccount) {
-        return NextResponse.json({
-          error: 'No Outreach Sender Account configured. Please create an Outreach Sender Account in Settings first.',
-        }, { status: 400 });
-      }
-      validAccountId = defaultAccount.id;
-    } else {
+    if (accountId && typeof accountId === 'string') {
       const existingAccount = await prisma.outreachAccountConfig.findFirst({
         where: { id: accountId, tenantId },
       });
-      if (!existingAccount) {
-        return NextResponse.json({
-          error: 'Selected Outreach Sender Account not found or unauthorized. Please choose a valid account.',
-        }, { status: 400 });
+      if (existingAccount) {
+        validAccountId = existingAccount.id;
       }
-      validAccountId = existingAccount.id;
     }
 
     const campaign = await prisma.outreachCampaign.create({

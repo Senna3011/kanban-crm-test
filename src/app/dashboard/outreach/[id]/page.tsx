@@ -276,6 +276,49 @@ export default function CampaignWorkspacePage({
     });
   }
 
+  // 5b. Push All Verified Leads to Kanban CRM
+  function handlePushAllToCrm() {
+    const uncommittedLeads = (campaign?.leads || []).filter(
+      (l) => l.status !== 'CONVERTED'
+    );
+    if (uncommittedLeads.length === 0) {
+      toast.error('All leads are already converted to Kanban CRM.');
+      return;
+    }
+
+    setConfirmDialog({
+      isOpen: true,
+      title: `Push All ${uncommittedLeads.length} Leads to Kanban CRM?`,
+      message: `Are you sure you want to convert all ${uncommittedLeads.length} leads into cards on your Kanban CRM board? They will appear in the "Leads" column ready for follow-up.`,
+      confirmText: `Push ${uncommittedLeads.length} Leads to CRM`,
+      variant: 'info',
+      onConfirm: async () => {
+        setConfirmDialog((prev) => ({ ...prev, isLoading: true }));
+        setActionLoading('push-all');
+        let successCount = 0;
+        try {
+          for (const lead of uncommittedLeads) {
+            try {
+              const res = await fetch(`/api/outreach/leads/${lead.id}/push-to-crm`, {
+                method: 'POST',
+              });
+              if (res.ok) successCount++;
+            } catch (err) {
+              console.error(`Failed pushing lead ${lead.id}:`, err);
+            }
+          }
+          toast.success(`Successfully pushed ${successCount} leads into Kanban CRM!`);
+          await fetchCampaign();
+        } catch (err: any) {
+          toast.error(`Batch push failed: ${err.message}`);
+        } finally {
+          setConfirmDialog((prev) => ({ ...prev, isOpen: false, isLoading: false }));
+          setActionLoading('');
+        }
+      },
+    });
+  }
+
   // 6. Export Campaign Leads to CSV
   async function handleExportCsv() {
     if (!campaign?.leads || campaign.leads.length === 0) return;
@@ -632,6 +675,24 @@ export default function CampaignWorkspacePage({
               )}
             </button>
             <button
+              onClick={() => handlePushAllToCrm()}
+              disabled={Boolean(actionLoading) || allLeads.length === 0 || loading}
+              className="px-3.5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-xl shadow-xs transition-colors disabled:opacity-50 flex items-center gap-1.5"
+              title="Push all uncommitted leads into your Kanban CRM board"
+            >
+              {actionLoading === 'push-all' ? (
+                <>
+                  <span className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                  <span>Pushing All to CRM...</span>
+                </>
+              ) : (
+                <>
+                  <span>📋</span>
+                  <span>Push All to Kanban CRM</span>
+                </>
+              )}
+            </button>
+            <button
               onClick={() => handleDispatchEmails()}
               disabled={Boolean(actionLoading) || readyDrafts === 0 || loading}
               className="px-4 py-2 bg-primary-600 hover:bg-primary-700 text-white text-xs font-semibold rounded-xl shadow-xs transition-colors disabled:opacity-50 flex items-center gap-1.5"
@@ -786,12 +847,12 @@ export default function CampaignWorkspacePage({
                             🟡 Risky
                           </span>
                         )}
-                        {isInvalid && (
+                        {(isInvalid || lead.verifyStatus === 'DISPOSABLE') && (
                           <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-red-100 text-red-800">
-                            🔴 Invalid
+                            🔴 {lead.verifyStatus === 'DISPOSABLE' ? 'Disposable' : 'Invalid'}
                           </span>
                         )}
-                        {!lead.verifyStatus && (
+                        {!isSafe && !isRisky && !isInvalid && lead.verifyStatus !== 'DISPOSABLE' && (
                           <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-100 text-slate-500">
                             ⚪ Unverified
                           </span>
