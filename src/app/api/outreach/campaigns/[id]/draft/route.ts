@@ -21,7 +21,7 @@ export async function POST(
     where: { id: campaignId, tenantId },
     include: {
       account: true,
-      tenant: { select: { name: true } },
+      tenant: { select: { name: true, companyInfo: true } },
     },
   });
 
@@ -40,8 +40,24 @@ export async function POST(
     },
   });
 
-  const senderName = campaign.account?.senderName || session.user.name || 'Outreach Specialist';
-  const senderCompany = campaign.tenant?.name || 'Our Company';
+  // Extract company knowledge from tenant settings if available
+  let parsedCompanyContext = '';
+  if (campaign.tenant?.companyInfo) {
+    try {
+      const parsed = JSON.parse(campaign.tenant.companyInfo);
+      const parts = [];
+      if (parsed.name) parts.push(`Company Name: ${parsed.name}`);
+      if (parsed.products) parts.push(`Products & Solutions: ${parsed.products}`);
+      if (parsed.knowledgeBase) parts.push(`Knowledge Base / Value Offer: ${parsed.knowledgeBase}`);
+      if (parsed.customPrompt) parts.push(`Tone & Guidelines: ${parsed.customPrompt}`);
+      parsedCompanyContext = parts.join('\n');
+    } catch {
+      parsedCompanyContext = campaign.tenant.companyInfo;
+    }
+  }
+
+  const senderName = campaign.account?.senderName || session.user.name || 'JetDigitalPro Team';
+  const senderCompany = campaign.account?.name || campaign.tenant?.name || 'JetDigitalPro';
   const customInstructions = campaign.promptInstructions || undefined;
 
   const updatedLeads = [];
@@ -56,6 +72,7 @@ export async function POST(
       linkedinSummary,
       senderName,
       senderCompany,
+      companyKnowledge: parsedCompanyContext || undefined,
       customInstructions,
     });
 
