@@ -90,7 +90,7 @@ export default function CampaignWorkspacePage({
 
   // Direct Test Email Modal State
   const [isTestSendOpen, setIsTestSendOpen] = useState(false);
-  const [testTargetEmail, setTestTargetEmail] = useState('salmanajawe@gmail.com');
+  const [testTargetEmail, setTestTargetEmail] = useState('');
   const [testSubject, setTestSubject] = useState('');
   const [testContent, setTestContent] = useState('');
   const [sendingTestDirect, setSendingTestDirect] = useState(false);
@@ -495,6 +495,7 @@ export default function CampaignWorkspacePage({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           leadIds: [selectedLead.id],
+          leadCustomPrompt: modalCustomPrompt.trim() || undefined,
         }),
       });
       const data = await res.json();
@@ -503,9 +504,9 @@ export default function CampaignWorkspacePage({
       if (updated) {
         setEditSubject(updated.aiDraftSubject || '');
         setEditBody(updated.aiDraftBody || '');
-        setSelectedLead((prev) => (prev ? { ...prev, aiDraftSubject: updated.aiDraftSubject, aiDraftBody: updated.aiDraftBody } : null));
+        setSelectedLead((prev) => (prev ? { ...prev, aiDraftSubject: updated.aiDraftSubject, aiDraftBody: updated.aiDraftBody, metadata: updated.metadata } : null));
       }
-      toast.success('AI draft regenerated with JetDigitalPro context!');
+      toast.success('AI draft regenerated with custom context!');
       await fetchCampaign();
     } catch (err: any) {
       toast.error(`Regeneration error: ${err.message}`);
@@ -1284,19 +1285,31 @@ export default function CampaignWorkspacePage({
             <div className="space-y-3">
               <div>
                 <label className="block text-xs font-semibold text-slate-700 mb-1">
-                  Recipient Target Email (Ubah ke email pribadi Anda untuk tes kirim)
+                  Recipient Target Email <span className="text-slate-400 font-normal">(Verified or custom test email)</span>
                 </label>
                 <input
                   type="email"
                   value={editEmail}
                   onChange={(e) => setEditEmail(e.target.value)}
-                  placeholder="e.g. salmanajawe@gmail.com"
+                  placeholder="e.g. prospect@company.com"
                   className="w-full px-3 py-2 border border-slate-300 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-primary-500 font-mono text-slate-800"
                 />
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">Subject Line</label>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="block text-xs font-semibold text-slate-700">Subject Line</label>
+                  {Boolean(selectedLead.metadata && (selectedLead.metadata as any).alternativeSubject) && (
+                    <button
+                      type="button"
+                      onClick={() => setEditSubject((selectedLead.metadata as any).alternativeSubject)}
+                      className="text-[10px] text-indigo-600 hover:text-indigo-800 font-medium"
+                      title="Use AI A/B testing alternative subject"
+                    >
+                      💡 Switch to A/B Subject
+                    </button>
+                  )}
+                </div>
                 <input
                   type="text"
                   value={editSubject}
@@ -1305,21 +1318,36 @@ export default function CampaignWorkspacePage({
                 />
               </div>
 
-              <div>
-                <div className="flex items-center justify-between mb-1">
-                  <label className="block text-xs font-semibold text-slate-700">Email Pitch Body</label>
+              {/* Custom AI Regeneration Guidance */}
+              <div className="p-3 bg-purple-50/50 rounded-xl border border-purple-100 space-y-2">
+                <div className="flex items-center justify-between">
+                  <label className="text-[11px] font-bold text-purple-900 flex items-center gap-1">
+                    <span>✨</span>
+                    <span>AI Regeneration Directives for this Lead (Optional)</span>
+                  </label>
                   <button
                     type="button"
                     onClick={handleRegenerateModalDraft}
                     disabled={regeneratingDraft}
-                    className="text-[11px] text-purple-700 hover:underline font-bold flex items-center gap-1"
+                    className="text-[11px] text-purple-700 hover:text-purple-900 font-bold flex items-center gap-1 bg-white px-2 py-1 rounded-lg border border-purple-200 shadow-2xs"
                   >
                     <span>{regeneratingDraft ? '⏳' : '⚡'}</span>
                     <span>{regeneratingDraft ? 'Regenerating AI...' : 'Regenerate AI Copy'}</span>
                   </button>
                 </div>
+                <input
+                  type="text"
+                  value={modalCustomPrompt}
+                  onChange={(e) => setModalCustomPrompt(e.target.value)}
+                  placeholder="e.g. Make it under 80 words, emphasize cloud security, or use a conversational tone."
+                  className="w-full px-3 py-1.5 border border-purple-200 bg-white rounded-lg text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-purple-500"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">Email Pitch Body</label>
                 <textarea
-                  rows={8}
+                  rows={7}
                   value={editBody}
                   onChange={(e) => setEditBody(e.target.value)}
                   className="w-full px-3 py-2.5 border border-slate-300 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-primary-500 text-slate-800 leading-relaxed font-sans"
@@ -1403,8 +1431,8 @@ export default function CampaignWorkspacePage({
           <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-xl border border-slate-200 space-y-4">
             <div className="flex items-center justify-between border-b border-slate-100 pb-3">
               <div>
-                <h3 className="text-sm font-bold text-slate-900">Add Custom Lead</h3>
-                <p className="text-xs text-slate-500">Tambahkan target email spesifik untuk verifikasi & AI draft.</p>
+                <h3 className="text-sm font-bold text-slate-900">Add Custom Prospect</h3>
+                <p className="text-xs text-slate-500">Add a specific lead for deliverability check & AI drafting.</p>
               </div>
               <button onClick={() => setIsAddLeadOpen(false)} className="text-slate-400 hover:text-slate-600">
                 ✕
@@ -1419,7 +1447,7 @@ export default function CampaignWorkspacePage({
                   required
                   value={customEmail}
                   onChange={(e) => setCustomEmail(e.target.value)}
-                  placeholder="e.g. salmanajawe@gmail.com"
+                  placeholder="e.g. prospect@company.com"
                   className="w-full px-3 py-2 border border-slate-300 rounded-xl text-xs focus:ring-2 focus:ring-primary-500 font-mono text-slate-800"
                 />
               </div>
@@ -1430,7 +1458,7 @@ export default function CampaignWorkspacePage({
                   required
                   value={customName}
                   onChange={(e) => setCustomName(e.target.value)}
-                  placeholder="e.g. Salman Faris"
+                  placeholder="e.g. John Doe"
                   className="w-full px-3 py-2 border border-slate-300 rounded-xl text-xs focus:ring-2 focus:ring-primary-500 text-slate-800"
                 />
               </div>
@@ -1487,7 +1515,7 @@ export default function CampaignWorkspacePage({
                 <span className="text-xl">⚡</span>
                 <div>
                   <h3 className="text-sm font-bold text-slate-900">Direct Test Email Dispatcher</h3>
-                  <p className="text-xs text-slate-500">Kirim email pengujian langsung ke inbox pribadi Anda.</p>
+                  <p className="text-xs text-slate-500">Send an immediate live test email to your personal inbox.</p>
                 </div>
               </div>
               <button onClick={() => setIsTestSendOpen(false)} className="text-slate-400 hover:text-slate-600">
@@ -1503,7 +1531,7 @@ export default function CampaignWorkspacePage({
                   required
                   value={testTargetEmail}
                   onChange={(e) => setTestTargetEmail(e.target.value)}
-                  placeholder="e.g. salmanajawe@gmail.com"
+                  placeholder="e.g. yourname@gmail.com"
                   className="w-full px-3 py-2 border border-slate-300 rounded-xl text-xs focus:ring-2 focus:ring-primary-500 font-mono text-slate-800"
                 />
               </div>

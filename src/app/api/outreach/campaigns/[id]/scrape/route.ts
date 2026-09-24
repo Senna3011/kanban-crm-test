@@ -50,8 +50,34 @@ export async function POST(
       actorId,
     });
 
+    // Cross-campaign deduplication for the tenant
+    const existingLeads = await prisma.outreachLead.findMany({
+      where: {
+        campaign: { tenantId },
+      },
+      select: {
+        linkedinUrl: true,
+        email: true,
+        fullName: true,
+      },
+    });
+
+    const existingUrls = new Set(existingLeads.map((l) => l.linkedinUrl).filter(Boolean));
+    const existingEmails = new Set(existingLeads.map((l) => l.email).filter(Boolean));
+
     const createdLeads = [];
+    let skippedDuplicates = 0;
+
     for (const lead of scrapedLeads) {
+      // Check if lead already exists in this or another campaign for this tenant
+      const isDuplicateUrl = lead.linkedinUrl && existingUrls.has(lead.linkedinUrl);
+      const isDuplicateEmail = lead.email && existingEmails.has(lead.email);
+
+      if (isDuplicateUrl || isDuplicateEmail) {
+        skippedDuplicates++;
+        continue;
+      }
+
       const created = await prisma.outreachLead.create({
         data: {
           fullName: String(lead.fullName || 'Executive Prospect'),
@@ -73,12 +99,16 @@ export async function POST(
           campaignId: campaign.id,
         },
       });
+
+      if (lead.linkedinUrl) existingUrls.add(lead.linkedinUrl);
+      if (lead.email) existingEmails.add(lead.email);
       createdLeads.push(created);
     }
 
     return NextResponse.json({
       success: true,
       count: createdLeads.length,
+      skippedDuplicates,
       leads: createdLeads,
     });
   } catch (error: any) {

@@ -11,24 +11,57 @@ interface OutreachAccountOption {
   isActive: boolean;
 }
 
+const INDUSTRY_OPTIONS = [
+  'Information Technology & Services',
+  'Software & SaaS',
+  'Financial Services & Fintech',
+  'Healthcare & Biotechnology',
+  'E-commerce & Retail',
+  'Management Consulting & Professional Services',
+  'Marketing & Advertising',
+  'Real Estate & Construction',
+  'Manufacturing & Supply Chain',
+  'Education & EdTech',
+  'Energy & Utilities',
+  'Other / Cross-Industry',
+];
+
+const SENIORITY_OPTIONS = [
+  { label: 'All Seniority Levels', value: 'ALL' },
+  { label: 'C-Level (CEO, CTO, CIO, CMO, COO)', value: 'C-Level' },
+  { label: 'VP / Vice President', value: 'VP' },
+  { label: 'Director / Head of Department', value: 'Director' },
+  { label: 'Manager / Lead', value: 'Manager' },
+  { label: 'Founder & Co-Founder', value: 'Founder' },
+];
+
 export default function NewOutreachCampaignPage() {
   const router = useRouter();
+  const [step, setStep] = useState<1 | 2 | 3>(1);
+
+  // Step 1: Basics
   const [name, setName] = useState('');
+  const [selectedAccountId, setSelectedAccountId] = useState<string>('');
+  const [outreachAccounts, setOutreachAccounts] = useState<OutreachAccountOption[]>([]);
+
+  // Step 2: Targeting
   const [targetRole, setTargetRole] = useState('Chief Technology Officer');
+  const [seniority, setSeniority] = useState('ALL');
   const [targetLocation, setTargetLocation] = useState('United States');
-  const [targetIndustry, setTargetIndustry] = useState('Information Technology');
+  const [targetIndustry, setTargetIndustry] = useState('Information Technology & Services');
   const [searchQuery, setSearchQuery] = useState('');
-  const [promptInstructions, setPromptInstructions] = useState(
-    'Highlight our enterprise automation capabilities and offer a complimentary 10-minute architecture review.'
-  );
   const [leadCount, setLeadCount] = useState(10);
+
+  // Step 3: AI Copywriting Strategy
+  const [aiTone, setAiTone] = useState<'formal' | 'conversational' | 'direct'>('formal');
+  const [aiLength, setAiLength] = useState<'concise' | 'detailed'>('concise');
+  const [promptInstructions, setPromptInstructions] = useState(
+    'Highlight our enterprise web architecture and AI automation capabilities. Offer a complimentary 10-minute discovery review.'
+  );
+
   const [loading, setLoading] = useState(false);
   const [loadingStep, setLoadingStep] = useState('');
   const [error, setError] = useState('');
-
-  // Optional Outreach Mailbox accounts
-  const [outreachAccounts, setOutreachAccounts] = useState<OutreachAccountOption[]>([]);
-  const [selectedAccountId, setSelectedAccountId] = useState<string>('');
 
   useEffect(() => {
     fetch('/api/outreach/accounts')
@@ -44,6 +77,23 @@ export default function NewOutreachCampaignPage() {
       .catch((e) => console.error('Failed to load accounts:', e));
   }, []);
 
+  function handleNextStep() {
+    setError('');
+    if (step === 1) {
+      if (!name.trim()) {
+        setError('Please enter a campaign name to continue.');
+        return;
+      }
+      setStep(2);
+    } else if (step === 2) {
+      if (!targetRole.trim() && !searchQuery.trim()) {
+        setError('Please specify a target role or a custom search query.');
+        return;
+      }
+      setStep(3);
+    }
+  }
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!name.trim()) {
@@ -56,7 +106,8 @@ export default function NewOutreachCampaignPage() {
     setError('');
 
     try {
-      // 1. Create Campaign
+      const fullPromptInstructions = `[Tone: ${aiTone}, Length: ${aiLength}] ${promptInstructions}`.trim();
+
       const res = await fetch('/api/outreach/campaigns', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -66,7 +117,7 @@ export default function NewOutreachCampaignPage() {
           targetLocation: targetLocation.trim(),
           targetIndustry: targetIndustry.trim(),
           searchQuery: searchQuery.trim() || undefined,
-          promptInstructions: promptInstructions.trim(),
+          promptInstructions: fullPromptInstructions,
           accountId: selectedAccountId || undefined,
         }),
       });
@@ -77,9 +128,7 @@ export default function NewOutreachCampaignPage() {
       }
 
       const campaign = await res.json();
-
-      // Navigate immediately to campaign workspace where pipeline steps are clearly guided
-      router.push(`/dashboard/outreach/${campaign.id}?autoSource=true&limit=${leadCount}`);
+      router.push(`/dashboard/outreach/${campaign.id}?autoSource=true&limit=${leadCount}&seniority=${encodeURIComponent(seniority)}`);
     } catch (err: any) {
       setError(err.message || 'An error occurred while creating the campaign.');
       setLoading(false);
@@ -89,6 +138,7 @@ export default function NewOutreachCampaignPage() {
 
   return (
     <div className="p-4 sm:p-6 lg:p-8 max-w-4xl mx-auto space-y-6">
+      {/* Header */}
       <div className="flex items-center justify-between">
         <div>
           <Link
@@ -97,165 +147,274 @@ export default function NewOutreachCampaignPage() {
           >
             ← Back to Outreach Campaigns
           </Link>
-          <h1 className="text-xl font-bold text-slate-900 tracking-tight">Create New Outreach Campaign</h1>
+          <h1 className="text-xl font-bold text-slate-900 tracking-tight">Create Targeted Outreach Campaign</h1>
           <p className="text-xs text-slate-500 mt-0.5">
-            Discover LinkedIn leads, verify email deliverability, and push contacts into your Kanban CRM board.
+            Follow the 3-step wizard to configure lead sourcing parameters and AI copywriting directives.
           </p>
+        </div>
+      </div>
+
+      {/* Step Indicator */}
+      <div className="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-xs">
+        <div className="flex items-center justify-between max-w-2xl mx-auto">
+          <div className="flex items-center gap-2">
+            <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold ${step >= 1 ? 'bg-primary-600 text-white' : 'bg-slate-100 text-slate-500'}`}>
+              1
+            </div>
+            <span className={`text-xs font-bold ${step >= 1 ? 'text-slate-900' : 'text-slate-400'}`}>
+              Basics & Mailbox
+            </span>
+          </div>
+          <div className={`flex-1 h-0.5 mx-4 ${step >= 2 ? 'bg-primary-600' : 'bg-slate-200'}`} />
+          <div className="flex items-center gap-2">
+            <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold ${step >= 2 ? 'bg-primary-600 text-white' : 'bg-slate-100 text-slate-500'}`}>
+              2
+            </div>
+            <span className={`text-xs font-bold ${step >= 2 ? 'text-slate-900' : 'text-slate-400'}`}>
+              Targeting Criteria
+            </span>
+          </div>
+          <div className={`flex-1 h-0.5 mx-4 ${step >= 3 ? 'bg-primary-600' : 'bg-slate-200'}`} />
+          <div className="flex items-center gap-2">
+            <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold ${step >= 3 ? 'bg-primary-600 text-white' : 'bg-slate-100 text-slate-500'}`}>
+              3
+            </div>
+            <span className={`text-xs font-bold ${step >= 3 ? 'text-slate-900' : 'text-slate-400'}`}>
+              AI Strategy & Review
+            </span>
+          </div>
         </div>
       </div>
 
       <form onSubmit={handleSubmit} className="bg-white p-6 rounded-2xl border border-slate-200/80 shadow-xs space-y-6">
         {error && (
-          <div className="p-3 bg-red-50 border border-red-200 text-xs text-red-600 rounded-xl">
-            {error}
+          <div className="p-3 bg-red-50 border border-red-200 text-xs text-red-600 rounded-xl font-medium">
+            ⚠️ {error}
           </div>
         )}
 
-        {/* Campaign Basics & Optional Mailbox Selector */}
-        <div className="space-y-4">
-          <h2 className="text-sm font-bold text-slate-900 border-b border-slate-100 pb-2">
-            1. Campaign Details
-          </h2>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        {/* STEP 1: BASICS & SENDER */}
+        {step === 1 && (
+          <div className="space-y-4 animate-in fade-in">
+            <div>
+              <h2 className="text-sm font-bold text-slate-900">Step 1: Campaign Identity & Sender Setup</h2>
+              <p className="text-xs text-slate-500 mt-0.5">Name your campaign and select which sender account to associate.</p>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2">
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">
+                  Campaign Name <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  required
+                  placeholder="e.g., US Enterprise CTOs - Q4 Outbound"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  className="w-full px-3.5 py-2.5 border border-slate-300 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-primary-500"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">
+                  Sender Mailbox <span className="text-slate-400 font-normal">(Optional for staging)</span>
+                </label>
+                <select
+                  value={selectedAccountId}
+                  onChange={(e) => setSelectedAccountId(e.target.value)}
+                  className="w-full px-3.5 py-2.5 border border-slate-300 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-primary-500 bg-white"
+                >
+                  <option value="">Direct Sourcing & Staging (No Sender Required)</option>
+                  {outreachAccounts.map((acc) => (
+                    <option key={acc.id} value={acc.id}>
+                      {acc.name} ({acc.senderEmail})
+                    </option>
+                  ))}
+                </select>
+                <p className="text-[10px] text-slate-400 mt-1">
+                  You can source leads and push them to Kanban CRM even without an outbound sender configured.
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* STEP 2: STRUCTURED TARGETING CRITERIA */}
+        {step === 2 && (
+          <div className="space-y-4 animate-in fade-in">
+            <div>
+              <h2 className="text-sm font-bold text-slate-900">Step 2: Structured LinkedIn Prospecting Parameters</h2>
+              <p className="text-xs text-slate-500 mt-0.5">Define your ideal customer profile (ICP) with structured filters.</p>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2">
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">Target Job Title / Function</label>
+                <input
+                  type="text"
+                  placeholder="e.g., Chief Technology Officer, VP of Engineering, Head of IT"
+                  value={targetRole}
+                  onChange={(e) => setTargetRole(e.target.value)}
+                  className="w-full px-3.5 py-2.5 border border-slate-300 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-primary-500"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">Seniority Level</label>
+                <select
+                  value={seniority}
+                  onChange={(e) => setSeniority(e.target.value)}
+                  className="w-full px-3.5 py-2.5 border border-slate-300 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-primary-500 bg-white"
+                >
+                  {SENIORITY_OPTIONS.map((opt) => (
+                    <option key={opt.value} value={opt.value}>
+                      {opt.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">Geographic Location</label>
+                <input
+                  type="text"
+                  placeholder="e.g., United States, Singapore, Jakarta, United Kingdom"
+                  value={targetLocation}
+                  onChange={(e) => setTargetLocation(e.target.value)}
+                  className="w-full px-3.5 py-2.5 border border-slate-300 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-primary-500"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">Target Industry / Niche</label>
+                <select
+                  value={targetIndustry}
+                  onChange={(e) => setTargetIndustry(e.target.value)}
+                  className="w-full px-3.5 py-2.5 border border-slate-300 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-primary-500 bg-white"
+                >
+                  {INDUSTRY_OPTIONS.map((ind) => (
+                    <option key={ind} value={ind}>
+                      {ind}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">Initial Prospect Count</label>
+                <select
+                  value={leadCount}
+                  onChange={(e) => setLeadCount(Number(e.target.value))}
+                  className="w-full px-3.5 py-2.5 border border-slate-300 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-primary-500 bg-white"
+                >
+                  <option value={5}>5 Leads (Quick Test)</option>
+                  <option value={10}>10 Leads (Recommended Batch)</option>
+                  <option value={25}>25 Leads (Standard Sourcing)</option>
+                  <option value={50}>50 Leads (Comprehensive)</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">Custom Search Query (Optional)</label>
+                <input
+                  type="text"
+                  placeholder="e.g., B2B SaaS Series A funding scale"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="w-full px-3.5 py-2.5 border border-slate-300 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-primary-500"
+                />
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* STEP 3: AI COPYWRITING STRATEGY & REVIEW */}
+        {step === 3 && (
+          <div className="space-y-4 animate-in fade-in">
+            <div>
+              <h2 className="text-sm font-bold text-slate-900">Step 3: AI Copywriting Strategy & Guidelines</h2>
+              <p className="text-xs text-slate-500 mt-0.5">Customize tone, length, and value propositions for JetDigitalPro AI copywriter.</p>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2">
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">Copy Tone</label>
+                <select
+                  value={aiTone}
+                  onChange={(e) => setAiTone(e.target.value as any)}
+                  className="w-full px-3.5 py-2.5 border border-slate-300 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-primary-500 bg-white"
+                >
+                  <option value="formal">Formal & Consultative (Executive)</option>
+                  <option value="conversational">Conversational & Friendly (Peer-to-Peer)</option>
+                  <option value="direct">Direct & Value-Focused (Zero Fluff)</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">Copy Length</label>
+                <select
+                  value={aiLength}
+                  onChange={(e) => setAiLength(e.target.value as any)}
+                  className="w-full px-3.5 py-2.5 border border-slate-300 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-primary-500 bg-white"
+                >
+                  <option value="concise">Concise (Under 90 words, high punchiness)</option>
+                  <option value="detailed">Detailed (100-140 words, 2 value bullet points)</option>
+                </select>
+              </div>
+            </div>
             <div>
               <label className="block text-xs font-semibold text-slate-700 mb-1">
-                Campaign Name <span className="text-red-500">*</span>
+                Custom Value Proposition & Pain Points
               </label>
-              <input
-                type="text"
-                required
-                placeholder="e.g., Q4 Tech Founders Jakarta"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
+              <textarea
+                rows={3}
+                value={promptInstructions}
+                onChange={(e) => setPromptInstructions(e.target.value)}
+                placeholder="Specify key angles, problems you solve, or call-to-actions you want included."
                 className="w-full px-3.5 py-2.5 border border-slate-300 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-primary-500"
               />
             </div>
-            <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1">
-                Sender Mailbox <span className="text-slate-400 font-normal">(Optional for cold email dispatch)</span>
-              </label>
-              <select
-                value={selectedAccountId}
-                onChange={(e) => setSelectedAccountId(e.target.value)}
-                className="w-full px-3.5 py-2.5 border border-slate-300 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-primary-500 bg-white"
-              >
-                <option value="">Direct Sourcing & Staging (No Sender Required)</option>
-                {outreachAccounts.map((acc) => (
-                  <option key={acc.id} value={acc.id}>
-                    {acc.name} ({acc.senderEmail})
-                  </option>
-                ))}
-              </select>
-              <p className="text-[10px] text-slate-400 mt-1">
-                You can source leads and push them to Kanban CRM without configuring a sender.
-              </p>
-            </div>
           </div>
-        </div>
+        )}
 
-        {/* Target Prospecting Criteria */}
-        <div className="space-y-4">
-          <h2 className="text-sm font-bold text-slate-900 border-b border-slate-100 pb-2">
-            2. Target Lead Parameters (LinkedIn Sourcing via Apify)
-          </h2>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1">Target Job Title / Role</label>
-              <input
-                type="text"
-                placeholder="e.g., Chief Technology Officer, Founder, VP Sales"
-                value={targetRole}
-                onChange={(e) => setTargetRole(e.target.value)}
-                className="w-full px-3.5 py-2.5 border border-slate-300 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-primary-500"
-              />
-            </div>
-            <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1">Target Geographic Location</label>
-              <input
-                type="text"
-                placeholder="e.g., Singapore, Jakarta, United States"
-                value={targetLocation}
-                onChange={(e) => setTargetLocation(e.target.value)}
-                className="w-full px-3.5 py-2.5 border border-slate-300 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-primary-500"
-              />
-            </div>
-            <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1">Target Industry / Niche</label>
-              <input
-                type="text"
-                placeholder="e.g., Fintech, Healthcare, SaaS"
-                value={targetIndustry}
-                onChange={(e) => setTargetIndustry(e.target.value)}
-                className="w-full px-3.5 py-2.5 border border-slate-300 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-primary-500"
-              />
-            </div>
-            <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1">Initial Prospect Count</label>
-              <select
-                value={leadCount}
-                onChange={(e) => setLeadCount(Number(e.target.value))}
-                className="w-full px-3.5 py-2.5 border border-slate-300 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-primary-500 bg-white"
-              >
-                <option value={5}>5 Leads (Quick Test)</option>
-                <option value={10}>10 Leads (Recommended)</option>
-                <option value={25}>25 Leads (Standard Batch)</option>
-                <option value={50}>50 Leads (Large Campaign)</option>
-              </select>
-            </div>
-          </div>
+        {/* Wizard Navigation Footer */}
+        <div className="flex items-center justify-between pt-4 border-t border-slate-100">
           <div>
-            <label className="block text-xs font-semibold text-slate-700 mb-1">Custom Search Query (Optional)</label>
-            <input
-              type="text"
-              placeholder="e.g., CTO B2B SaaS startup funding series A"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full px-3.5 py-2.5 border border-slate-300 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-primary-500"
-            />
-          </div>
-        </div>
-
-        {/* AI Copywriting Directives */}
-        <div className="space-y-4">
-          <h2 className="text-sm font-bold text-slate-900 border-b border-slate-100 pb-2">
-            3. AI Copywriting Directives (Optional)
-          </h2>
-          <div>
-            <label className="block text-xs font-semibold text-slate-700 mb-1">
-              Custom Value Proposition & Guidelines for AI Drafter
-            </label>
-            <textarea
-              rows={3}
-              value={promptInstructions}
-              onChange={(e) => setPromptInstructions(e.target.value)}
-              placeholder="Specify special angles, pain points, or call-to-actions you want the AI to include in the cold emails."
-              className="w-full px-3.5 py-2.5 border border-slate-300 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-primary-500"
-            />
-          </div>
-        </div>
-
-        {/* Form Actions */}
-        <div className="flex items-center justify-end gap-3 pt-4 border-t border-slate-100">
-          <Link
-            href="/dashboard/outreach"
-            className="px-4 py-2.5 text-xs font-semibold text-slate-600 hover:bg-slate-100 rounded-xl transition-colors"
-          >
-            Cancel
-          </Link>
-          <button
-            type="submit"
-            disabled={loading}
-            className="px-6 py-2.5 bg-primary-600 hover:bg-primary-700 text-white text-xs font-semibold rounded-xl shadow-xs transition-colors disabled:opacity-50 flex items-center gap-2"
-          >
-            {loading ? (
-              <>
-                <span className="animate-spin">🔄</span>
-                <span>{loadingStep || 'Creating Campaign...'}</span>
-              </>
+            {step > 1 ? (
+              <button
+                type="button"
+                onClick={() => setStep((s) => (s - 1) as any)}
+                className="px-4 py-2.5 text-xs font-semibold text-slate-600 hover:bg-slate-100 rounded-xl transition-colors"
+              >
+                ← Back
+              </button>
             ) : (
-              <span>Create Campaign & Source Leads →</span>
+              <Link
+                href="/dashboard/outreach"
+                className="px-4 py-2.5 text-xs font-semibold text-slate-600 hover:bg-slate-100 rounded-xl transition-colors inline-block"
+              >
+                Cancel
+              </Link>
             )}
-          </button>
+          </div>
+
+          <div>
+            {step < 3 ? (
+              <button
+                type="button"
+                onClick={handleNextStep}
+                className="px-6 py-2.5 bg-primary-600 hover:bg-primary-700 text-white text-xs font-semibold rounded-xl shadow-xs transition-colors"
+              >
+                Continue to Next Step →
+              </button>
+            ) : (
+              <button
+                type="submit"
+                disabled={loading}
+                className="px-6 py-2.5 bg-primary-600 hover:bg-primary-700 text-white text-xs font-semibold rounded-xl shadow-xs transition-colors disabled:opacity-50 flex items-center gap-2"
+              >
+                {loading ? (
+                  <>
+                    <span className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                    <span>{loadingStep || 'Creating Workspace...'}</span>
+                  </>
+                ) : (
+                  <span>🚀 Create Campaign & Start Sourcing</span>
+                )}
+              </button>
+            )}
+          </div>
         </div>
       </form>
     </div>

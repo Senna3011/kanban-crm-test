@@ -3,6 +3,7 @@ export interface ApifySearchParams {
   role?: string;
   location?: string;
   industry?: string;
+  seniority?: string;
   limit?: number;
   linkedinUrls?: string[];
   apiToken?: string;
@@ -31,11 +32,12 @@ const ROLE_EXPANSIONS: Record<string, string> = {
   'vp of technology': '("VP of Technology" OR "Vice President of Technology" OR "CTO")',
   'cto': '("CTO" OR "Chief Technology Officer" OR "VP of Engineering")',
   'cio': '("CIO" OR "Chief Information Officer" OR "VP of IT" OR "Director of IT")',
+  'ceo': '("CEO" OR "Chief Executive Officer" OR "Founder" OR "Co-Founder")',
+  'cmo': '("CMO" OR "Chief Marketing Officer" OR "VP of Marketing" OR "Head of Marketing")',
   'head of sales': '("Head of Sales" OR "VP of Sales" OR "Director of Sales")',
   'vp of sales': '("VP of Sales" OR "Vice President of Sales" OR "Head of Sales")',
 };
 
-// Map common countries to LinkedIn domain prefixes & ISO country codes
 const COUNTRY_GEO_MAP: Record<string, { prefix: string; countryCode: string }> = {
   indonesia: { prefix: 'id.linkedin.com/in/', countryCode: 'id' },
   jakarta: { prefix: 'id.linkedin.com/in/', countryCode: 'id' },
@@ -70,7 +72,7 @@ export async function scrapeApifyLeads(
   const limit = Math.min(params.limit || 10, 50);
 
   if (!token) {
-    throw new Error('Apify API token belum diatur. Silakan konfigurasikan Apify API Token di menu Outreach Settings.');
+    throw new Error('Apify API token is not configured. Please set your Apify Token in Outreach Settings or .env');
   }
 
   // If direct LinkedIn URLs are passed, scrape them via harvestapi/linkedin-profile-scraper
@@ -98,6 +100,10 @@ export async function scrapeApifyLeads(
     searchTerms.push(ROLE_EXPANSIONS[roleLower]);
   } else if (params.role) {
     searchTerms.push(`"${params.role.trim()}"`);
+  }
+
+  if (params.seniority && params.seniority !== 'ALL') {
+    searchTerms.push(`"${params.seniority.trim()}"`);
   }
 
   if (locLower === 'us' || locLower === 'usa' || locLower === 'united states') {
@@ -128,7 +134,7 @@ export async function scrapeApifyLeads(
       queries: googleSearchQuery,
       countryCode: targetCountryCode,
       maxPagesPerQuery: 1,
-      resultsPerPage: Math.max(limit * 2, 15), // Fetch extra results to allow strict location filtering
+      resultsPerPage: Math.max(limit * 2, 20),
     }),
   });
 
@@ -176,63 +182,89 @@ async function scrapeDirectLinkedInUrls(
 
   return items
     .filter((item) => item && !item.error && item.status !== 404)
-    .map((item) => ({
-      fullName: `${item.firstName || ''} ${item.lastName || ''}`.trim() || item.name || 'LinkedIn Prospect',
-      firstName: item.firstName || undefined,
-      lastName: item.lastName || undefined,
-      jobTitle: item.headline || item.title || item.occupation || 'Executive',
-      companyName: item.company || item.companyName || 'Enterprise',
-      companyDomain: item.company ? `${item.company.toLowerCase().replace(/[^a-z0-9]/g, '')}.com` : undefined,
-      linkedinUrl: item.linkedinUrl || item.profileUrl || undefined,
-      location: typeof item.location === 'object' ? item.location.linkedinText || 'Global' : item.location || 'Global',
-      email: item.email || (Array.isArray(item.emails) ? item.emails[0] : undefined),
-      summary: item.summary || item.about || undefined,
-      metadata: { source: 'apify-harvestapi-direct' },
-    }));
+    .map((item) => {
+      const company = item.company || item.companyName || '';
+      return {
+        fullName: `${item.firstName || ''} ${item.lastName || ''}`.trim() || item.name || 'LinkedIn Prospect',
+        firstName: item.firstName || undefined,
+        lastName: item.lastName || undefined,
+        jobTitle: item.headline || item.title || item.occupation || 'Executive',
+        companyName: company || 'Enterprise Organization',
+        companyDomain: company ? cleanCompanyToDomain(company) : undefined,
+        linkedinUrl: item.linkedinUrl || item.profileUrl || undefined,
+        location: typeof item.location === 'object' ? item.location.linkedinText || 'Global' : item.location || 'Global',
+        email: item.email || (Array.isArray(item.emails) ? item.emails[0] : undefined),
+        summary: item.summary || item.about || undefined,
+        metadata: { source: 'apify-harvestapi-direct' },
+      };
+    });
+}
+
+function cleanCompanyToDomain(companyName: string): string | undefined {
+  if (!companyName || typeof companyName !== 'string') return undefined;
+  // Strip legal entities
+  let clean = companyName
+    .replace(/\b(Inc\.?|Incorporated|LLC|Ltd\.?|Limited|PT\.?|Tbk\.?|Corp\.?|Corporation|GmbH|Co\.?)\b/gi, '')
+    .trim();
+  clean = clean.toLowerCase().replace(/[^a-z0-9]/g, '');
+  if (!clean || clean.length < 2) return undefined;
+  return `${clean}.com`;
 }
 
 function parseGoogleOrganicToLead(item: any, params: ApifySearchParams): ApifyScrapedLead {
-  // Clean raw title
-  const rawTitle = (item.title || '').replace(/\s*[-–—|]\s*LinkedIn.*$/i, '').trim();
-  const parts = rawTitle.split(/\s*[-–—|]\s*/);
+  // Clean raw title from Google snippet
+  const rawTitle = (item.title || '')
+    .replace(/\s*[-–—|]\s*LinkedIn.*$/i, '')
+    .replace(/^LinkedIn\s*[-–—|]\s*/i, '')
+    .trim();
 
-  const fullName = (parts[0] || 'LinkedIn Member')
+  const titleSegments = rawTitle.split(/\s*[-–—|]\s*/);
+
+  // Extract Name (Segment 0)
+  const fullName = (titleSegments[0] || 'LinkedIn Member')
     .replace(/[\u{1F600}-\u{1F64F}\u{1F300}-\u{1F5FF}\u{1F680}-\u{1F6FF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}]/gu, '')
+    .replace(/,\s*(PhD|MBA|MSc|MD|CPA|PMP|BSc|BA|MA)$/i, '')
     .trim() || 'LinkedIn Member';
 
-  const nameParts = fullName.split(' ');
+  const nameParts = fullName.split(/\s+/);
   const firstName = nameParts[0] || 'Prospect';
   const lastName = nameParts.slice(1).join(' ') || '';
 
-  let jobTitle = parts[1] || item.personalInfo?.jobTitle || params.role || 'Executive';
+  // Extract Job Title & Company from remaining segments
+  let jobTitle = titleSegments[1] || item.personalInfo?.jobTitle || params.role || 'Executive';
   let companyName = item.personalInfo?.companyName || '';
 
-  // Extract company if mentioned with "at" or "of"
-  if (jobTitle.toLowerCase().includes(' at ')) {
+  // Guard against splitting phrases like "Head of Product" or "Director of Engineering"
+  // Only split on " at " or " @ " when identifying company
+  if (jobTitle.includes(' at ')) {
     const splitAt = jobTitle.split(/\s+at\s+/i);
     jobTitle = splitAt[0].trim();
-    if (!companyName) companyName = splitAt[1].trim();
-  } else if (jobTitle.toLowerCase().includes(' of ')) {
-    const splitOf = jobTitle.split(/\s+of\s+/i);
-    jobTitle = splitOf[0].trim();
-    if (!companyName) companyName = splitOf[1].trim();
+    if (!companyName && splitAt[1]) companyName = splitAt[1].trim();
+  } else if (jobTitle.includes(' @ ')) {
+    const splitAt = jobTitle.split(/\s+@\s+/);
+    jobTitle = splitAt[0].trim();
+    if (!companyName && splitAt[1]) companyName = splitAt[1].trim();
+  } else if (titleSegments[2] && !companyName) {
+    companyName = titleSegments[2].trim();
   }
 
-  // Fallback company extraction from Google snippet description
+  // Snippet description fallback for company
   if (!companyName && item.description) {
-    const match = item.description.match(/(?:at|company:?)\s+([A-Za-z0-9\s&]+?)(?:\.|\s*·|\s*,|Read more)/i);
+    const match = item.description.match(/(?:works\s+at|at|company:?)\s+([A-Za-z0-9\s&,.-]+?)(?:\.|\s*·|\s*\|\s*|Read more)/i);
     if (match && match[1]) {
-      companyName = match[1].trim();
+      const candidate = match[1].trim();
+      if (candidate.length > 2 && candidate.length < 50) {
+        companyName = candidate;
+      }
     }
   }
 
-  companyName = companyName || params.industry || 'Enterprise Group';
-  const cleanCompany = companyName.toLowerCase().replace(/[^a-z0-9]/g, '');
-  const companyDomain = cleanCompany ? `${cleanCompany}.com` : 'enterprise.com';
+  companyName = companyName || params.industry || 'Enterprise Org';
+  const companyDomain = cleanCompanyToDomain(companyName);
 
   const cleanUrl = (item.url || '').split('?')[0];
 
-  // Infer location from URL subdomain or search parameters
+  // Infer location
   let location = params.location || 'Global';
   if (cleanUrl.includes('id.linkedin.com')) {
     location = 'Indonesia';
@@ -240,6 +272,10 @@ function parseGoogleOrganicToLead(item: any, params: ApifySearchParams): ApifySc
     location = 'Singapore';
   } else if (cleanUrl.includes('my.linkedin.com')) {
     location = 'Malaysia';
+  } else if (cleanUrl.includes('uk.linkedin.com')) {
+    location = 'United Kingdom';
+  } else if (cleanUrl.includes('au.linkedin.com')) {
+    location = 'Australia';
   } else if (item.personalInfo?.location) {
     location = item.personalInfo.location;
   }

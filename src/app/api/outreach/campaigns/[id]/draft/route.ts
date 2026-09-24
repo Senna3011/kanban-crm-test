@@ -31,6 +31,7 @@ export async function POST(
 
   const body = await req.json().catch(() => ({}));
   const leadIds: string[] | undefined = body.leadIds;
+  const requestCustomPrompt: string | undefined = body.customInstructions || body.leadCustomPrompt;
 
   const leads = await prisma.outreachLead.findMany({
     where: {
@@ -59,7 +60,7 @@ export async function POST(
 
   const senderName = campaign.account?.senderName || session.user.name || 'JetDigitalPro Team';
   const senderCompany = campaign.account?.name || campaign.tenant?.name || 'JetDigitalPro';
-  const customInstructions = campaign.promptInstructions || undefined;
+  const customInstructions = [campaign.promptInstructions, requestCustomPrompt].filter(Boolean).join('\n');
 
   const updatedLeads = [];
   for (const lead of leads) {
@@ -74,7 +75,7 @@ export async function POST(
       senderName,
       senderCompany,
       companyKnowledge: parsedCompanyContext || undefined,
-      customInstructions,
+      customInstructions: customInstructions || undefined,
     });
 
     const updated = await prisma.outreachLead.update({
@@ -86,6 +87,8 @@ export async function POST(
         metadata: {
           ...(typeof lead.metadata === 'object' && lead.metadata !== null ? lead.metadata : {}),
           isAiGenerated: draft.isAiGenerated,
+          alternativeSubject: draft.alternativeSubject,
+          scoreEstimate: draft.scoreEstimate,
           draftedAt: new Date().toISOString(),
         },
       },
