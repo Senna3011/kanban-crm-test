@@ -2,7 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/server/auth';
 import prisma from '@/lib/prisma';
-import { findProspectEmail } from '@/lib/reoon';
+import { resolveCompanyDomain } from '@/lib/domain-resolver';
+import { generateEmailPermutations } from '@/lib/email-pattern-generator';
 
 export async function POST(
   req: NextRequest,
@@ -37,33 +38,37 @@ export async function POST(
       },
     });
 
-    const apiKey = campaign.account?.reoonApiKey || process.env.REOON_API_KEY;
     const updatedLeads = [];
 
     for (const lead of leads) {
       let email = lead.email;
+      let companyDomain = lead.companyDomain;
 
-      if (!email) {
-        const nameParts = lead.fullName.split(' ');
-        const firstName = lead.firstName || nameParts[0] || 'prospect';
-        const lastName = lead.lastName || nameParts.slice(1).join(' ') || '';
+      // 1. Resolve authentic domain using Domain Resolver (Clearbit & Sanitizer)
+      const domainResult = await resolveCompanyDomain(lead.companyName, companyDomain);
+      if (domainResult.domain) {
+        companyDomain = domainResult.domain;
+      }
 
-        const found = await findProspectEmail({
-          firstName,
-          lastName,
-          companyName: lead.companyName || undefined,
-          companyDomain: lead.companyDomain || undefined,
-          apiKey,
-        });
-
-        email = found.email || null;
+      // 2. Generate candidate email permutations if email not present
+      if (!email && companyDomain) {
+        const permutations = generateEmailPermutations(lead.fullName, companyDomain);
+        if (permutations.length > 0) {
+          email = permutations[0]; // Primary pattern: first.last@domain
+        }
       }
 
       const updated = await prisma.outreachLead.update({
         where: { id: lead.id },
         data: {
           email,
+          companyDomain: companyDomain || lead.companyDomain,
           status: email ? 'DRAFT_READY' : lead.status,
+          metadata: {
+            ...(typeof lead.metadata === 'object' && lead.metadata !== null ? lead.metadata : {}),
+            domainResolvedReason: domainResult.reason,
+            isVerifiedDomain: domainResult.isVerifiedDomain,
+          },
         },
       });
 

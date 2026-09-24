@@ -1,4 +1,5 @@
-import dns from 'dns';
+import { resolveCompanyDomain } from './domain-resolver';
+import { generateEmailPermutations } from './email-pattern-generator';
 
 export interface EmailVerifyResult {
   email: string;
@@ -11,8 +12,9 @@ export interface EmailVerifyResult {
 }
 
 export interface EmailCandidateParams {
-  firstName: string;
-  lastName: string;
+  firstName?: string;
+  lastName?: string;
+  fullName?: string;
   companyDomain?: string;
   companyName?: string;
   reoonApiKey?: string;
@@ -29,49 +31,6 @@ function isValidEmailSyntax(email: string): boolean {
   if (!email || typeof email !== 'string') return false;
   const re = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
   return re.test(email.trim());
-}
-
-/**
- * Quick DNS MX resolver to verify domain can actually receive emails
- */
-async function domainHasMxRecords(domain: string): Promise<boolean> {
-  if (!domain || typeof domain !== 'string' || !domain.includes('.')) return false;
-  try {
-    const records = await dns.promises.resolveMx(domain);
-    return Array.isArray(records) && records.length > 0;
-  } catch {
-    return false;
-  }
-}
-
-/**
- * Intelligent company name to clean domain normalizer
- */
-export function normalizeCompanyToDomainCandidates(companyName?: string, existingDomain?: string): string[] {
-  const domains: string[] = [];
-
-  if (existingDomain && existingDomain.includes('.')) {
-    domains.push(existingDomain.toLowerCase().trim());
-  }
-
-  if (!companyName || typeof companyName !== 'string') return domains;
-
-  // Clean company name from corporate entities and brackets
-  let clean = companyName
-    .replace(/\s*\([^)]*\)/g, '') // remove (AWS), (Persero), etc.
-    .replace(/\b(Inc\.?|Incorporated|LLC|Ltd\.?|Limited|PT\.?|Tbk\.?|Corp\.?|Corporation|GmbH|Co\.?|Group|Technologies|Solutions|Services|International)\b/gi, '')
-    .trim();
-
-  clean = clean.toLowerCase().replace(/[^a-z0-9]/g, '');
-
-  if (clean && clean.length >= 2) {
-    domains.push(`${clean}.com`);
-    domains.push(`${clean}.io`);
-    domains.push(`${clean}.co.id`);
-    domains.push(`${clean}.org`);
-  }
-
-  return Array.from(new Set(domains));
 }
 
 /**
@@ -408,52 +367,53 @@ export async function verifyEmailMultiProvider(
 }
 
 /**
- * Generate Comprehensive B2B Email Patterns
+ * Backwards-compatible verifyEmailAddress wrapper
+ */
+export async function verifyEmailAddress(
+  email: string,
+  apiKey?: string
+): Promise<EmailVerifyResult> {
+  return verifyEmailMultiProvider(email, { reoonApiKey: apiKey });
+}
+
+/**
+ * Generate Candidate Patterns (wraps email-pattern-generator)
  */
 export function generateCandidatePatterns(
   firstName: string,
   lastName: string,
   domain: string
 ): string[] {
-  const f = firstName.toLowerCase().replace(/[^a-z0-9]/g, '');
-  const l = lastName.toLowerCase().replace(/[^a-z0-9]/g, '');
-  if (!f && !l) return [];
-  if (!l) return [`${f}@${domain}`];
-  if (!f) return [`${l}@${domain}`];
-
-  const candidates = [
-    `${f}.${l}@${domain}`,
-    `${f}@${domain}`,
-    `${f[0]}${l}@${domain}`,
-    `${f}${l}@${domain}`,
-    `${f}${l[0]}@${domain}`,
-    `${f}_${l}@${domain}`,
-    `${l}.${f}@${domain}`,
-  ];
-
-  return Array.from(new Set(candidates));
+  const fullName = `${firstName} ${lastName}`.trim();
+  return generateEmailPermutations(fullName, domain);
 }
 
 /**
- * Discover Prospect Email & Verify with High Accuracy
+ * Discover Prospect Email & Verify using Domain Resolver & Permutation Engine
  */
 export async function findAndVerifyProspectEmail(
   params: EmailCandidateParams
 ): Promise<{
   email: string | null;
+  resolvedDomain: string | null;
   status: EmailVerifyResult['status'];
   score: number;
   provider: EmailVerifyResult['provider'];
   reason?: string;
 }> {
+  const fullName = params.fullName || `${params.firstName || ''} ${params.lastName || ''}`.trim() || 'prospect';
   const hunterKey = params.hunterApiKey || process.env.HUNTER_API_KEY || process.env.HUNTERIO_API_KEY;
 
-  // 1. Direct Hunter.io Email Finder API if key is configured (High accuracy database search)
-  if (hunterKey && params.firstName && (params.companyDomain || params.companyName)) {
+  // 1. Resolve authentic corporate domain via Clearbit & sanitization
+  const domainRes = await resolveCompanyDomain(params.companyName, params.companyDomain);
+  const targetDomain = domainRes.domain;
+
+  // 2. Direct Hunter.io Email Finder if key is available
+  if (hunterKey && params.firstName && (targetDomain || params.companyName)) {
     const hunterMatch = await findEmailWithHunterFinder(
       params.firstName,
       params.lastName || '',
-      params.companyDomain || params.companyName || '',
+      targetDomain || params.companyName || '',
       hunterKey
     );
 
@@ -466,6 +426,7 @@ export async function findAndVerifyProspectEmail(
 
       return {
         email: hunterMatch.email,
+        resolvedDomain: targetDomain,
         status: verified.status === 'UNVERIFIED' ? 'SAFE' : verified.status,
         score: verified.score || hunterMatch.score || 90,
         provider: verified.provider !== 'None' ? verified.provider : 'Hunter',
@@ -474,27 +435,28 @@ export async function findAndVerifyProspectEmail(
     }
   }
 
-  // 2. Resolve domain candidates and check MX records
-  const domainCandidates = normalizeCompanyToDomainCandidates(params.companyName, params.companyDomain);
-
-  let targetDomain = domainCandidates[0] || (params.companyName ? `${params.companyName.toLowerCase().replace(/[^a-z0-9]/g, '')}.com` : null);
-
-  // Check if primary domain has MX records, otherwise try alternatives
-  for (const d of domainCandidates) {
-    const hasMx = await domainHasMxRecords(d);
-    if (hasMx) {
-      targetDomain = d;
-      break;
-    }
-  }
-
   if (!targetDomain) {
-    return { email: null, status: 'UNVERIFIED', score: 0, provider: 'None', reason: 'Domain perusahaan tidak ditemukan' };
+    return {
+      email: null,
+      resolvedDomain: null,
+      status: 'UNVERIFIED',
+      score: 0,
+      provider: 'None',
+      reason: domainRes.reason,
+    };
   }
 
-  const candidates = generateCandidatePatterns(params.firstName, params.lastName, targetDomain);
+  // 3. Generate candidate permutations
+  const candidates = generateEmailPermutations(fullName, targetDomain);
   if (candidates.length === 0) {
-    return { email: null, status: 'INVALID', score: 0, provider: 'None', reason: 'Nama prospek tidak lengkap' };
+    return {
+      email: null,
+      resolvedDomain: targetDomain,
+      status: 'INVALID',
+      score: 0,
+      provider: 'None',
+      reason: 'Nama prospek tidak lengkap',
+    };
   }
 
   const hasAnyKey = Boolean(
@@ -510,6 +472,7 @@ export async function findAndVerifyProspectEmail(
   if (!hasAnyKey) {
     return {
       email: candidates[0],
+      resolvedDomain: targetDomain,
       status: 'UNVERIFIED',
       score: 0,
       provider: 'None',
@@ -519,12 +482,14 @@ export async function findAndVerifyProspectEmail(
 
   let bestResult = {
     email: candidates[0],
+    resolvedDomain: targetDomain,
     status: 'UNVERIFIED' as EmailVerifyResult['status'],
     score: 0,
     provider: 'None' as EmailVerifyResult['provider'],
     reason: undefined as string | undefined,
   };
 
+  // Test top 3 candidates to preserve verification quota
   for (const candidate of candidates.slice(0, 3)) {
     const verified = await verifyEmailMultiProvider(candidate, {
       reoonApiKey: params.reoonApiKey,
@@ -535,6 +500,7 @@ export async function findAndVerifyProspectEmail(
     if (verified.status === 'SAFE') {
       return {
         email: candidate,
+        resolvedDomain: targetDomain,
         status: verified.status,
         score: verified.score,
         provider: verified.provider,
@@ -545,6 +511,7 @@ export async function findAndVerifyProspectEmail(
     if (verified.status === 'RISKY' && bestResult.status !== 'RISKY') {
       bestResult = {
         email: candidate,
+        resolvedDomain: targetDomain,
         status: verified.status,
         score: verified.score,
         provider: verified.provider,

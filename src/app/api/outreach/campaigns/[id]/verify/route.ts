@@ -2,7 +2,9 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/server/auth';
 import prisma from '@/lib/prisma';
-import { findProspectEmail, verifyEmailAddress } from '@/lib/reoon';
+import { findAndVerifyProspectEmail, verifyEmailAddress } from '@/lib/email-verifier';
+import { resolveCompanyDomain } from '@/lib/domain-resolver';
+import { generateEmailPermutations } from '@/lib/email-pattern-generator';
 
 export async function POST(
   req: NextRequest,
@@ -44,27 +46,54 @@ export async function POST(
       let email = lead.email;
       let verifyStatus = lead.verifyStatus || 'UNVERIFIED';
       let verifyScore = lead.verifyScore || 0;
+      let companyDomain = lead.companyDomain;
 
-      if (!email) {
-        const nameParts = lead.fullName.split(' ');
-        const firstName = lead.firstName || nameParts[0] || 'prospect';
-        const lastName = lead.lastName || nameParts.slice(1).join(' ') || '';
+      // 1. Ensure valid domain resolution
+      if (!companyDomain || !companyDomain.includes('.')) {
+        const domRes = await resolveCompanyDomain(lead.companyName, companyDomain);
+        if (domRes.domain) companyDomain = domRes.domain;
+      }
 
-        const found = await findProspectEmail({
-          firstName,
-          lastName,
+      if (!email && (lead.fullName || lead.firstName)) {
+        const found = await findAndVerifyProspectEmail({
+          fullName: lead.fullName,
+          firstName: lead.firstName || undefined,
+          lastName: lead.lastName || undefined,
           companyName: lead.companyName || undefined,
-          companyDomain: lead.companyDomain || undefined,
-          apiKey,
+          companyDomain: companyDomain || undefined,
+          reoonApiKey: apiKey,
         });
 
         email = found.email || null;
         verifyStatus = found.status;
         verifyScore = found.score;
-      } else {
+        if (found.resolvedDomain) companyDomain = found.resolvedDomain;
+      } else if (email) {
+        // Verify current email
         const verified = await verifyEmailAddress(email, apiKey);
         verifyStatus = verified.status;
         verifyScore = verified.score;
+
+        // If primary candidate was INVALID and we have domain, try other permutations to find valid email
+        if (verified.status === 'INVALID' && companyDomain) {
+          const permutations = generateEmailPermutations(lead.fullName, companyDomain);
+          for (const candidate of permutations) {
+            if (candidate.toLowerCase() === email.toLowerCase()) continue; // Skip already failed candidate
+
+            const candidateRes = await verifyEmailAddress(candidate, apiKey);
+            if (candidateRes.status === 'SAFE') {
+              email = candidate;
+              verifyStatus = candidateRes.status;
+              verifyScore = candidateRes.score;
+              break;
+            }
+            if (candidateRes.status === 'RISKY' && verifyStatus === 'INVALID') {
+              email = candidate;
+              verifyStatus = candidateRes.status;
+              verifyScore = candidateRes.score;
+            }
+          }
+        }
       }
 
       const newStatus =
@@ -80,6 +109,7 @@ export async function POST(
         where: { id: lead.id },
         data: {
           email,
+          companyDomain: companyDomain || lead.companyDomain,
           verifyStatus,
           verifyScore,
           status: newStatus,
