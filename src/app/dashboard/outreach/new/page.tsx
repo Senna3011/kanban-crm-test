@@ -52,11 +52,11 @@ export default function NewOutreachCampaignPage() {
     }
 
     setLoading(true);
-    setLoadingStep('1/2 Creating campaign record...');
+    setLoadingStep('Creating campaign workspace...');
     setError('');
 
     try {
-      // 1. Create Campaign (accountId is optional)
+      // 1. Create Campaign
       const res = await fetch('/api/outreach/campaigns', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -77,28 +77,9 @@ export default function NewOutreachCampaignPage() {
       }
 
       const campaign = await res.json();
-      setLoadingStep(`2/2 Sourcing ${leadCount} LinkedIn leads via Apify...`);
 
-      // 2. Automatically trigger lead scraping and await result
-      const scrapeRes = await fetch(`/api/outreach/campaigns/${campaign.id}/scrape`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          query: searchQuery.trim() || undefined,
-          role: targetRole.trim() || undefined,
-          location: targetLocation.trim() || undefined,
-          industry: targetIndustry.trim() || undefined,
-          limit: leadCount,
-        }),
-      });
-
-      if (!scrapeRes.ok) {
-        const scrapeErr = await scrapeRes.json().catch(() => ({}));
-        throw new Error(scrapeErr.error || 'Lead scraping failed during campaign creation.');
-      }
-
-      // Navigate to campaign workspace
-      router.push(`/dashboard/outreach/${campaign.id}`);
+      // Navigate immediately to campaign workspace where pipeline steps are clearly guided
+      router.push(`/dashboard/outreach/${campaign.id}?autoSource=true&limit=${leadCount}`);
     } catch (err: any) {
       setError(err.message || 'An error occurred while creating the campaign.');
       setLoading(false);

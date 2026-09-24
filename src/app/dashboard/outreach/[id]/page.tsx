@@ -1,6 +1,7 @@
 'use client';
 
-import { useEffect, useState, use } from 'react';
+import { useEffect, useState, use, useRef } from 'react';
+import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import ConfirmDialog, { type ConfirmDialogVariant } from '@/components/ui/ConfirmDialog';
 import toast, { Toaster } from 'react-hot-toast';
@@ -50,6 +51,8 @@ export default function CampaignWorkspacePage({
 }) {
   const resolvedParams = use(params as any) as { id: string };
   const campaignId = resolvedParams.id;
+  const searchParams = useSearchParams();
+  const autoSourceTriggered = useRef(false);
 
   const [campaign, setCampaign] = useState<CampaignDetail | null>(null);
   const [loading, setLoading] = useState(true);
@@ -110,10 +113,17 @@ export default function CampaignWorkspacePage({
   });
 
   useEffect(() => {
-    fetchCampaign();
+    fetchCampaign().then((loadedCampaign) => {
+      const autoSource = searchParams?.get('autoSource');
+      const limit = Number(searchParams?.get('limit')) || 10;
+      if (autoSource === 'true' && !autoSourceTriggered.current && loadedCampaign?.leads?.length === 0) {
+        autoSourceTriggered.current = true;
+        handleSourceLeads(limit);
+      }
+    });
   }, [campaignId]);
 
-  async function fetchCampaign() {
+  async function fetchCampaign(): Promise<CampaignDetail | null> {
     setLoading(true);
     setError('');
     try {
@@ -121,8 +131,10 @@ export default function CampaignWorkspacePage({
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Failed to load campaign');
       setCampaign(data);
+      return data;
     } catch (err: any) {
       setError(err.message || 'Connection error');
+      return null;
     } finally {
       setLoading(false);
     }
@@ -150,13 +162,14 @@ export default function CampaignWorkspacePage({
   }
 
   // 1. Source More Leads
-  async function handleSourceLeads() {
+  async function handleSourceLeads(customLimit?: number | React.MouseEvent) {
+    const limitNum = typeof customLimit === 'number' ? customLimit : 10;
     setActionLoading('scrape');
     try {
       const res = await fetch(`/api/outreach/campaigns/${campaignId}/scrape`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ limit: 10 }),
+        body: JSON.stringify({ limit: limitNum }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Failed to source leads');
