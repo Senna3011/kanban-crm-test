@@ -103,28 +103,79 @@ export async function verifyEmailAddress(
   }
 }
 
+export function generateEmailCandidates(
+  firstName: string,
+  lastName: string,
+  domain: string
+): string[] {
+  const f = firstName.toLowerCase().replace(/[^a-z0-9]/g, '');
+  const l = lastName.toLowerCase().replace(/[^a-z0-9]/g, '');
+  if (!f && !l) return [];
+  if (!l) return [`${f}@${domain}`];
+  if (!f) return [`${l}@${domain}`];
+
+  const candidates = [
+    `${f}.${l}@${domain}`,
+    `${f}@${domain}`,
+    `${f[0]}${l}@${domain}`,
+    `${f}${l}@${domain}`,
+    `${f}${l[0]}@${domain}`,
+  ];
+
+  return Array.from(new Set(candidates));
+}
+
 export async function findProspectEmail(
   params: ReoonFindParams
 ): Promise<{ email: string | null; status: 'SAFE' | 'RISKY' | 'INVALID' | 'DISPOSABLE' | 'UNVERIFIED'; score: number; reason?: string }> {
-  const cleanFirst = params.firstName.toLowerCase().replace(/[^a-z0-9]/g, '');
-  const cleanLast = params.lastName.toLowerCase().replace(/[^a-z0-9]/g, '');
   const domain = params.companyDomain || (params.companyName ? `${params.companyName.toLowerCase().replace(/[^a-z0-9]/g, '')}.com` : null);
-
-  if (!cleanFirst && !cleanLast) {
-    return { email: null, status: 'INVALID', score: 0, reason: 'First or last name is missing' };
-  }
 
   if (!domain) {
     return { email: null, status: 'UNVERIFIED', score: 0, reason: 'Company domain not found' };
   }
 
-  const candidateEmail = cleanLast ? `${cleanFirst}.${cleanLast}@${domain}` : `${cleanFirst}@${domain}`;
-  const verification = await verifyEmailAddress(candidateEmail, params.apiKey);
+  const candidates = generateEmailCandidates(params.firstName, params.lastName, domain);
+  if (candidates.length === 0) {
+    return { email: null, status: 'INVALID', score: 0, reason: 'First or last name is missing' };
+  }
 
-  return {
-    email: candidateEmail,
-    status: verification.status,
-    score: verification.score,
-    reason: verification.reason,
+  // If no API key, return the primary standard pattern immediately
+  if (!params.apiKey && !process.env.REOON_API_KEY) {
+    return {
+      email: candidates[0],
+      status: 'UNVERIFIED',
+      score: 0,
+      reason: 'Generated pattern without Reoon API key verification',
+    };
+  }
+
+  // Try verifying candidates to find the highest deliverability email
+  let bestResult = {
+    email: candidates[0],
+    status: 'UNVERIFIED' as 'SAFE' | 'RISKY' | 'INVALID' | 'DISPOSABLE' | 'UNVERIFIED',
+    score: 0,
+    reason: undefined as string | undefined,
   };
+
+  for (const candidate of candidates.slice(0, 3)) {
+    const verification = await verifyEmailAddress(candidate, params.apiKey);
+    if (verification.status === 'SAFE') {
+      return {
+        email: candidate,
+        status: verification.status,
+        score: verification.score,
+        reason: verification.reason,
+      };
+    }
+    if (verification.status === 'RISKY' && bestResult.status !== 'RISKY') {
+      bestResult = {
+        email: candidate,
+        status: verification.status,
+        score: verification.score,
+        reason: verification.reason,
+      };
+    }
+  }
+
+  return bestResult;
 }

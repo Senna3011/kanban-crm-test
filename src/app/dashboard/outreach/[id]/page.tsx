@@ -330,18 +330,17 @@ export default function CampaignWorkspacePage({
         } else {
           setActionLoading('push-crm');
         }
-        let successCount = 0;
         try {
-          for (const lead of uncommittedLeads) {
-            try {
-              const res = await fetch(`/api/outreach/leads/${lead.id}/push-to-crm`, {
-                method: 'POST',
-              });
-              if (res.ok) successCount++;
-            } catch (err) {
-              console.error(`Failed pushing lead ${lead.id}:`, err);
-            }
-          }
+          const idsToPush = uncommittedLeads.map((l) => l.id);
+          const res = await fetch('/api/outreach/leads/batch-push-crm', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ leadIds: idsToPush }),
+          });
+          const data = await res.json();
+          if (!res.ok) throw new Error(data.error || 'Failed to push leads to CRM');
+
+          const successCount = data.convertedCount ?? uncommittedLeads.length;
           toast.success(`Successfully pushed ${successCount} leads into Kanban CRM!`);
           clearSelection();
           await fetchCampaign();

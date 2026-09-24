@@ -36,6 +36,7 @@ export async function POST(
     where: {
       campaignId: campaign.id,
       ...(leadIds && leadIds.length > 0 ? { id: { in: leadIds } } : {}),
+      email: { not: null },
       verifyStatus: { not: 'INVALID' },
     },
   });

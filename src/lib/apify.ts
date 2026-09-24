@@ -23,6 +23,18 @@ export interface ApifyScrapedLead {
   metadata?: Record<string, any>;
 }
 
+const ROLE_EXPANSIONS: Record<string, string> = {
+  'head of it': '("Head of IT" OR "Director of IT" OR "VP of IT" OR "CIO")',
+  'head it': '("Head of IT" OR "Director of IT" OR "VP of IT" OR "CIO")',
+  'director of it': '("Director of IT" OR "VP of IT" OR "Head of IT" OR "Director of Information Technology")',
+  'vp of it': '("VP of IT" OR "Vice President of IT" OR "Director of IT" OR "CIO")',
+  'vp of technology': '("VP of Technology" OR "Vice President of Technology" OR "CTO")',
+  'cto': '("CTO" OR "Chief Technology Officer" OR "VP of Engineering")',
+  'cio': '("CIO" OR "Chief Information Officer" OR "VP of IT" OR "Director of IT")',
+  'head of sales': '("Head of Sales" OR "VP of Sales" OR "Director of Sales")',
+  'vp of sales': '("VP of Sales" OR "Vice President of Sales" OR "Head of Sales")',
+};
+
 // Map common countries to LinkedIn domain prefixes & ISO country codes
 const COUNTRY_GEO_MAP: Record<string, { prefix: string; countryCode: string }> = {
   indonesia: { prefix: 'id.linkedin.com/in/', countryCode: 'id' },
@@ -81,8 +93,19 @@ export async function scrapeApifyLeads(
 
   // Build targeted search terms
   const searchTerms: string[] = [];
-  if (params.role) searchTerms.push(`"${params.role.trim()}"`);
-  if (params.location) searchTerms.push(`"${params.location.trim()}"`);
+  const roleLower = (params.role || '').toLowerCase().trim();
+  if (ROLE_EXPANSIONS[roleLower]) {
+    searchTerms.push(ROLE_EXPANSIONS[roleLower]);
+  } else if (params.role) {
+    searchTerms.push(`"${params.role.trim()}"`);
+  }
+
+  if (locLower === 'us' || locLower === 'usa' || locLower === 'united states') {
+    searchTerms.push('("United States" OR "USA")');
+  } else if (params.location) {
+    searchTerms.push(`"${params.location.trim()}"`);
+  }
+
   if (params.industry) searchTerms.push(`"${params.industry.trim()}"`);
   if (params.query && !params.role && !params.location) {
     searchTerms.push(params.query.trim());
