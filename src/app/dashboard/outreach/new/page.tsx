@@ -23,16 +23,7 @@ const INDUSTRY_OPTIONS = [
   'Manufacturing & Supply Chain',
   'Education & EdTech',
   'Energy & Utilities',
-  'Other / Cross-Industry',
-];
-
-const SENIORITY_OPTIONS = [
-  { label: 'All Seniority Levels', value: 'ALL' },
-  { label: 'C-Level (CEO, CTO, CIO, CMO, COO)', value: 'C-Level' },
-  { label: 'VP / Vice President', value: 'VP' },
-  { label: 'Director / Head of Department', value: 'Director' },
-  { label: 'Manager / Lead', value: 'Manager' },
-  { label: 'Founder & Co-Founder', value: 'Founder' },
+  'Other / Custom Niche',
 ];
 
 export default function NewOutreachCampaignPage() {
@@ -44,9 +35,8 @@ export default function NewOutreachCampaignPage() {
   const [selectedAccountId, setSelectedAccountId] = useState<string>('');
   const [outreachAccounts, setOutreachAccounts] = useState<OutreachAccountOption[]>([]);
 
-  // Step 2: Targeting
+  // Step 2: Targeting (Pak Nell's Standard Parameters)
   const [targetRole, setTargetRole] = useState('Chief Technology Officer');
-  const [seniority, setSeniority] = useState('ALL');
   const [targetLocation, setTargetLocation] = useState('United States');
   const [targetIndustry, setTargetIndustry] = useState('Information Technology & Services');
   const [searchQuery, setSearchQuery] = useState('');
@@ -77,7 +67,8 @@ export default function NewOutreachCampaignPage() {
       .catch((e) => console.error('Failed to load accounts:', e));
   }, []);
 
-  function handleNextStep() {
+  function handleNextStep(e?: React.MouseEvent) {
+    if (e) e.preventDefault();
     setError('');
     if (step === 1) {
       if (!name.trim()) {
@@ -96,6 +87,13 @@ export default function NewOutreachCampaignPage() {
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
+
+    // STRICT GUARD: Do not allow submission if not on Step 3
+    if (step !== 3) {
+      handleNextStep();
+      return;
+    }
+
     if (!name.trim()) {
       setError('Please provide a campaign name.');
       return;
@@ -128,7 +126,7 @@ export default function NewOutreachCampaignPage() {
       }
 
       const campaign = await res.json();
-      router.push(`/dashboard/outreach/${campaign.id}?autoSource=true&limit=${leadCount}&seniority=${encodeURIComponent(seniority)}`);
+      router.push(`/dashboard/outreach/${campaign.id}?autoSource=true&limit=${leadCount}`);
     } catch (err: any) {
       setError(err.message || 'An error occurred while creating the campaign.');
       setLoading(false);
@@ -186,7 +184,16 @@ export default function NewOutreachCampaignPage() {
         </div>
       </div>
 
-      <form onSubmit={handleSubmit} className="bg-white p-6 rounded-2xl border border-slate-200/80 shadow-xs space-y-6">
+      <form
+        onSubmit={handleSubmit}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' && step < 3 && e.target instanceof HTMLInputElement) {
+            e.preventDefault();
+            handleNextStep();
+          }
+        }}
+        className="bg-white p-6 rounded-2xl border border-slate-200/80 shadow-xs space-y-6"
+      >
         {error && (
           <div className="p-3 bg-red-50 border border-red-200 text-xs text-red-600 rounded-xl font-medium">
             ⚠️ {error}
@@ -242,38 +249,26 @@ export default function NewOutreachCampaignPage() {
         {step === 2 && (
           <div className="space-y-4 animate-in fade-in">
             <div>
-              <h2 className="text-sm font-bold text-slate-900">Step 2: Structured LinkedIn Prospecting Parameters</h2>
-              <p className="text-xs text-slate-500 mt-0.5">Define your ideal customer profile (ICP) with structured filters.</p>
+              <h2 className="text-sm font-bold text-slate-900">Step 2: Target Lead Parameters (LinkedIn Prospecting)</h2>
+              <p className="text-xs text-slate-500 mt-0.5">Define your ideal customer profile (ICP) by role, location, and industry.</p>
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2">
               <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">Target Job Title / Function</label>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">Target Job Title / Role *</label>
                 <input
                   type="text"
-                  placeholder="e.g., Chief Technology Officer, VP of Engineering, Head of IT"
+                  required
+                  placeholder="e.g., Chief Technology Officer, VP Sales, Founder"
                   value={targetRole}
                   onChange={(e) => setTargetRole(e.target.value)}
                   className="w-full px-3.5 py-2.5 border border-slate-300 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-primary-500"
                 />
               </div>
               <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">Seniority Level</label>
-                <select
-                  value={seniority}
-                  onChange={(e) => setSeniority(e.target.value)}
-                  className="w-full px-3.5 py-2.5 border border-slate-300 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-primary-500 bg-white"
-                >
-                  {SENIORITY_OPTIONS.map((opt) => (
-                    <option key={opt.value} value={opt.value}>
-                      {opt.label}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">Geographic Location</label>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">Geographic Location *</label>
                 <input
                   type="text"
+                  required
                   placeholder="e.g., United States, Singapore, Jakarta, United Kingdom"
                   value={targetLocation}
                   onChange={(e) => setTargetLocation(e.target.value)}
@@ -307,7 +302,7 @@ export default function NewOutreachCampaignPage() {
                   <option value={50}>50 Leads (Comprehensive)</option>
                 </select>
               </div>
-              <div>
+              <div className="sm:col-span-2">
                 <label className="block text-xs font-semibold text-slate-700 mb-1">Custom Search Query (Optional)</label>
                 <input
                   type="text"
@@ -326,7 +321,7 @@ export default function NewOutreachCampaignPage() {
           <div className="space-y-4 animate-in fade-in">
             <div>
               <h2 className="text-sm font-bold text-slate-900">Step 3: AI Copywriting Strategy & Guidelines</h2>
-              <p className="text-xs text-slate-500 mt-0.5">Customize tone, length, and value propositions for JetDigitalPro AI copywriter.</p>
+              <p className="text-xs text-slate-500 mt-0.5">Customize tone, length, and value propositions for JetDigitalPro AI copywriter before creating.</p>
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2">
               <div>

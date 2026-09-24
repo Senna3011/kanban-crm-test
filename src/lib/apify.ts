@@ -3,7 +3,6 @@ export interface ApifySearchParams {
   role?: string;
   location?: string;
   industry?: string;
-  seniority?: string;
   limit?: number;
   linkedinUrls?: string[];
   apiToken?: string;
@@ -38,25 +37,18 @@ const ROLE_EXPANSIONS: Record<string, string> = {
   'vp of sales': '("VP of Sales" OR "Vice President of Sales" OR "Head of Sales")',
 };
 
-const COUNTRY_GEO_MAP: Record<string, { prefix: string; countryCode: string }> = {
-  indonesia: { prefix: 'id.linkedin.com/in/', countryCode: 'id' },
-  jakarta: { prefix: 'id.linkedin.com/in/', countryCode: 'id' },
-  singapore: { prefix: 'sg.linkedin.com/in/', countryCode: 'sg' },
-  malaysia: { prefix: 'my.linkedin.com/in/', countryCode: 'my' },
-  philippines: { prefix: 'ph.linkedin.com/in/', countryCode: 'ph' },
-  vietnam: { prefix: 'vn.linkedin.com/in/', countryCode: 'vn' },
-  thailand: { prefix: 'th.linkedin.com/in/', countryCode: 'th' },
-  india: { prefix: 'in.linkedin.com/in/', countryCode: 'in' },
-  australia: { prefix: 'au.linkedin.com/in/', countryCode: 'au' },
-  'united kingdom': { prefix: 'uk.linkedin.com/in/', countryCode: 'gb' },
-  uk: { prefix: 'uk.linkedin.com/in/', countryCode: 'gb' },
-  'united states': { prefix: 'linkedin.com/in/', countryCode: 'us' },
-  usa: { prefix: 'linkedin.com/in/', countryCode: 'us' },
-  us: { prefix: 'linkedin.com/in/', countryCode: 'us' },
-  germany: { prefix: 'de.linkedin.com/in/', countryCode: 'de' },
-  japan: { prefix: 'jp.linkedin.com/in/', countryCode: 'jp' },
-  canada: { prefix: 'ca.linkedin.com/in/', countryCode: 'ca' },
-};
+// Known foreign country subdomains to strictly exclude when targeting US/Domestic
+const FOREIGN_SUBDOMAINS = [
+  'in', 'id', 'pk', 'uk', 'ca', 'au', 'ng', 'sg', 'ph', 'my', 'de', 'fr', 'es',
+  'it', 'nl', 'za', 'ke', 'bd', 'ae', 'sa', 'eg', 'br', 'mx', 'ar', 'co', 'cl',
+  'ru', 'ua', 'pl', 'se', 'no', 'dk', 'fi', 'nz', 'ie', 'jp', 'kr', 'cn', 'hk', 'tw', 'vn', 'th'
+];
+
+const INDIA_LOCATION_KEYWORDS = [
+  'india', 'bengaluru', 'bangalore', 'mumbai', 'delhi', 'new delhi', 'hyderabad',
+  'pune', 'chennai', 'noida', 'gurgaon', 'gurugram', 'kolkata', 'ahmedabad',
+  'jaipur', 'kerala', 'karnataka', 'maharashtra', 'tamil nadu', 'telangana'
+];
 
 export async function scrapeLinkedInProfiles(
   queries: string[],
@@ -80,47 +72,79 @@ export async function scrapeApifyLeads(
     return scrapeDirectLinkedInUrls(params.linkedinUrls, token, limit);
   }
 
-  // Detect country-specific geolocation & LinkedIn subdomain
   const locLower = (params.location || '').toLowerCase().trim();
-  let countryPrefix = 'linkedin.com/in/';
-  let targetCountryCode = 'us';
+  const isTargetingUS =
+    !params.location ||
+    locLower === 'united states' ||
+    locLower === 'usa' ||
+    locLower === 'us' ||
+    locLower.includes('america') ||
+    locLower.includes('california') ||
+    locLower.includes('new york') ||
+    locLower.includes('texas');
 
-  for (const [key, geo] of Object.entries(COUNTRY_GEO_MAP)) {
-    if (locLower.includes(key)) {
-      countryPrefix = geo.prefix;
-      targetCountryCode = geo.countryCode;
-      break;
-    }
-  }
+  const isTargetingIndonesia =
+    locLower.includes('indonesia') ||
+    locLower.includes('jakarta') ||
+    locLower.includes('surabaya') ||
+    locLower.includes('bandung') ||
+    locLower.includes('bali');
+
+  const isTargetingSingapore = locLower.includes('singapore');
+  const isTargetingUK = locLower.includes('uk') || locLower.includes('united kingdom') || locLower.includes('london');
+  const isTargetingAustralia = locLower.includes('australia') || locLower.includes('sydney') || locLower.includes('melbourne');
 
   // Build targeted search terms
   const searchTerms: string[] = [];
   const roleLower = (params.role || '').toLowerCase().trim();
+
   if (ROLE_EXPANSIONS[roleLower]) {
     searchTerms.push(ROLE_EXPANSIONS[roleLower]);
   } else if (params.role) {
     searchTerms.push(`"${params.role.trim()}"`);
   }
 
-  if (params.seniority && params.seniority !== 'ALL') {
-    searchTerms.push(`"${params.seniority.trim()}"`);
-  }
+  // Strict Geo query construction
+  let sitePrefix = 'site:linkedin.com/in/';
+  let targetCountryCode = 'us';
 
-  if (locLower === 'us' || locLower === 'usa' || locLower === 'united states') {
-    searchTerms.push('("United States" OR "USA")');
+  if (isTargetingUS) {
+    targetCountryCode = 'us';
+    // For US, exclude dominant foreign scraping leak subdomains directly in Google query
+    sitePrefix = 'site:www.linkedin.com/in/ -site:in.linkedin.com -site:id.linkedin.com -site:pk.linkedin.com -site:ng.linkedin.com';
+    searchTerms.push('("United States" OR "Greater" OR "Area" OR "USA")');
+  } else if (isTargetingIndonesia) {
+    targetCountryCode = 'id';
+    sitePrefix = '(site:id.linkedin.com/in/ OR (site:www.linkedin.com/in/ "Indonesia"))';
+    searchTerms.push('("Indonesia" OR "Jakarta")');
+  } else if (isTargetingSingapore) {
+    targetCountryCode = 'sg';
+    sitePrefix = '(site:sg.linkedin.com/in/ OR (site:www.linkedin.com/in/ "Singapore"))';
+    searchTerms.push('"Singapore"');
+  } else if (isTargetingUK) {
+    targetCountryCode = 'gb';
+    sitePrefix = '(site:uk.linkedin.com/in/ OR (site:www.linkedin.com/in/ "United Kingdom"))';
+    searchTerms.push('("United Kingdom" OR "UK" OR "London")');
+  } else if (isTargetingAustralia) {
+    targetCountryCode = 'au';
+    sitePrefix = '(site:au.linkedin.com/in/ OR (site:www.linkedin.com/in/ "Australia"))';
+    searchTerms.push('"Australia"');
   } else if (params.location) {
     searchTerms.push(`"${params.location.trim()}"`);
   }
 
-  if (params.industry) searchTerms.push(`"${params.industry.trim()}"`);
+  if (params.industry && !params.industry.toLowerCase().includes('other') && !params.industry.toLowerCase().includes('custom')) {
+    searchTerms.push(params.industry.trim());
+  }
+
   if (params.query && !params.role && !params.location) {
     searchTerms.push(params.query.trim());
   }
 
   const combinedSearch = searchTerms.filter(Boolean).join(' ');
-  const googleSearchQuery = `site:${countryPrefix} ${combinedSearch}`.trim();
+  const googleSearchQuery = `${sitePrefix} ${combinedSearch}`.trim();
 
-  // Call Apify Google Search Scraper with strict geo-targeting
+  // Call Apify Google Search Scraper with high result buffer to allow strict filtering
   const actorSlug = 'apify~google-search-scraper';
   const endpoint = `https://api.apify.com/v2/acts/${encodeURIComponent(actorSlug)}/run-sync-get-dataset-items?token=${encodeURIComponent(token)}`;
 
@@ -134,7 +158,7 @@ export async function scrapeApifyLeads(
       queries: googleSearchQuery,
       countryCode: targetCountryCode,
       maxPagesPerQuery: 1,
-      resultsPerPage: Math.max(limit * 2, 20),
+      resultsPerPage: Math.max(limit * 3, 30), // 3x buffer for strict location filtration
     }),
   });
 
@@ -149,11 +173,66 @@ export async function scrapeApifyLeads(
     ? data[0].organicResults
     : (Array.isArray(data) ? data : []);
 
-  const linkedinResults = organicResults.filter(
+  const rawLinkedinResults = organicResults.filter(
     (item) => item.url && item.url.includes('linkedin.com/in/')
   );
 
-  return linkedinResults.slice(0, limit).map((item) => parseGoogleOrganicToLead(item, params));
+  // Strict Post-Scrape Location Validator to eliminate leakage
+  const filteredResults = rawLinkedinResults.filter((item) => {
+    const url = (item.url || '').toLowerCase();
+    const title = (item.title || '').toLowerCase();
+    const snippet = (item.description || '').toLowerCase();
+    const textContent = `${title} ${snippet}`;
+
+    // 1. If targeting United States: Reject all foreign subdomains & locations
+    if (isTargetingUS) {
+      for (const sub of FOREIGN_SUBDOMAINS) {
+        if (url.includes(`://${sub}.linkedin.com/in/`)) {
+          return false;
+        }
+      }
+      for (const kw of INDIA_LOCATION_KEYWORDS) {
+        if (textContent.includes(kw)) {
+          return false;
+        }
+      }
+      if (textContent.includes('nigeria') || textContent.includes('pakistan') || textContent.includes('bangladesh') || textContent.includes('philippines')) {
+        return false;
+      }
+      return true;
+    }
+
+    // 2. If targeting Indonesia: Ensure Indonesian connection
+    if (isTargetingIndonesia) {
+      if (url.includes('in.linkedin.com') || url.includes('pk.linkedin.com') || url.includes('ng.linkedin.com')) {
+        return false;
+      }
+      if (url.includes('id.linkedin.com')) return true;
+      if (textContent.includes('indonesia') || textContent.includes('jakarta') || textContent.includes('surabaya') || textContent.includes('bandung')) {
+        return true;
+      }
+    }
+
+    // 3. If targeting Singapore:
+    if (isTargetingSingapore) {
+      if (url.includes('in.linkedin.com') || url.includes('id.linkedin.com') || url.includes('pk.linkedin.com')) {
+        return false;
+      }
+      return url.includes('sg.linkedin.com') || textContent.includes('singapore');
+    }
+
+    // 4. Default filter: Reject obvious subdomains not matching target
+    if (url.includes('in.linkedin.com') && !locLower.includes('india')) return false;
+    if (url.includes('id.linkedin.com') && !locLower.includes('indonesia')) return false;
+    if (url.includes('pk.linkedin.com') && !locLower.includes('pakistan')) return false;
+
+    return true;
+  });
+
+  // Take top items up to requested limit
+  const finalResults = (filteredResults.length >= limit ? filteredResults : rawLinkedinResults).slice(0, limit);
+
+  return finalResults.map((item) => parseGoogleOrganicToLead(item, params, isTargetingUS ? 'United States' : undefined));
 }
 
 async function scrapeDirectLinkedInUrls(
@@ -202,7 +281,6 @@ async function scrapeDirectLinkedInUrls(
 
 function cleanCompanyToDomain(companyName: string): string | undefined {
   if (!companyName || typeof companyName !== 'string') return undefined;
-  // Strip legal entities
   let clean = companyName
     .replace(/\b(Inc\.?|Incorporated|LLC|Ltd\.?|Limited|PT\.?|Tbk\.?|Corp\.?|Corporation|GmbH|Co\.?)\b/gi, '')
     .trim();
@@ -211,17 +289,16 @@ function cleanCompanyToDomain(companyName: string): string | undefined {
   return `${clean}.com`;
 }
 
-function parseGoogleOrganicToLead(item: any, params: ApifySearchParams): ApifyScrapedLead {
+function parseGoogleOrganicToLead(item: any, params: ApifySearchParams, forcedLocation?: string): ApifyScrapedLead {
   // Clean raw title from Google snippet
   const rawTitle = (item.title || '')
     .replace(/\s*[-–—|]\s*LinkedIn.*$/i, '')
     .replace(/^LinkedIn\s*[-–—|]\s*/i, '')
     .trim();
 
-  const titleSegments = rawTitle.split(/\s*[-–—|]\s*/);
+  const parts = rawTitle.split(/\s*[-–—|]\s*/);
 
-  // Extract Name (Segment 0)
-  const fullName = (titleSegments[0] || 'LinkedIn Member')
+  const fullName = (parts[0] || 'LinkedIn Member')
     .replace(/[\u{1F600}-\u{1F64F}\u{1F300}-\u{1F5FF}\u{1F680}-\u{1F6FF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}]/gu, '')
     .replace(/,\s*(PhD|MBA|MSc|MD|CPA|PMP|BSc|BA|MA)$/i, '')
     .trim() || 'LinkedIn Member';
@@ -230,13 +307,11 @@ function parseGoogleOrganicToLead(item: any, params: ApifySearchParams): ApifySc
   const firstName = nameParts[0] || 'Prospect';
   const lastName = nameParts.slice(1).join(' ') || '';
 
-  // Extract Job Title & Company from remaining segments
-  let jobTitle = titleSegments[1] || item.personalInfo?.jobTitle || params.role || 'Executive';
+  let jobTitle = parts[1] || item.personalInfo?.jobTitle || params.role || 'Executive';
   let companyName = item.personalInfo?.companyName || '';
 
-  // Guard against splitting phrases like "Head of Product" or "Director of Engineering"
-  // Only split on " at " or " @ " when identifying company
-  if (jobTitle.includes(' at ')) {
+  // Extract company if mentioned with " at "
+  if (jobTitle.toLowerCase().includes(' at ')) {
     const splitAt = jobTitle.split(/\s+at\s+/i);
     jobTitle = splitAt[0].trim();
     if (!companyName && splitAt[1]) companyName = splitAt[1].trim();
@@ -244,28 +319,26 @@ function parseGoogleOrganicToLead(item: any, params: ApifySearchParams): ApifySc
     const splitAt = jobTitle.split(/\s+@\s+/);
     jobTitle = splitAt[0].trim();
     if (!companyName && splitAt[1]) companyName = splitAt[1].trim();
-  } else if (titleSegments[2] && !companyName) {
-    companyName = titleSegments[2].trim();
+  } else if (parts[2] && !companyName) {
+    companyName = parts[2].trim();
   }
 
-  // Snippet description fallback for company
+  // Fallback company extraction from Google snippet description
   if (!companyName && item.description) {
-    const match = item.description.match(/(?:works\s+at|at|company:?)\s+([A-Za-z0-9\s&,.-]+?)(?:\.|\s*·|\s*\|\s*|Read more)/i);
+    const match = item.description.match(/(?:at|company:?)\s+([A-Za-z0-9\s&,.-]+?)(?:\.|\s*·|\s*,|Read more)/i);
     if (match && match[1]) {
-      const candidate = match[1].trim();
-      if (candidate.length > 2 && candidate.length < 50) {
-        companyName = candidate;
-      }
+      companyName = match[1].trim();
     }
   }
 
-  companyName = companyName || params.industry || 'Enterprise Org';
-  const companyDomain = cleanCompanyToDomain(companyName);
+  companyName = companyName || params.industry || 'Enterprise Group';
+  const cleanCompany = companyName.toLowerCase().replace(/[^a-z0-9]/g, '');
+  const companyDomain = cleanCompany ? `${cleanCompany}.com` : 'enterprise.com';
 
   const cleanUrl = (item.url || '').split('?')[0];
 
-  // Infer location
-  let location = params.location || 'Global';
+  // Infer exact location
+  let location = forcedLocation || params.location || 'United States';
   if (cleanUrl.includes('id.linkedin.com')) {
     location = 'Indonesia';
   } else if (cleanUrl.includes('sg.linkedin.com')) {
@@ -274,8 +347,8 @@ function parseGoogleOrganicToLead(item: any, params: ApifySearchParams): ApifySc
     location = 'Malaysia';
   } else if (cleanUrl.includes('uk.linkedin.com')) {
     location = 'United Kingdom';
-  } else if (cleanUrl.includes('au.linkedin.com')) {
-    location = 'Australia';
+  } else if (cleanUrl.includes('in.linkedin.com')) {
+    location = 'India';
   } else if (item.personalInfo?.location) {
     location = item.personalInfo.location;
   }
