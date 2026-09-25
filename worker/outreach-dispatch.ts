@@ -1,9 +1,12 @@
-import { dispatchColdEmail } from '../src/lib/outreach-dispatcher';
+import { dispatchColdEmail, waitWithJitter } from '../src/lib/outreach-dispatcher';
 import { OutreachDispatchJob } from '../queue/jobs';
 
 export async function processOutreachDispatch(job: OutreachDispatchJob) {
   console.log(`[Outreach Worker] Processing dispatch job for lead: ${job.leadId} (Tenant: ${job.tenantId})`);
   try {
+    // Add human-like random jitter interval (3s - 9s) to protect mailbox reputation
+    await waitWithJitter(3000, 6000);
+
     const result = await dispatchColdEmail({
       leadId: job.leadId,
       tenantId: job.tenantId,

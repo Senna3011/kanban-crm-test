@@ -147,6 +147,11 @@ model Card {
   drafts       DraftMessage[]
   notifications Notification[]
   recoveredSpam SpamLog[]
+
+  @@index([tenantId, columnId])
+  @@index([tenantId, status])
+  @@index([imapFolder])
+  @@index([tenantId, lastActivityAt])
 }
 
 model ActivityLog {

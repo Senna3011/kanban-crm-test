@@ -1,6 +1,11 @@
 import nodemailer from 'nodemailer';
 import { prisma } from './prisma';
 
+export async function waitWithJitter(baseMs = 3000, jitterMs = 6000): Promise<void> {
+  const delay = baseMs + Math.floor(Math.random() * jitterMs);
+  await new Promise((resolve) => setTimeout(resolve, delay));
+}
+
 export interface DispatchLeadEmailParams {
   leadId: string;
   tenantId: string;
@@ -170,7 +175,8 @@ export async function dispatchColdEmail(params: DispatchLeadEmailParams): Promis
         pass: smtpPass,
       },
       tls: {
-        rejectUnauthorized: false,
+        rejectUnauthorized: process.env.NODE_ENV === 'production',
+        minVersion: 'TLSv1.2',
       },
     });
 

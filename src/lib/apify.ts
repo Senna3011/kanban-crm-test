@@ -24,15 +24,57 @@ export interface ApifyScrapedLead {
 }
 
 const FOREIGN_SUBDOMAINS = [
-  'in', 'id', 'pk', 'uk', 'ca', 'au', 'ng', 'sg', 'ph', 'my', 'de', 'fr', 'es',
-  'it', 'nl', 'za', 'ke', 'bd', 'ae', 'sa', 'eg', 'br', 'mx', 'ar', 'co', 'cl',
-  'ru', 'ua', 'pl', 'se', 'no', 'dk', 'fi', 'nz', 'ie', 'jp', 'kr', 'cn', 'hk', 'tw', 'vn', 'th'
+  'in', 'pk', 'ng', 'bd', 'ru', 'ua'
 ];
 
-const INDIA_KEYWORDS = [
-  'india', 'bengaluru', 'bangalore', 'mumbai', 'delhi', 'hyderabad', 'pune',
-  'chennai', 'noida', 'gurgaon', 'gurugram', 'kolkata', 'ahmedabad', 'karnataka', 'maharashtra'
-];
+const COMPANY_LEGAL_ENTITY_REGEX = /\b(PT\.?|CV\.?|Inc\.?|LLC|Ltd\.?|Limited|Tbk\.?|Corp\.?|Corporation|Pte\.?|GmbH|Co\.?|Foundation|Yayasan|Universitas|University|Sekolah|School|Bank)\b/i;
+
+/**
+ * Validates whether a scraped entity is an authentic individual prospect
+ */
+function isValidHumanProspect(lead: ApifyScrapedLead): boolean {
+  if (!lead || !lead.fullName) return false;
+  const nameLower = lead.fullName.toLowerCase().trim();
+
+  // 1. Filter out anonymous / private LinkedIn Member profiles
+  if (
+    nameLower === 'linkedin member' ||
+    nameLower === 'linkedin user' ||
+    nameLower === 'member' ||
+    nameLower === 'prospect' ||
+    nameLower.startsWith('linkedin member')
+  ) {
+    return false;
+  }
+
+  // 2. Filter out company / organizational names (e.g. "PT. Mutiara Empat Gemilang")
+  if (COMPANY_LEGAL_ENTITY_REGEX.test(lead.fullName)) {
+    return false;
+  }
+
+  // 3. Filter out non-person or multi-line strings
+  const words = lead.fullName.split(/\s+/).filter(Boolean);
+  if (words.length > 5) {
+    return false;
+  }
+
+  // 4. Filter out non-individual LinkedIn URLs
+  if (lead.linkedinUrl) {
+    const urlLower = lead.linkedinUrl.toLowerCase();
+    if (
+      urlLower.includes('/company/') ||
+      urlLower.includes('/school/') ||
+      urlLower.includes('/showcase/') ||
+      urlLower.includes('/pulse/') ||
+      urlLower.includes('/posts/') ||
+      urlLower.includes('/jobs/')
+    ) {
+      return false;
+    }
+  }
+
+  return true;
+}
 
 export async function scrapeLinkedInProfiles(
   queries: string[],
@@ -68,7 +110,7 @@ export async function scrapeApifyLeads(
   const isTargetingSingapore = locLower.includes('singapore');
   const isTargetingUK = locLower.includes('uk') || locLower.includes('united kingdom');
 
-  // Build clean, natural search terms without contradictory boolean operators
+  // Build clean, natural Google Dork search query
   const searchTerms: string[] = [];
 
   if (params.role) {
@@ -87,7 +129,6 @@ export async function scrapeApifyLeads(
     searchTerms.push(`"${params.location.trim()}"`);
   }
 
-  // Add search query or industry keyword loosely if custom query exists
   if (params.query && !params.role) {
     searchTerms.push(params.query.trim());
   }
@@ -128,40 +169,36 @@ export async function scrapeApifyLeads(
     (item) => item.url && item.url.includes('linkedin.com/in/')
   );
 
-  // Filter results by geography in JavaScript to prevent foreign leakage
-  const filteredResults = rawLinkedinResults.filter((item) => {
+  // 1. Geographic Filter
+  const geoFilteredResults = rawLinkedinResults.filter((item) => {
     const url = (item.url || '').toLowerCase();
-    const title = (item.title || '').toLowerCase();
-    const snippet = (item.description || '').toLowerCase();
-    const text = `${title} ${snippet}`;
 
     if (isTargetingUS) {
-      // Reject any non-US country subdomain
       for (const sub of FOREIGN_SUBDOMAINS) {
         if (url.includes(`://${sub}.linkedin.com/in/`)) return false;
-      }
-      // Reject any snippet with prominent Indian locations
-      for (const kw of INDIA_KEYWORDS) {
-        if (text.includes(kw)) return false;
       }
       return true;
     }
 
     if (isTargetingIndonesia) {
       if (url.includes('in.linkedin.com') || url.includes('pk.linkedin.com')) return false;
-      return url.includes('id.linkedin.com') || text.includes('indonesia') || text.includes('jakarta');
-    }
-
-    if (isTargetingSingapore) {
-      return url.includes('sg.linkedin.com') || text.includes('singapore');
+      return true;
     }
 
     return true;
   });
 
-  const finalResults = (filteredResults.length > 0 ? filteredResults : rawLinkedinResults).slice(0, limit);
+  // 2. Parse candidates and filter out Companies & "LinkedIn Member"
+  const candidates = (geoFilteredResults.length > 0 ? geoFilteredResults : rawLinkedinResults)
+    .map((item) => parseGoogleOrganicToLead(item, params, isTargetingUS ? 'United States' : undefined))
+    .filter(isValidHumanProspect);
 
-  return finalResults.map((item) => parseGoogleOrganicToLead(item, params, isTargetingUS ? 'United States' : undefined));
+  // Return clean verified human prospects (fallback to raw if all filtered)
+  const finalCandidates = candidates.length > 0
+    ? candidates
+    : rawLinkedinResults.map((item) => parseGoogleOrganicToLead(item, params, isTargetingUS ? 'United States' : undefined));
+
+  return finalCandidates.slice(0, limit);
 }
 
 async function scrapeDirectLinkedInUrls(
@@ -205,7 +242,8 @@ async function scrapeDirectLinkedInUrls(
         summary: item.summary || item.about || undefined,
         metadata: { source: 'apify-harvestapi-direct' },
       };
-    });
+    })
+    .filter(isValidHumanProspect);
 }
 
 function parseGoogleOrganicToLead(item: any, params: ApifySearchParams, forcedLocation?: string): ApifyScrapedLead {
@@ -219,7 +257,7 @@ function parseGoogleOrganicToLead(item: any, params: ApifySearchParams, forcedLo
 
   const fullName = (parts[0] || 'LinkedIn Member')
     .replace(/[\u{1F600}-\u{1F64F}\u{1F300}-\u{1F5FF}\u{1F680}-\u{1F6FF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}]/gu, '')
-    .replace(/,\s*(PhD|MBA|MSc|MD|CPA|PMP|BSc|BA|MA)$/i, '')
+    .replace(/,\s*(PhD|MBA|MSc|MD|CPA|PMP|BSc|BA|MA|BEng|MEng|Dr|Ir|SE|MM|ST|SH|S\.Kom|M\.Kom).*$/i, '')
     .trim() || 'LinkedIn Member';
 
   const nameParts = fullName.split(/\s+/);

@@ -1,6 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
 
+function escapeHtml(str: string): string {
+  return str
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
+}
+
 export async function POST(req: NextRequest) {
   const { searchParams } = new URL(req.url);
   const email = searchParams.get('email');
@@ -61,6 +70,8 @@ export async function GET(req: NextRequest) {
       },
     });
 
+    const safeEmail = escapeHtml(email);
+
     return new NextResponse(
       `<!DOCTYPE html>
       <html lang="en">
@@ -80,7 +91,7 @@ export async function GET(req: NextRequest) {
         <div class="card">
           <div class="icon">✅</div>
           <h1>Unsubscribed Successfully</h1>
-          <p>The email address <strong>${email}</strong> has been removed from our outbound list. You will not receive further outreach communications from us.</p>
+          <p>The email address <strong>${safeEmail}</strong> has been removed from our outbound list. You will not receive further outreach communications from us.</p>
         </div>
       </body>
       </html>`,
