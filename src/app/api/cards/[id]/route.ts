@@ -21,7 +21,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     const card = await prisma.card.findUnique({
       where: { id: id },
       include: {
-        activityLogs: { orderBy: { createdAt: 'desc' } },
+        activityLogs: { take: 50, orderBy: { createdAt: 'desc' } },
         drafts: { orderBy: { editedAt: 'desc' } },
         assignedTo: { select: { id: true, name: true } },
         column: { select: { id: true, title: true, boardId: true } },

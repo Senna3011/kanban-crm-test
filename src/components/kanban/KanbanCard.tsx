@@ -33,6 +33,20 @@ function getAvatarColor(str: string) {
   return gradients[index];
 }
 
+function formatFollowUpSla(targetDate: Date): { text: string; isOverdue: boolean } {
+  const diffMs = targetDate.getTime() - Date.now();
+  if (diffMs < 0) {
+    const absHours = Math.floor(Math.abs(diffMs) / 3600000);
+    if (absHours < 24) return { text: `🔴 Overdue ${Math.max(1, absHours)}h`, isOverdue: true };
+    const absDays = Math.floor(absHours / 24);
+    return { text: `🔴 Overdue ${absDays}d`, isOverdue: true };
+  }
+  const hoursLeft = Math.floor(diffMs / 3600000);
+  if (hoursLeft < 24) return { text: `🟡 ${Math.max(1, hoursLeft)}h left`, isOverdue: false };
+  const daysLeft = Math.floor(hoursLeft / 24);
+  return { text: `🟢 ${daysLeft}d left`, isOverdue: false };
+}
+
 function formatRelativeTime(dateStr: string): string {
   const date = new Date(dateStr);
   const now = Date.now();
@@ -183,22 +197,22 @@ export default function KanbanCard({
             </span>
           )}
 
-          {followUpDate && (
-            <span
-              className={clsx(
-                'inline-flex items-center gap-1 text-[10px] font-semibold px-1.5 py-0.5 rounded-md border',
-                isOverdue
-                  ? 'bg-rose-50 text-rose-700 border-rose-200 animate-pulse'
-                  : 'bg-slate-100 text-slate-600 border-slate-200'
-              )}
-              title={isOverdue ? `Overdue: ${followUpDate.toLocaleDateString()}` : `Follow-up: ${followUpDate.toLocaleDateString()}`}
-            >
-              <svg className="w-2.5 h-2.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z" />
-              </svg>
-              {isOverdue ? 'Overdue' : followUpDate.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
-            </span>
-          )}
+          {followUpDate && (() => {
+            const sla = formatFollowUpSla(followUpDate);
+            return (
+              <span
+                className={clsx(
+                  'inline-flex items-center gap-1 text-[10px] font-semibold px-1.5 py-0.5 rounded-md border',
+                  sla.isOverdue
+                    ? 'bg-rose-50 text-rose-700 border-rose-200 animate-pulse'
+                    : 'bg-slate-100 text-slate-700 border-slate-200'
+                )}
+                title={`Follow-up target: ${followUpDate.toLocaleString()}`}
+              >
+                {sla.text}
+              </span>
+            );
+          })()}
 
           {/* Assigned User Avatar */}
           {card.assignedTo && (

@@ -175,17 +175,24 @@ function buildTimelineMessages(
     });
   }
 
-  // Parse and add activity logs
+  // Parse and add activity logs (with deduplication to prevent spam/overflow)
   const emailLogTypes = new Set(['email_received', 'email_sent', 'email_reply_received']);
+  const seenActivityKeys = new Set<string>();
+
   for (const log of activityLogs) {
     const c = log.content as any;
 
     if (emailLogTypes.has(log.type)) {
       if (c?.cardId && shownCardIds.has(c.cardId)) continue;
       if (c?.draftId && shownDraftIds.has(c.draftId)) continue;
+      if (c?.messageId && seenActivityKeys.has(`msg-${c.messageId}`)) continue;
+      if (c?.messageId) seenActivityKeys.add(`msg-${c.messageId}`);
     }
 
     const parsed = parseActivityPayload(log.type, log.content);
+    const dedupeKey = `${log.type}-${parsed.summary}`;
+    if (seenActivityKeys.has(dedupeKey)) continue;
+    seenActivityKeys.add(dedupeKey);
 
     items.push({
       id: `log-${log.id}`,
@@ -423,7 +430,9 @@ export default function CardDetailPanel({ card, onClose }: Props) {
           const addresses = configs.map((c: any) => c.smtpUser).filter(Boolean);
           const uniqueAddrs = [...new Set(addresses)] as string[];
           setFromAddresses(uniqueAddrs);
-          if (uniqueAddrs.length > 0 && !selectedFrom) setSelectedFrom(uniqueAddrs[0]);
+          if (uniqueAddrs.length > 0) {
+            setSelectedFrom((prev) => prev || uniqueAddrs[0]);
+          }
         }
 
         if (threadRes.status === 'fulfilled' && threadRes.value.ok) {
@@ -437,7 +446,7 @@ export default function CardDetailPanel({ card, onClose }: Props) {
       }
     }
     loadBackgroundDetails();
-  }, [card.id, selectedFrom]);
+  }, [card.id]);
 
   // Keyboard shortcut: Escape to close modal
   useEffect(() => {

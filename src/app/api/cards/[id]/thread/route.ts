@@ -20,66 +20,88 @@ export async function GET(
     return NextResponse.json({ error: 'Not found' }, { status: 404 });
   }
 
-  // Find all cards in the same thread using RFC Message-ID chain (fast 2-round resolution)
+  // Find all cards in the same thread using valid RFC Message-ID chain
   const threadMessageIds = new Set<string>();
   const threadCardIds = new Set<string>();
 
-  if (card.messageId) threadMessageIds.add(card.messageId);
-  if (card.inReplyTo) threadMessageIds.add(card.inReplyTo);
+  if (card.messageId && card.messageId.trim().length > 3) {
+    threadMessageIds.add(card.messageId.trim());
+  }
+  if (card.inReplyTo && card.inReplyTo.trim().length > 3) {
+    threadMessageIds.add(card.inReplyTo.trim());
+  }
   threadCardIds.add(card.id);
 
   // Bounded 2-round thread lookup to prevent unbounded recursive loops
-  for (let round = 0; round < 2; round++) {
-    if (threadMessageIds.size === 0) break;
-    const related = await prisma.card.findMany({
+  if (threadMessageIds.size > 0) {
+    for (let round = 0; round < 2; round++) {
+      const messageIdList = Array.from(threadMessageIds).filter((m) => m && m.length > 3);
+      if (messageIdList.length === 0) break;
+
+      const related = await prisma.card.findMany({
+        where: {
+          tenantId,
+          status: { not: 'deleted' },
+          OR: [
+            { messageId: { in: messageIdList } },
+            { inReplyTo: { in: messageIdList } },
+          ],
+        },
+        select: { id: true, messageId: true, inReplyTo: true },
+        take: 30,
+      });
+
+      let addedNew = false;
+      for (const r of related) {
+        if (r.messageId && r.messageId.trim().length > 3 && !threadMessageIds.has(r.messageId.trim())) {
+          threadMessageIds.add(r.messageId.trim());
+          addedNew = true;
+        }
+        if (r.inReplyTo && r.inReplyTo.trim().length > 3 && !threadMessageIds.has(r.inReplyTo.trim())) {
+          threadMessageIds.add(r.inReplyTo.trim());
+          addedNew = true;
+        }
+        if (!threadCardIds.has(r.id)) {
+          threadCardIds.add(r.id);
+          addedNew = true;
+        }
+      }
+      if (!addedNew) break;
+    }
+  }
+
+  // Fetch all received emails in thread (only if we have valid message IDs)
+  let receivedEmails: {
+    id: string;
+    subject: string;
+    fromEmail: string;
+    fromName: string | null;
+    bodyText: string | null;
+    lastActivityAt: Date;
+  }[] = [];
+
+  const validMessageIds = Array.from(threadMessageIds).filter((m) => m && m.length > 3);
+  if (validMessageIds.length > 0) {
+    receivedEmails = await prisma.card.findMany({
       where: {
         tenantId,
         status: { not: 'deleted' },
         OR: [
-          { messageId: { in: [...threadMessageIds] } },
-          { inReplyTo: { in: [...threadMessageIds] } },
+          { messageId: { in: validMessageIds } },
+          { inReplyTo: { in: validMessageIds } },
         ],
       },
-      select: { id: true, messageId: true, inReplyTo: true },
-      take: 50,
+      select: {
+        id: true,
+        subject: true,
+        fromEmail: true,
+        fromName: true,
+        bodyText: true,
+        lastActivityAt: true,
+      },
+      take: 30,
     });
-
-    let addedNew = false;
-    for (const r of related) {
-      if (r.messageId && !threadMessageIds.has(r.messageId)) {
-        threadMessageIds.add(r.messageId);
-        addedNew = true;
-      }
-      if (r.inReplyTo && !threadMessageIds.has(r.inReplyTo)) {
-        threadMessageIds.add(r.inReplyTo);
-        addedNew = true;
-      }
-      if (!threadCardIds.has(r.id)) {
-        threadCardIds.add(r.id);
-        addedNew = true;
-      }
-    }
-    if (!addedNew) break;
   }
-
-  // Fetch all received emails in thread
-  const receivedEmails = await prisma.card.findMany({
-    where: {
-      tenantId,
-      OR: [
-        { messageId: { in: [...threadMessageIds] } },
-        { inReplyTo: { in: [...threadMessageIds] } },
-      ],
-    },
-    select: {
-      id: true,
-      subject: true,
-      fromEmail: true,
-      fromName: true,
-      bodyText: true,
-      lastActivityAt: true,
-    },
-  });
 
   // Fetch sent + pending drafts for these cards
   const sentEmails = await prisma.draftMessage.findMany({

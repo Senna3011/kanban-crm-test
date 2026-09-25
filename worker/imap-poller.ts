@@ -165,12 +165,25 @@ async function pollFolder(imapConfig: Record<string, string>, folder: string, te
       if (msg.inReplyTo) {
         const parentCard = await prisma.card.findFirst({ where: { messageId: msg.inReplyTo, tenantId } });
         if (parentCard) {
-          // Mark parent card as replied (highlighted)
-          await prisma.card.update({ where: { id: parentCard.id }, data: { highlighted: true, lastActivityAt: new Date() } });
-          await prisma.activityLog.create({
-            data: { type: 'email_reply_received', content: { messageId: msg.messageId, subject: msg.subject, from: msg.fromEmail, replyTo: msg.inReplyTo }, cardId: parentCard.id, tenantId },
-          });
-          console.log(`[IMAP Poller] Reply detected: "${msg.subject}" → parent card ${parentCard.id} marked as highlighted`);
+          // Check if this reply message has already been processed to prevent infinite duplicate activity logs
+          const alreadyLogged = msg.messageId
+            ? await prisma.activityLog.findFirst({
+                where: {
+                  cardId: parentCard.id,
+                  type: 'email_reply_received',
+                  content: { path: ['messageId'], equals: msg.messageId },
+                },
+              })
+            : null;
+
+          if (!alreadyLogged) {
+            // Mark parent card as replied (highlighted)
+            await prisma.card.update({ where: { id: parentCard.id }, data: { highlighted: true, lastActivityAt: new Date() } });
+            await prisma.activityLog.create({
+              data: { type: 'email_reply_received', content: { messageId: msg.messageId, subject: msg.subject, from: msg.fromEmail, replyTo: msg.inReplyTo }, cardId: parentCard.id, tenantId },
+            });
+            console.log(`[IMAP Poller] Reply detected: "${msg.subject}" → parent card ${parentCard.id} marked as highlighted`);
+          }
           continue;
         }
         // If parent not found, might be a new thread — allow creation

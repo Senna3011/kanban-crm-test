@@ -123,6 +123,24 @@ export default function CampaignWorkspacePage({
     });
   }, [campaignId]);
 
+  // Keyboard shortcut listener for Draft Review Modal
+  useEffect(() => {
+    function handleKeyDown(e: KeyboardEvent) {
+      if (!selectedLead) return;
+      if (e.key === 'Escape') {
+        setSelectedLead(null);
+      } else if (e.altKey && e.key === 'ArrowRight') {
+        e.preventDefault();
+        navigateDraftModal('next');
+      } else if (e.altKey && e.key === 'ArrowLeft') {
+        e.preventDefault();
+        navigateDraftModal('prev');
+      }
+    }
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [selectedLead, campaign]);
+
   async function fetchCampaign(): Promise<CampaignDetail | null> {
     setLoading(true);
     setError('');
@@ -816,30 +834,39 @@ export default function CampaignWorkspacePage({
 
         {/* Step Progression Grid */}
         <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
-          {/* Step 1 */}
+          {/* Step 1: Leads Sourced */}
           <div className={`p-3.5 rounded-xl border transition-all ${currentStepNumber === 1 ? 'bg-white/15 border-amber-400 ring-2 ring-amber-400/30' : allLeads.length > 0 ? 'bg-emerald-950/30 border-emerald-500/30' : 'bg-white/5 border-white/10'}`}>
             <div className="flex items-center justify-between">
-              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Step 1</p>
-              {allLeads.length > 0 && <span className="text-emerald-400 text-xs font-bold">✓</span>}
+              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Step 1</span>
+              {allLeads.length > 0 ? (
+                <span className="text-emerald-400 text-xs font-bold bg-emerald-500/20 px-1.5 py-0.5 rounded-md">✓ Done</span>
+              ) : (
+                <span className="text-slate-500 text-[10px]">Pending</span>
+              )}
             </div>
-            <p className="text-xs font-bold text-white mt-0.5">Leads Sourced</p>
-            <p className="text-lg font-bold text-blue-400 mt-1">{allLeads.length}</p>
+            <p className="text-xs font-semibold text-slate-200 mt-1">Leads Sourced</p>
+            <p className="text-lg font-bold text-blue-400 mt-0.5">{allLeads.length}</p>
           </div>
 
           {/* Step 2: Get Emails */}
           <div className={`p-3.5 rounded-xl border transition-all ${currentStepNumber === 2 ? 'bg-white/15 border-amber-400 ring-2 ring-amber-400/30' : leadsWithEmail > 0 ? 'bg-emerald-950/30 border-emerald-500/30' : 'bg-white/5 border-white/10'} flex flex-col justify-between`}>
             <div>
               <div className="flex items-center justify-between">
-                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Step 2</p>
-                {leadsWithEmail > 0 && <span className="text-emerald-400 text-xs font-bold">✓</span>}
+                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Step 2</span>
+                {leadsWithEmail > 0 ? (
+                  <span className="text-emerald-400 text-xs font-bold bg-emerald-500/20 px-1.5 py-0.5 rounded-md">✓ Done</span>
+                ) : (
+                  <span className="text-slate-500 text-[10px]">Pending</span>
+                )}
               </div>
-              <p className="text-xs font-bold text-white mt-0.5">Candidate Emails</p>
-              <p className="text-lg font-bold text-indigo-300 mt-1">{leadsWithEmail} / {allLeads.length}</p>
+              <p className="text-xs font-semibold text-slate-200 mt-1">Candidate Emails</p>
+              <p className="text-lg font-bold text-indigo-300 mt-0.5">{leadsWithEmail} <span className="text-xs font-normal text-slate-400">/ {allLeads.length}</span></p>
             </div>
             <button
               onClick={() => handleFindEmails()}
               disabled={Boolean(actionLoading) || allLeads.length === 0}
-              className="mt-2 w-full py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white text-[11px] font-bold rounded-lg transition-colors shadow-xs flex items-center justify-center gap-1 disabled:opacity-40"
+              className="mt-2 w-full py-1 bg-indigo-600/80 hover:bg-indigo-600 text-white text-[11px] font-semibold rounded-lg transition-colors flex items-center justify-center gap-1 disabled:opacity-30"
+              title="Run pattern generator & domain lookup to find missing emails"
             >
               {actionLoading === 'find-emails' ? (
                 <span className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin" />
@@ -853,16 +880,21 @@ export default function CampaignWorkspacePage({
           <div className={`p-3.5 rounded-xl border transition-all ${currentStepNumber === 3 ? 'bg-white/15 border-amber-400 ring-2 ring-amber-400/30' : safeLeads > 0 ? 'bg-emerald-950/30 border-emerald-500/30' : 'bg-white/5 border-white/10'} flex flex-col justify-between`}>
             <div>
               <div className="flex items-center justify-between">
-                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Step 3</p>
-                {safeLeads > 0 && <span className="text-emerald-400 text-xs font-bold">✓</span>}
+                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Step 3</span>
+                {safeLeads > 0 ? (
+                  <span className="text-emerald-400 text-xs font-bold bg-emerald-500/20 px-1.5 py-0.5 rounded-md">✓ Done</span>
+                ) : (
+                  <span className="text-slate-500 text-[10px]">Pending</span>
+                )}
               </div>
-              <p className="text-xs font-bold text-white mt-0.5">Verify Deliverability</p>
-              <p className="text-lg font-bold text-emerald-400 mt-1">{safeLeads} Safe</p>
+              <p className="text-xs font-semibold text-slate-200 mt-1">Deliverability</p>
+              <p className="text-lg font-bold text-emerald-400 mt-0.5">{safeLeads} <span className="text-xs font-normal text-emerald-300/70">Safe</span></p>
             </div>
             <button
               onClick={() => handleVerifyEmails()}
               disabled={Boolean(actionLoading) || leadsWithEmail === 0}
-              className="mt-2 w-full py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white text-[11px] font-bold rounded-lg transition-colors shadow-xs flex items-center justify-center gap-1 disabled:opacity-40"
+              className="mt-2 w-full py-1 bg-emerald-600/80 hover:bg-emerald-600 text-white text-[11px] font-semibold rounded-lg transition-colors flex items-center justify-center gap-1 disabled:opacity-30"
+              title="Verify inbox existence via Reoon API"
             >
               {actionLoading === 'verify' ? (
                 <span className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin" />
@@ -876,16 +908,21 @@ export default function CampaignWorkspacePage({
           <div className={`p-3.5 rounded-xl border transition-all ${currentStepNumber === 4 ? 'bg-white/15 border-amber-400 ring-2 ring-amber-400/30' : readyDrafts > 0 ? 'bg-emerald-950/30 border-emerald-500/30' : 'bg-white/5 border-white/10'} flex flex-col justify-between`}>
             <div>
               <div className="flex items-center justify-between">
-                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Step 4</p>
-                {readyDrafts > 0 && <span className="text-emerald-400 text-xs font-bold">✓</span>}
+                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Step 4</span>
+                {readyDrafts > 0 ? (
+                  <span className="text-emerald-400 text-xs font-bold bg-emerald-500/20 px-1.5 py-0.5 rounded-md">✓ Done</span>
+                ) : (
+                  <span className="text-slate-500 text-[10px]">Pending</span>
+                )}
               </div>
-              <p className="text-xs font-bold text-white mt-0.5">JetDigital AI Copy</p>
-              <p className="text-lg font-bold text-purple-400 mt-1">{readyDrafts} Ready</p>
+              <p className="text-xs font-semibold text-slate-200 mt-1">AI Pitch Copy</p>
+              <p className="text-lg font-bold text-purple-400 mt-0.5">{readyDrafts} <span className="text-xs font-normal text-purple-300/70">Ready</span></p>
             </div>
             <button
               onClick={() => handleGenerateDrafts()}
               disabled={Boolean(actionLoading) || safeLeads === 0}
-              className="mt-2 w-full py-1.5 bg-purple-600 hover:bg-purple-500 text-white text-[11px] font-bold rounded-lg transition-colors shadow-xs flex items-center justify-center gap-1 disabled:opacity-40"
+              className="mt-2 w-full py-1 bg-purple-600/80 hover:bg-purple-600 text-white text-[11px] font-semibold rounded-lg transition-colors flex items-center justify-center gap-1 disabled:opacity-30"
+              title="Generate personalized cold pitches with JetDigitalPro AI"
             >
               {actionLoading === 'draft' ? (
                 <span className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin" />
@@ -899,21 +936,26 @@ export default function CampaignWorkspacePage({
           <div className={`p-3.5 rounded-xl border transition-all ${currentStepNumber === 5 ? 'bg-white/15 border-amber-400 ring-2 ring-amber-400/30' : convertedLeads > 0 ? 'bg-emerald-950/30 border-emerald-500/30' : 'bg-white/5 border-white/10'} col-span-2 md:col-span-1 flex flex-col justify-between`}>
             <div>
               <div className="flex items-center justify-between">
-                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Step 5</p>
-                {convertedLeads > 0 && <span className="text-emerald-400 text-xs font-bold">✓</span>}
+                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Step 5</span>
+                {convertedLeads > 0 ? (
+                  <span className="text-emerald-400 text-xs font-bold bg-emerald-500/20 px-1.5 py-0.5 rounded-md">✓ Done</span>
+                ) : (
+                  <span className="text-slate-500 text-[10px]">Pending</span>
+                )}
               </div>
-              <p className="text-xs font-bold text-white mt-0.5">CRM / Dispatch</p>
-              <p className="text-lg font-bold text-amber-400 mt-1">{convertedLeads} in CRM</p>
+              <p className="text-xs font-semibold text-slate-200 mt-1">CRM / Dispatch</p>
+              <p className="text-lg font-bold text-amber-400 mt-0.5">{convertedLeads} <span className="text-xs font-normal text-amber-300/70">in CRM</span></p>
             </div>
             <button
               onClick={() => handlePushToCrm()}
               disabled={Boolean(actionLoading) || allLeads.length === 0}
-              className="mt-2 w-full py-1.5 bg-amber-500 hover:bg-amber-400 text-slate-950 text-[11px] font-bold rounded-lg transition-colors shadow-xs flex items-center justify-center gap-1 disabled:opacity-40"
+              className="mt-2 w-full py-1 bg-amber-500 hover:bg-amber-400 text-slate-950 text-[11px] font-bold rounded-lg transition-colors flex items-center justify-center gap-1 disabled:opacity-30"
+              title="Bridge verified leads into Kanban CRM pipeline board"
             >
               {actionLoading === 'push-crm' ? (
                 <span className="w-3 h-3 border-2 border-slate-900 border-t-transparent rounded-full animate-spin" />
               ) : (
-                <span>📋 Push to CRM</span>
+                <span>📋 Push CRM</span>
               )}
             </button>
           </div>
@@ -1230,138 +1272,199 @@ export default function CampaignWorkspacePage({
         )}
       </div>
 
-      {/* Sequential AI Draft Review & Edit Modal */}
+      {/* Sequential AI Draft Review & Edit Modal (Side-by-Side Split View) */}
       {selectedLead && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 z-50 animate-in fade-in">
-          <div className="bg-white rounded-2xl max-w-2xl w-full p-6 shadow-2xl border border-slate-200 space-y-4 max-h-[90vh] overflow-y-auto">
+          <div className="bg-white rounded-2xl max-w-4xl w-full p-5 sm:p-6 shadow-2xl border border-slate-200 space-y-4 max-h-[92vh] overflow-y-auto">
             {/* Modal Header with Sequential Lead Navigator */}
             <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-              <div className="flex items-center gap-3">
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-xl bg-purple-100 text-purple-700 flex items-center justify-center font-bold text-sm">
+                  🤖
+                </div>
                 <div>
                   <div className="flex items-center gap-2">
-                    <h3 className="text-sm font-bold text-slate-900">JetDigitalPro AI Cold Email Pitch</h3>
+                    <h3 className="text-sm font-bold text-slate-900">JetDigitalPro AI Draft Reviewer</h3>
                     {currentModalIndex !== -1 && (
-                      <span className="text-[10px] font-bold bg-slate-100 text-slate-600 px-2 py-0.5 rounded-full">
+                      <span className="text-[10px] font-bold bg-purple-50 text-purple-700 border border-purple-200/70 px-2 py-0.5 rounded-full">
                         Lead {currentModalIndex + 1} of {filteredLeads.length}
                       </span>
                     )}
                   </div>
                   <p className="text-xs text-slate-500">
-                    Recipient: <span className="font-semibold text-slate-800">{selectedLead.fullName}</span> ({selectedLead.jobTitle} at {selectedLead.companyName})
+                    Review and tailor AI personalized pitch for <span className="font-semibold text-slate-800">{selectedLead.fullName}</span>
                   </p>
                 </div>
               </div>
 
-              {/* Prev / Next Lead Quick Navigation */}
+              {/* Prev / Next Lead Quick Navigation & Shortcuts */}
               <div className="flex items-center gap-1.5">
                 <button
                   type="button"
                   onClick={() => navigateDraftModal('prev')}
                   disabled={currentModalIndex <= 0}
-                  className="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold rounded-lg disabled:opacity-30 transition-colors"
-                  title="Previous Lead Draft"
+                  className="px-2.5 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold rounded-lg disabled:opacity-30 transition-colors flex items-center gap-1"
+                  title="Previous Lead (Alt + ←)"
                 >
-                  ← Prev
+                  <span>←</span>
+                  <span className="hidden sm:inline">Prev</span>
                 </button>
                 <button
                   type="button"
                   onClick={() => navigateDraftModal('next')}
                   disabled={currentModalIndex >= filteredLeads.length - 1}
-                  className="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold rounded-lg disabled:opacity-30 transition-colors"
-                  title="Next Lead Draft"
+                  className="px-2.5 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold rounded-lg disabled:opacity-30 transition-colors flex items-center gap-1"
+                  title="Next Lead (Alt + →)"
                 >
-                  Next →
+                  <span className="hidden sm:inline">Next</span>
+                  <span>→</span>
                 </button>
                 <button
                   onClick={() => setSelectedLead(null)}
-                  className="text-slate-400 hover:text-slate-600 text-lg leading-none ml-2"
+                  className="text-slate-400 hover:text-slate-600 text-lg leading-none ml-2 px-1.5 py-1 rounded-lg hover:bg-slate-100"
+                  title="Close (Esc)"
                 >
                   ✕
                 </button>
               </div>
             </div>
 
-            {/* Email Edit Inputs */}
-            <div className="space-y-3">
-              <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">
-                  Recipient Target Email <span className="text-slate-400 font-normal">(Verified or custom test email)</span>
-                </label>
-                <input
-                  type="email"
-                  value={editEmail}
-                  onChange={(e) => setEditEmail(e.target.value)}
-                  placeholder="e.g. prospect@company.com"
-                  className="w-full px-3 py-2 border border-slate-300 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-primary-500 font-mono text-slate-800"
-                />
-              </div>
-
-              <div>
-                <div className="flex items-center justify-between mb-1">
-                  <label className="block text-xs font-semibold text-slate-700">Subject Line</label>
-                  {Boolean(selectedLead.metadata && (selectedLead.metadata as any).alternativeSubject) && (
-                    <button
-                      type="button"
-                      onClick={() => setEditSubject((selectedLead.metadata as any).alternativeSubject)}
-                      className="text-[10px] text-indigo-600 hover:text-indigo-800 font-medium"
-                      title="Use AI A/B testing alternative subject"
-                    >
-                      💡 Switch to A/B Subject
-                    </button>
-                  )}
-                </div>
-                <input
-                  type="text"
-                  value={editSubject}
-                  onChange={(e) => setEditSubject(e.target.value)}
-                  className="w-full px-3 py-2 border border-slate-300 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-primary-500 font-semibold text-slate-800"
-                />
-              </div>
-
-              {/* Custom AI Regeneration Guidance */}
-              <div className="p-3 bg-purple-50/50 rounded-xl border border-purple-100 space-y-2">
-                <div className="flex items-center justify-between">
-                  <label className="text-[11px] font-bold text-purple-900 flex items-center gap-1">
-                    <span>✨</span>
-                    <span>AI Regeneration Directives for this Lead (Optional)</span>
+            {/* Side-by-Side Content Grid */}
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">
+              {/* Left Column (7 cols): Email Editor */}
+              <div className="lg:col-span-7 space-y-3.5">
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">
+                    Recipient Target Email
                   </label>
+                  <input
+                    type="email"
+                    value={editEmail}
+                    onChange={(e) => setEditEmail(e.target.value)}
+                    placeholder="prospect@company.com"
+                    className="w-full px-3 py-2 border border-slate-300 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-primary-500 font-mono text-slate-800"
+                  />
+                </div>
+
+                <div>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="block text-xs font-semibold text-slate-700">Subject Line</label>
+                    {Boolean(selectedLead.metadata && (selectedLead.metadata as any).alternativeSubject) && (
+                      <button
+                        type="button"
+                        onClick={() => setEditSubject((selectedLead.metadata as any).alternativeSubject)}
+                        className="text-[10px] text-indigo-600 hover:text-indigo-800 font-semibold inline-flex items-center gap-1 bg-indigo-50 px-2 py-0.5 rounded-md border border-indigo-200"
+                        title="Use AI alternative subject"
+                      >
+                        <span>💡</span>
+                        <span>Switch to A/B Subject</span>
+                      </button>
+                    )}
+                  </div>
+                  <input
+                    type="text"
+                    value={editSubject}
+                    onChange={(e) => setEditSubject(e.target.value)}
+                    className="w-full px-3 py-2 border border-slate-300 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-primary-500 font-semibold text-slate-800"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">Email Pitch Body</label>
+                  <textarea
+                    rows={8}
+                    value={editBody}
+                    onChange={(e) => setEditBody(e.target.value)}
+                    className="w-full px-3 py-2.5 border border-slate-300 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-primary-500 text-slate-800 leading-relaxed font-sans"
+                    placeholder="Enter pitch body..."
+                  />
+                </div>
+              </div>
+
+              {/* Right Column (5 cols): Context & AI Assistant */}
+              <div className="lg:col-span-5 space-y-3">
+                {/* Lead Profile Context Card */}
+                <div className="p-3.5 bg-slate-50 rounded-xl border border-slate-200 space-y-2">
+                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Prospect Profile</span>
+                  <div className="space-y-1">
+                    <p className="text-xs font-bold text-slate-900">{selectedLead.fullName}</p>
+                    <p className="text-xs text-slate-600">{selectedLead.jobTitle || 'No title'} @ <span className="font-semibold text-slate-800">{selectedLead.companyName || 'Unknown company'}</span></p>
+                    {selectedLead.location && (
+                      <p className="text-[11px] text-slate-500">📍 {selectedLead.location}</p>
+                    )}
+                  </div>
+
+                  {/* Deliverability Badge */}
+                  <div className="pt-2 border-t border-slate-200 flex items-center justify-between">
+                    <span className="text-[11px] text-slate-500">Deliverability:</span>
+                    {selectedLead.verifyStatus === 'SAFE' ? (
+                      <span className="px-2 py-0.5 bg-emerald-100 text-emerald-800 font-bold text-[10px] rounded-full border border-emerald-300 flex items-center gap-1">
+                        <span>🛡️</span>
+                        <span>Safe (Score: {selectedLead.verifyScore ?? 100})</span>
+                      </span>
+                    ) : selectedLead.verifyStatus === 'INVALID' ? (
+                      <span className="px-2 py-0.5 bg-rose-100 text-rose-800 font-bold text-[10px] rounded-full border border-rose-300">
+                        ⚠️ Invalid / Risky
+                      </span>
+                    ) : (
+                      <span className="px-2 py-0.5 bg-slate-200 text-slate-700 font-medium text-[10px] rounded-full">
+                        Not Verified
+                      </span>
+                    )}
+                  </div>
+                </div>
+
+                {/* AI Assistant Directives Card */}
+                <div className="p-3.5 bg-purple-50/70 rounded-xl border border-purple-200/80 space-y-2.5">
+                  <div className="flex items-center justify-between">
+                    <label className="text-xs font-bold text-purple-900 flex items-center gap-1">
+                      <span>✨</span>
+                      <span>AI Directives</span>
+                    </label>
+                  </div>
+                  <p className="text-[11px] text-purple-700 leading-snug">
+                    Provide custom instructions to regenerate tailored copy for this lead.
+                  </p>
+                  <textarea
+                    rows={3}
+                    value={modalCustomPrompt}
+                    onChange={(e) => setModalCustomPrompt(e.target.value)}
+                    placeholder="e.g. Keep under 75 words, emphasize ROI and security, informal tone."
+                    className="w-full px-3 py-1.5 border border-purple-200 bg-white rounded-lg text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-purple-500"
+                  />
                   <button
                     type="button"
                     onClick={handleRegenerateModalDraft}
                     disabled={regeneratingDraft}
-                    className="text-[11px] text-purple-700 hover:text-purple-900 font-bold flex items-center gap-1 bg-white px-2 py-1 rounded-lg border border-purple-200 shadow-2xs"
+                    className="w-full py-1.5 bg-purple-600 hover:bg-purple-700 text-white text-xs font-bold rounded-lg transition-colors flex items-center justify-center gap-1.5 shadow-xs disabled:opacity-50"
                   >
-                    <span>{regeneratingDraft ? '⏳' : '⚡'}</span>
-                    <span>{regeneratingDraft ? 'Regenerating AI...' : 'Regenerate AI Copy'}</span>
+                    {regeneratingDraft ? (
+                      <>
+                        <span className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                        <span>Regenerating AI Copy...</span>
+                      </>
+                    ) : (
+                      <>
+                        <span>⚡</span>
+                        <span>Regenerate AI Copy</span>
+                      </>
+                    )}
                   </button>
                 </div>
-                <input
-                  type="text"
-                  value={modalCustomPrompt}
-                  onChange={(e) => setModalCustomPrompt(e.target.value)}
-                  placeholder="e.g. Make it under 80 words, emphasize cloud security, or use a conversational tone."
-                  className="w-full px-3 py-1.5 border border-purple-200 bg-white rounded-lg text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-purple-500"
-                />
-              </div>
 
-              <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">Email Pitch Body</label>
-                <textarea
-                  rows={7}
-                  value={editBody}
-                  onChange={(e) => setEditBody(e.target.value)}
-                  className="w-full px-3 py-2.5 border border-slate-300 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-primary-500 text-slate-800 leading-relaxed font-sans"
-                />
+                <p className="text-[10px] text-slate-400 text-center italic">
+                  Keyboard: Esc to close | Alt + ← / → to browse
+                </p>
               </div>
             </div>
 
             {/* Clean Unified Action Footer */}
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pt-3 border-t border-slate-100">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-4 border-t border-slate-100">
               {/* Push / Approve to CRM Action */}
               <div>
                 {selectedLead.status === 'CONVERTED' ? (
-                  <span className="px-3 py-1.5 bg-emerald-50 text-emerald-800 border border-emerald-200 text-xs font-bold rounded-xl inline-block">
-                    ✓ Converted in Kanban CRM
+                  <span className="px-3 py-1.5 bg-emerald-50 text-emerald-800 border border-emerald-200 text-xs font-bold rounded-xl inline-flex items-center gap-1">
+                    <span>✓</span> Converted in Kanban CRM
                   </span>
                 ) : (
                   <button
@@ -1369,7 +1472,6 @@ export default function CampaignWorkspacePage({
                     onClick={async () => {
                       setPushingToCrmModal(true);
                       try {
-                        // 1. Save any pending draft changes first
                         await fetch(`/api/outreach/leads/${selectedLead.id}`, {
                           method: 'PATCH',
                           headers: { 'Content-Type': 'application/json' },
@@ -1379,7 +1481,6 @@ export default function CampaignWorkspacePage({
                             email: editEmail.trim() || undefined,
                           }),
                         });
-                        // 2. Convert and push directly to CRM
                         await handlePushToCrm([selectedLead.id]);
                         setSelectedLead(null);
                       } finally {

@@ -28,22 +28,42 @@ export default async function SettingsPage() {
 
       <AiStatusBanner />
 
-      {/* Outreach Engine Banner */}
-      <div className="p-4 bg-gradient-to-r from-primary-50 to-indigo-50 border border-primary-200/80 rounded-2xl flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 shadow-2xs">
-        <div>
-          <div className="flex items-center gap-1.5">
-            <span className="text-base">🚀</span>
-            <h3 className="text-sm font-bold text-slate-900">Outreach Sender Accounts & API Keys</h3>
+      {/* Quick Navigation / Category Cards */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+        <a
+          href="#company-profile"
+          className="p-3.5 bg-white border border-slate-200 hover:border-primary-400 rounded-xl transition-all shadow-2xs hover:shadow-xs group"
+        >
+          <div className="flex items-center gap-2">
+            <span className="text-lg">🏢</span>
+            <span className="text-xs font-bold text-slate-800 group-hover:text-primary-600">Company Profile</span>
           </div>
-          <p className="text-xs text-slate-600 mt-0.5">
-            Manage dedicated outbound cold mailboxes, Apify LinkedIn scrapers, and Reoon deliverability API tokens.
-          </p>
-        </div>
+          <p className="text-[11px] text-slate-500 mt-1">Branding, AI context & knowledge base</p>
+        </a>
+
+        <a
+          href="#crm-mailboxes"
+          className="p-3.5 bg-white border border-slate-200 hover:border-primary-400 rounded-xl transition-all shadow-2xs hover:shadow-xs group"
+        >
+          <div className="flex items-center gap-2">
+            <span className="text-lg">📬</span>
+            <span className="text-xs font-bold text-slate-800 group-hover:text-primary-600">CRM Inbound Mailboxes</span>
+          </div>
+          <p className="text-[11px] text-slate-500 mt-1">{data.configs.length} mailbox(es) connected to boards</p>
+        </a>
+
         <Link
           href="/dashboard/outreach/settings"
-          className="px-4 py-2 bg-primary-600 hover:bg-primary-700 text-white text-xs font-semibold rounded-xl transition-colors whitespace-nowrap self-start sm:self-auto shadow-2xs"
+          className="p-3.5 bg-gradient-to-br from-indigo-50 to-purple-50 border border-indigo-200 hover:border-indigo-400 rounded-xl transition-all shadow-2xs hover:shadow-xs group"
         >
-          Manage Outreach Accounts →
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <span className="text-lg">🚀</span>
+              <span className="text-xs font-bold text-indigo-950 group-hover:text-indigo-700">Outreach Senders & APIs</span>
+            </div>
+            <span className="text-xs text-indigo-600 font-bold">→</span>
+          </div>
+          <p className="text-[11px] text-indigo-800/80 mt-1">Dedicated cold SMTP, Apify & Reoon tokens</p>
         </Link>
       </div>
 
@@ -61,25 +81,34 @@ export default async function SettingsPage() {
       )}
 
       {/* Company Information Section */}
-      <section className="bg-white rounded-xl border border-gray-200 p-6">
-        <h2 className="text-lg font-semibold mb-4">Company Profile & Context</h2>
+      <section id="company-profile" className="bg-white rounded-2xl border border-gray-200/90 p-6 shadow-2xs space-y-4">
+        <div className="flex items-center justify-between border-b border-gray-100 pb-3">
+          <div>
+            <h2 className="text-base font-bold text-slate-900">Company Profile & AI Knowledge Context</h2>
+            <p className="text-xs text-slate-500 mt-0.5">
+              This context powers automatic AI email replies in Kanban and custom outreach pitch copy generation.
+            </p>
+          </div>
+        </div>
         <CompanyInfoForm initial={data.company} readOnly={!isAdmin} />
       </section>
 
       {/* Email Configurations Section */}
-      <section className="bg-white rounded-xl border border-gray-200 p-6">
-        <div className="flex items-center justify-between mb-4">
+      <section id="crm-mailboxes" className="bg-white rounded-2xl border border-gray-200/90 p-6 shadow-2xs space-y-4">
+        <div className="flex items-center justify-between border-b border-gray-100 pb-3">
           <div>
-            <h2 className="text-lg font-semibold">
-              {isAdmin ? 'Email Mailbox Integrations (IMAP / SMTP)' : 'Connected Mailbox Accounts'}
+            <h2 className="text-base font-bold text-slate-900">
+              {isAdmin ? 'CRM Mailbox Integrations (Inbound IMAP / SMTP)' : 'Connected CRM Mailbox Accounts'}
             </h2>
-            <p className="text-xs text-gray-500 mt-0.5">
+            <p className="text-xs text-slate-500 mt-0.5">
               {isAdmin
-                ? 'Connect multiple business mailboxes (Zoho Mail, Gmail, Outlook, etc.) for automatic Kanban sync.'
-                : 'List of active mailboxes synced with your pipeline boards.'}
+                ? 'Sync customer emails directly into Kanban pipeline boards. For outbound mass cold campaigns, use Outreach Senders.'
+                : 'Active mailboxes syncing customer conversations with your pipeline boards.'}
             </p>
           </div>
-          <p className="text-sm text-gray-500">{data.configs.length} configured</p>
+          <span className="text-xs font-semibold px-2.5 py-1 bg-slate-100 text-slate-700 rounded-lg">
+            {data.configs.length} configured
+          </span>
         </div>
 
         {data.configs.length === 0 ? (
