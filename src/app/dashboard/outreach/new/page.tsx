@@ -43,7 +43,7 @@ export default function NewOutreachCampaignPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [leadCount, setLeadCount] = useState(10);
 
-  // Step 3: AI Copywriting Strategy & Brand Research (Tavily/AI Engine)
+  // Step 3: AI Copywriting Strategy & Brand Research
   const [aiTone, setAiTone] = useState<'formal' | 'conversational' | 'direct'>('formal');
   const [aiLength, setAiLength] = useState<'concise' | 'detailed'>('concise');
   const [brandInput, setBrandInput] = useState('');
@@ -70,18 +70,28 @@ export default function NewOutreachCampaignPage() {
       .catch((e) => console.error('Failed to load accounts:', e));
   }, []);
 
-  async function handleAutoResearchBrand() {
+  async function handleAutoResearchBrand(
+    overrideTone?: 'formal' | 'conversational' | 'direct',
+    overrideLength?: 'concise' | 'detailed'
+  ) {
     if (!brandInput.trim()) {
       toast.error('Please enter a website URL, brand name, or pricing page link');
       return;
     }
+
+    const currentTone = overrideTone || aiTone;
+    const currentLength = overrideLength || aiLength;
 
     setIsResearchingBrand(true);
     try {
       const res = await fetch('/api/outreach/summarize-offer', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ urlOrBrand: brandInput.trim() }),
+        body: JSON.stringify({
+          urlOrBrand: brandInput.trim(),
+          tone: currentTone,
+          length: currentLength,
+        }),
       });
 
       const data = await res.json();
@@ -89,12 +99,26 @@ export default function NewOutreachCampaignPage() {
 
       if (data.data?.fullInstruction) {
         setPromptInstructions(data.data.fullInstruction);
-        toast.success(`Value proposition generated from ${data.data.source || 'AI Intelligence'}!`);
+        toast.success(`Value proposition updated (${currentTone} tone, ${currentLength})!`);
       }
     } catch (err: any) {
       toast.error(`Research failed: ${err.message}`);
     } finally {
       setIsResearchingBrand(false);
+    }
+  }
+
+  function handleToneChange(newTone: 'formal' | 'conversational' | 'direct') {
+    setAiTone(newTone);
+    if (brandInput.trim() && !isResearchingBrand) {
+      handleAutoResearchBrand(newTone, aiLength);
+    }
+  }
+
+  function handleLengthChange(newLength: 'concise' | 'detailed') {
+    setAiLength(newLength);
+    if (brandInput.trim() && !isResearchingBrand) {
+      handleAutoResearchBrand(aiTone, newLength);
     }
   }
 
@@ -358,14 +382,14 @@ export default function NewOutreachCampaignPage() {
               </p>
             </div>
 
-            {/* AI Auto-Research Box via Tavily / Web Crawler */}
+            {/* AI Auto-Research Box */}
             <div className="p-4 bg-gradient-to-r from-indigo-50/80 via-purple-50/60 to-indigo-50/80 rounded-2xl border border-indigo-200/80 space-y-3 shadow-2xs">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
                   <span className="text-base">✨</span>
                   <div>
                     <h3 className="text-xs font-bold text-indigo-950">
-                      Auto-Extract Offer from Website / Brand (Tavily AI Search)
+                      Auto-Extract Offer from Website / Brand
                     </h3>
                     <p className="text-[11px] text-indigo-700/80">
                       Provide a website, pricing page, or brand name to automatically extract your value proposition.
@@ -384,7 +408,7 @@ export default function NewOutreachCampaignPage() {
                 />
                 <button
                   type="button"
-                  onClick={handleAutoResearchBrand}
+                  onClick={() => handleAutoResearchBrand()}
                   disabled={isResearchingBrand || !brandInput.trim()}
                   className="w-full sm:w-auto px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-xl transition-all shadow-2xs flex items-center justify-center gap-1.5 whitespace-nowrap disabled:opacity-50"
                 >
@@ -408,7 +432,7 @@ export default function NewOutreachCampaignPage() {
                 <label className="block text-xs font-semibold text-slate-700 mb-1">Copy Tone</label>
                 <select
                   value={aiTone}
-                  onChange={(e) => setAiTone(e.target.value as any)}
+                  onChange={(e) => handleToneChange(e.target.value as any)}
                   className="w-full px-3.5 py-2.5 border border-slate-300 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-primary-500 bg-white"
                 >
                   <option value="formal">Formal & Consultative (Executive)</option>
@@ -420,7 +444,7 @@ export default function NewOutreachCampaignPage() {
                 <label className="block text-xs font-semibold text-slate-700 mb-1">Copy Length</label>
                 <select
                   value={aiLength}
-                  onChange={(e) => setAiLength(e.target.value as any)}
+                  onChange={(e) => handleLengthChange(e.target.value as any)}
                   className="w-full px-3.5 py-2.5 border border-slate-300 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-primary-500 bg-white"
                 >
                   <option value="concise">Concise (Under 90 words, high punchiness)</option>

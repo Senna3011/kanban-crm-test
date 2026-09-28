@@ -4,6 +4,8 @@ export interface OfferSummarizeParams {
   urlOrBrand: string;
   additionalContext?: string;
   tavilyApiKey?: string;
+  tone?: 'formal' | 'conversational' | 'direct';
+  length?: 'concise' | 'detailed';
 }
 
 export interface OfferSummarizeResult {
@@ -105,6 +107,18 @@ export async function summarizeBrandOffer(
 ): Promise<OfferSummarizeResult> {
   const input = (params.urlOrBrand || '').trim();
   const tavilyKey = params.tavilyApiKey || process.env.TAVILY_API_KEY;
+  const tone = params.tone || 'formal';
+  const length = params.length || 'concise';
+
+  const toneInstruction = tone === 'conversational'
+    ? 'Tone: Warm, approachable, peer-to-peer conversational.'
+    : tone === 'direct'
+    ? 'Tone: Direct, punchy, zero fluff, and immediate value focus.'
+    : 'Tone: Executive, polished, consultative, and professional.';
+
+  const lengthInstruction = length === 'detailed'
+    ? 'Length: Comprehensive 2-3 sentence instruction detailing specific pain points and distinct value deliverables.'
+    : 'Length: Ultra-concise, punchy, high-impact instruction under 2 sentences.';
 
   let knowledgeText = '';
   let source: OfferSummarizeResult['source'] = 'DirectAI';
@@ -130,11 +144,17 @@ export async function summarizeBrandOffer(
   // 3. Synthesize via LLM
   const { apiKey, endpoint, model } = getAIConfig();
   if (!apiKey) {
+    const fallbackInstruction = tone === 'direct'
+      ? `Deliver direct value on ${input}. Focus on eliminating operational bottlenecks and propose a quick 10-minute audit.`
+      : tone === 'conversational'
+      ? `Share friendly insights on how ${input} helps engineering and business teams streamline workflows, offering a casual 10-minute exchange.`
+      : `Highlight our enterprise capabilities based on ${input}. Address operational efficiency and propose a complimentary 10-minute consultative session.`;
+
     return {
-      valueProposition: `We partner with enterprises to accelerate operational efficiency through custom software and workflow automation.`,
+      valueProposition: `We partner with leadership teams to accelerate growth through custom software and workflow automation based on ${input}.`,
       painPoints: `Manual operational bottlenecks and fragmented tooling.`,
       callToAction: `Complimentary 10-minute discovery call.`,
-      fullInstruction: `Highlight our core capabilities based on ${input}. Address key efficiency pain points and offer a brief 10-minute review session.`,
+      fullInstruction: fallbackInstruction,
       source,
     };
   }
@@ -153,20 +173,26 @@ export async function summarizeBrandOffer(
             role: 'system',
             content: `You are an executive sales strategist. Analyze the provided company/product research and generate a high-converting Cold Email Value Proposition & Directive.
 
+STYLING DIRECTIVES:
+- ${toneInstruction}
+- ${lengthInstruction}
+
 OUTPUT FORMAT: Strict JSON with keys:
-- "valueProposition": (1-2 crisp sentences describing the primary offer and business value)
+- "valueProposition": (1-2 crisp sentences describing the primary offer and business value matching the requested tone)
 - "painPoints": (1 sentence highlighting the exact customer problem/bottleneck solved)
 - "callToAction": (A single low-friction CTA, e.g. 10-min architecture review)
-- "fullInstruction": (A cohesive 2-3 sentence instruction combining the above to guide AI cold email drafting)`,
+- "fullInstruction": (A cohesive instruction combining the value, tone, and CTA to guide AI cold email drafting)`,
           },
           {
             role: 'user',
             content: `TARGET BRAND / KNOWLEDGE BASE:
 Input: ${input}
+Tone: ${tone}
+Length: ${length}
 ${params.additionalContext ? `Additional Context: ${params.additionalContext}` : ''}
-${knowledgeText ? `Extracted Web/Tavily Research:\n${knowledgeText.slice(0, 2500)}` : ''}
+${knowledgeText ? `Extracted Web Research:\n${knowledgeText.slice(0, 2500)}` : ''}
 
-Generate the structured value proposition.`,
+Generate the structured value proposition adhering strictly to the requested tone (${tone}) and length (${length}).`,
           },
         ],
         temperature: 0.5,

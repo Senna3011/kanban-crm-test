@@ -11,7 +11,7 @@ export async function POST(req: NextRequest) {
 
   try {
     const body = await req.json();
-    const { urlOrBrand, additionalContext } = body;
+    const { urlOrBrand, additionalContext, tone, length } = body;
 
     if (!urlOrBrand || typeof urlOrBrand !== 'string' || !urlOrBrand.trim()) {
       return NextResponse.json({ error: 'Brand name or website URL is required' }, { status: 400 });
@@ -20,6 +20,8 @@ export async function POST(req: NextRequest) {
     const result = await summarizeBrandOffer({
       urlOrBrand: urlOrBrand.trim(),
       additionalContext: additionalContext?.trim() || undefined,
+      tone: tone || undefined,
+      length: length || undefined,
     });
 
     return NextResponse.json({
