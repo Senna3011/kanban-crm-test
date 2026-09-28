@@ -127,7 +127,7 @@ export default function GuidePage() {
             <div className="flex items-start gap-2.5">
               <span className="font-bold text-indigo-600">A.</span>
               <div>
-                <strong>Configure Sender Accounts (Settings):</strong> Go to <Link href="/dashboard/outreach/settings" className="text-indigo-600 underline font-semibold">Outreach Settings (⚙️)</Link> to set up your outbound email addresses, SMTP credentials, daily sending limits, and Apify API key. This lets you choose different business email accounts for different target audiences.
+                <strong>Configure Sender Accounts (Settings):</strong> Go to <Link href="/dashboard/outreach/settings" className="text-indigo-600 underline font-semibold">Outreach Settings (⚙️)</Link> to set up your outbound email addresses, SMTP credentials, daily sending limits, and discovery API key. This lets you choose different business email accounts for different target audiences.
               </div>
             </div>
 

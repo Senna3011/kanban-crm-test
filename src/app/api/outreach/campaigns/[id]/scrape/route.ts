@@ -35,7 +35,7 @@ export async function POST(
     const limit = Number(body.limit) || 10;
     const linkedinUrls = Array.isArray(body.linkedinUrls) ? body.linkedinUrls : undefined;
 
-    // Use account specific Apify token if configured, otherwise env default
+    // Use account specific token if configured, otherwise env default
     const apiToken = campaign.account?.apifyApiToken || process.env.APIFY_API_TOKEN || process.env.APIFY_API_KEY;
     const actorId = process.env.APIFY_ACTOR_ID || 'harvestapi/linkedin-profile-scraper';
 
@@ -50,28 +50,21 @@ export async function POST(
       actorId,
     });
 
-    // Cross-campaign deduplication for the tenant
-    const existingLeads = await prisma.outreachLead.findMany({
-      where: {
-        campaign: { tenantId },
-      },
-      select: {
-        linkedinUrl: true,
-        email: true,
-        fullName: true,
-      },
+    // Check leads existing specifically in this campaign
+    const campaignLeads = await prisma.outreachLead.findMany({
+      where: { campaignId: campaign.id },
+      select: { linkedinUrl: true, email: true },
     });
 
-    const existingUrls = new Set(existingLeads.map((l) => l.linkedinUrl).filter(Boolean));
-    const existingEmails = new Set(existingLeads.map((l) => l.email).filter(Boolean));
+    const campaignUrls = new Set(campaignLeads.map((l) => l.linkedinUrl).filter(Boolean));
+    const campaignEmails = new Set(campaignLeads.map((l) => l.email).filter(Boolean));
 
     const createdLeads = [];
     let skippedDuplicates = 0;
 
     for (const lead of scrapedLeads) {
-      // Check if lead already exists in this or another campaign for this tenant
-      const isDuplicateUrl = lead.linkedinUrl && existingUrls.has(lead.linkedinUrl);
-      const isDuplicateEmail = lead.email && existingEmails.has(lead.email);
+      const isDuplicateUrl = lead.linkedinUrl && campaignUrls.has(lead.linkedinUrl);
+      const isDuplicateEmail = lead.email && campaignEmails.has(lead.email);
 
       if (isDuplicateUrl || isDuplicateEmail) {
         skippedDuplicates++;
@@ -92,7 +85,7 @@ export async function POST(
           status: 'SCRAPED',
           metadata: {
             summary: lead.summary ? String(lead.summary) : undefined,
-            source: 'apify',
+            source: 'linkedin-discovery',
             ...(lead.metadata || {}),
             scrapedAt: new Date().toISOString(),
           },
@@ -100,8 +93,8 @@ export async function POST(
         },
       });
 
-      if (lead.linkedinUrl) existingUrls.add(lead.linkedinUrl);
-      if (lead.email) existingEmails.add(lead.email);
+      if (lead.linkedinUrl) campaignUrls.add(lead.linkedinUrl);
+      if (lead.email) campaignEmails.add(lead.email);
       createdLeads.push(created);
     }
 
@@ -112,7 +105,7 @@ export async function POST(
       leads: createdLeads,
     });
   } catch (error: any) {
-    console.error('[API OUTREACH SCRAPE - APIFY] Error:', error);
-    return NextResponse.json({ error: error.message || 'Apify lead scraping failed' }, { status: 500 });
+    console.error('[API OUTREACH SCRAPE] Error:', error);
+    return NextResponse.json({ error: error.message || 'Lead discovery failed' }, { status: 500 });
   }
 }

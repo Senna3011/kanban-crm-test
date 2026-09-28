@@ -83,6 +83,48 @@ export async function scrapeLinkedInProfiles(
   return scrapeApifyLeads({ query: queries.join(' '), limit });
 }
 
+/**
+ * Executes a search run against Google Search Scraper Actor
+ */
+async function executeGoogleSearchScraper(
+  query: string,
+  countryCode: string,
+  limit: number,
+  token: string
+): Promise<any[]> {
+  const actorSlug = 'apify~google-search-scraper';
+  const endpoint = `https://api.apify.com/v2/acts/${encodeURIComponent(actorSlug)}/run-sync-get-dataset-items?token=${encodeURIComponent(token)}`;
+
+  const response = await fetch(endpoint, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Accept: 'application/json',
+    },
+    body: JSON.stringify({
+      queries: query,
+      countryCode,
+      maxPagesPerQuery: 1,
+      resultsPerPage: Math.max(limit * 2, 25),
+    }),
+  });
+
+  if (!response.ok) {
+    const errText = await response.text();
+    console.error(`[DISCOVERY SEARCH ERROR] ${response.status}: ${errText}`);
+    throw new Error(`Lead search request failed (${response.status}): ${errText || 'Invalid token or quota exceeded'}`);
+  }
+
+  const data = await response.json();
+  const organicResults: any[] = Array.isArray(data) && data[0]?.organicResults
+    ? data[0].organicResults
+    : (Array.isArray(data) ? data : []);
+
+  return organicResults.filter(
+    (item) => item.url && item.url.includes('linkedin.com/in/')
+  );
+}
+
 export async function scrapeApifyLeads(
   params: ApifySearchParams
 ): Promise<ApifyScrapedLead[]> {
@@ -90,7 +132,7 @@ export async function scrapeApifyLeads(
   const limit = Math.min(params.limit || 10, 50);
 
   if (!token) {
-    throw new Error('Apify API token is not configured. Please set your Apify Token in Outreach Settings or .env');
+    throw new Error('Lead Discovery API token is not configured. Please set your token in Outreach Settings or .env');
   }
 
   // If direct LinkedIn URLs are passed, scrape them via harvestapi/linkedin-profile-scraper
@@ -110,7 +152,9 @@ export async function scrapeApifyLeads(
   const isTargetingSingapore = locLower.includes('singapore');
   const isTargetingUK = locLower.includes('uk') || locLower.includes('united kingdom');
 
-  // Build clean, natural Google Dork search query
+  const countryCode = isTargetingUS ? 'us' : isTargetingIndonesia ? 'id' : isTargetingSingapore ? 'sg' : isTargetingUK ? 'gb' : 'us';
+
+  // Build clean, natural search query
   const searchTerms: string[] = [];
 
   if (params.role) {
@@ -134,42 +178,23 @@ export async function scrapeApifyLeads(
   }
 
   const combinedSearch = searchTerms.filter(Boolean).join(' ');
-  const googleSearchQuery = `site:linkedin.com/in/ ${combinedSearch}`.trim();
+  const primaryQuery = `site:linkedin.com/in/ ${combinedSearch}`.trim();
 
-  // Call Apify Google Search Scraper
-  const actorSlug = 'apify~google-search-scraper';
-  const endpoint = `https://api.apify.com/v2/acts/${encodeURIComponent(actorSlug)}/run-sync-get-dataset-items?token=${encodeURIComponent(token)}`;
+  // 1. Primary Search Attempt
+  let rawLinkedinResults = await executeGoogleSearchScraper(primaryQuery, countryCode, limit, token);
 
-  const response = await fetch(endpoint, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Accept': 'application/json',
-    },
-    body: JSON.stringify({
-      queries: googleSearchQuery,
-      countryCode: isTargetingUS ? 'us' : isTargetingIndonesia ? 'id' : isTargetingSingapore ? 'sg' : isTargetingUK ? 'gb' : 'us',
-      maxPagesPerQuery: 1,
-      resultsPerPage: Math.max(limit * 2, 25),
-    }),
-  });
-
-  if (!response.ok) {
-    const errText = await response.text();
-    console.error(`[APIFY SEARCH ERROR] ${response.status}: ${errText}`);
-    throw new Error(`Apify scraping request failed (${response.status}): ${errText || 'Invalid token or quota exceeded'}`);
+  // 2. Fallback Attempt (Relaxed query without strict quotes if 0 results returned)
+  if (rawLinkedinResults.length === 0) {
+    const relaxedTerms = [params.role, params.location].filter(Boolean).join(' ');
+    const relaxedQuery = `site:linkedin.com/in/ ${relaxedTerms}`.trim();
+    try {
+      rawLinkedinResults = await executeGoogleSearchScraper(relaxedQuery, countryCode, limit, token);
+    } catch {
+      // Keep empty if failed
+    }
   }
 
-  const data = await response.json();
-  const organicResults: any[] = Array.isArray(data) && data[0]?.organicResults
-    ? data[0].organicResults
-    : (Array.isArray(data) ? data : []);
-
-  const rawLinkedinResults = organicResults.filter(
-    (item) => item.url && item.url.includes('linkedin.com/in/')
-  );
-
-  // 1. Geographic Filter
+  // 3. Geographic Filter
   const geoFilteredResults = rawLinkedinResults.filter((item) => {
     const url = (item.url || '').toLowerCase();
 
@@ -188,7 +213,7 @@ export async function scrapeApifyLeads(
     return true;
   });
 
-  // 2. Parse candidates and filter out Companies & "LinkedIn Member"
+  // 4. Parse candidates and filter out Companies & "LinkedIn Member"
   const candidates = (geoFilteredResults.length > 0 ? geoFilteredResults : rawLinkedinResults)
     .map((item) => parseGoogleOrganicToLead(item, params, isTargetingUS ? 'United States' : undefined))
     .filter(isValidHumanProspect);
@@ -240,7 +265,7 @@ async function scrapeDirectLinkedInUrls(
         location: typeof item.location === 'object' ? item.location.linkedinText || 'Global' : item.location || 'Global',
         email: item.email || (Array.isArray(item.emails) ? item.emails[0] : undefined),
         summary: item.summary || item.about || undefined,
-        metadata: { source: 'apify-harvestapi-direct' },
+        metadata: { source: 'harvestapi-direct' },
       };
     })
     .filter(isValidHumanProspect);
@@ -318,7 +343,7 @@ function parseGoogleOrganicToLead(item: any, params: ApifySearchParams, forcedLo
     location,
     summary: item.description || `Experienced ${jobTitle} at ${companyName}.`,
     metadata: {
-      source: 'apify-google-linkedin-live',
+      source: 'linkedin-discovery-live',
       scrapedAt: new Date().toISOString(),
       displayUrl: item.displayedUrl || undefined,
     },

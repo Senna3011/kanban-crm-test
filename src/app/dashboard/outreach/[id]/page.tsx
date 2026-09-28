@@ -191,7 +191,7 @@ export default function CampaignWorkspacePage({
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Failed to source leads');
-      toast.success(`Successfully sourced ${data.count} new leads via Apify.`);
+      toast.success(`Successfully sourced ${data.count} new targeted prospects.`);
       await fetchCampaign();
     } catch (err: any) {
       toast.error(`Source error: ${err.message}`);
@@ -670,8 +670,8 @@ export default function CampaignWorkspacePage({
 
   if (allLeads.length === 0) {
     currentStepNumber = 1;
-    nextActionPrompt = 'Start by sourcing targeted leads from LinkedIn / Apify.';
-    nextActionLabel = 'Source Leads via Apify';
+    nextActionPrompt = 'Start by sourcing targeted prospects from LinkedIn.';
+    nextActionLabel = 'Source Target Leads';
     nextActionHandler = async () => { await handleSourceLeads(); };
     nextActionColor = 'bg-blue-600 hover:bg-blue-700';
   } else if (missingEmailCount > 0 && leadsWithEmail === 0) {
@@ -774,7 +774,7 @@ export default function CampaignWorkspacePage({
               {actionLoading === 'scrape' ? (
                 <>
                   <span className="w-3.5 h-3.5 border-2 border-slate-800 border-t-transparent rounded-full animate-spin" />
-                  <span>Sourcing Apify...</span>
+                  <span>Searching Prospects...</span>
                 </>
               ) : (
                 <>
@@ -1051,10 +1051,10 @@ export default function CampaignWorkspacePage({
           <div className="p-12 text-center text-xs text-slate-400 space-y-2">
             <p>No leads sourced yet for this campaign.</p>
             <button
-              onClick={handleSourceLeads}
+              onClick={() => handleSourceLeads()}
               className="px-4 py-2 bg-primary-600 text-white font-bold rounded-xl text-xs"
             >
-              Source Leads with Apify Now →
+              Source Target Leads Now →
             </button>
           </div>
         ) : (

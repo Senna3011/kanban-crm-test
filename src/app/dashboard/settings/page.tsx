@@ -63,7 +63,7 @@ export default async function SettingsPage() {
             </div>
             <span className="text-xs text-indigo-600 font-bold">→</span>
           </div>
-          <p className="text-[11px] text-indigo-800/80 mt-1">Dedicated cold SMTP, Apify & Reoon tokens</p>
+          <p className="text-[11px] text-indigo-800/80 mt-1">Dedicated cold SMTP & Discovery API tokens</p>
         </Link>
       </div>
 

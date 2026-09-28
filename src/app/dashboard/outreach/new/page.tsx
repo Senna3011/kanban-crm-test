@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
+import toast, { Toaster } from 'react-hot-toast';
 
 interface OutreachAccountOption {
   id: string;
@@ -35,16 +36,18 @@ export default function NewOutreachCampaignPage() {
   const [selectedAccountId, setSelectedAccountId] = useState<string>('');
   const [outreachAccounts, setOutreachAccounts] = useState<OutreachAccountOption[]>([]);
 
-  // Step 2: Targeting (Pak Nell's Standard Parameters)
+  // Step 2: Targeting
   const [targetRole, setTargetRole] = useState('Chief Technology Officer');
   const [targetLocation, setTargetLocation] = useState('United States');
   const [targetIndustry, setTargetIndustry] = useState('Information Technology & Services');
   const [searchQuery, setSearchQuery] = useState('');
   const [leadCount, setLeadCount] = useState(10);
 
-  // Step 3: AI Copywriting Strategy
+  // Step 3: AI Copywriting Strategy & Brand Research (Tavily/AI Engine)
   const [aiTone, setAiTone] = useState<'formal' | 'conversational' | 'direct'>('formal');
   const [aiLength, setAiLength] = useState<'concise' | 'detailed'>('concise');
+  const [brandInput, setBrandInput] = useState('');
+  const [isResearchingBrand, setIsResearchingBrand] = useState(false);
   const [promptInstructions, setPromptInstructions] = useState(
     'Highlight our enterprise web architecture and AI automation capabilities. Offer a complimentary 10-minute discovery review.'
   );
@@ -67,6 +70,34 @@ export default function NewOutreachCampaignPage() {
       .catch((e) => console.error('Failed to load accounts:', e));
   }, []);
 
+  async function handleAutoResearchBrand() {
+    if (!brandInput.trim()) {
+      toast.error('Please enter a website URL, brand name, or pricing page link');
+      return;
+    }
+
+    setIsResearchingBrand(true);
+    try {
+      const res = await fetch('/api/outreach/summarize-offer', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ urlOrBrand: brandInput.trim() }),
+      });
+
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to extract offer knowledge');
+
+      if (data.data?.fullInstruction) {
+        setPromptInstructions(data.data.fullInstruction);
+        toast.success(`Value proposition generated from ${data.data.source || 'AI Intelligence'}!`);
+      }
+    } catch (err: any) {
+      toast.error(`Research failed: ${err.message}`);
+    } finally {
+      setIsResearchingBrand(false);
+    }
+  }
+
   function handleNextStep(e?: React.MouseEvent) {
     if (e) e.preventDefault();
     setError('');
@@ -88,7 +119,6 @@ export default function NewOutreachCampaignPage() {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
 
-    // STRICT GUARD: Do not allow submission if not on Step 3
     if (step !== 3) {
       handleNextStep();
       return;
@@ -136,6 +166,8 @@ export default function NewOutreachCampaignPage() {
 
   return (
     <div className="p-4 sm:p-6 lg:p-8 max-w-4xl mx-auto space-y-6">
+      <Toaster position="top-right" />
+
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
@@ -147,7 +179,7 @@ export default function NewOutreachCampaignPage() {
           </Link>
           <h1 className="text-xl font-bold text-slate-900 tracking-tight">Create Targeted Outreach Campaign</h1>
           <p className="text-xs text-slate-500 mt-0.5">
-            Follow the 3-step wizard to configure lead sourcing parameters and AI copywriting directives.
+            Follow the 3-step wizard to configure lead discovery parameters and AI copywriting directives.
           </p>
         </div>
       </div>
@@ -178,7 +210,7 @@ export default function NewOutreachCampaignPage() {
               3
             </div>
             <span className={`text-xs font-bold ${step >= 3 ? 'text-slate-900' : 'text-slate-400'}`}>
-              AI Strategy & Review
+              AI Strategy & Offer
             </span>
           </div>
         </div>
@@ -249,7 +281,7 @@ export default function NewOutreachCampaignPage() {
         {step === 2 && (
           <div className="space-y-4 animate-in fade-in">
             <div>
-              <h2 className="text-sm font-bold text-slate-900">Step 2: Target Lead Parameters (LinkedIn Prospecting)</h2>
+              <h2 className="text-sm font-bold text-slate-900">Step 2: Target Lead Parameters (Prospect Discovery)</h2>
               <p className="text-xs text-slate-500 mt-0.5">Define your ideal customer profile (ICP) by role, location, and industry.</p>
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2">
@@ -316,14 +348,62 @@ export default function NewOutreachCampaignPage() {
           </div>
         )}
 
-        {/* STEP 3: AI COPYWRITING STRATEGY & REVIEW */}
+        {/* STEP 3: AI COPYWRITING STRATEGY & OFFER GENERATOR */}
         {step === 3 && (
-          <div className="space-y-4 animate-in fade-in">
+          <div className="space-y-5 animate-in fade-in">
             <div>
-              <h2 className="text-sm font-bold text-slate-900">Step 3: AI Copywriting Strategy & Guidelines</h2>
-              <p className="text-xs text-slate-500 mt-0.5">Customize tone, length, and value propositions for JetDigitalPro AI copywriter before creating.</p>
+              <h2 className="text-sm font-bold text-slate-900">Step 3: AI Copywriting Strategy & Offer Context</h2>
+              <p className="text-xs text-slate-500 mt-0.5">
+                Provide your website or brand URL to auto-extract knowledge, or write your custom value proposition.
+              </p>
             </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2">
+
+            {/* AI Auto-Research Box via Tavily / Web Crawler */}
+            <div className="p-4 bg-gradient-to-r from-indigo-50/80 via-purple-50/60 to-indigo-50/80 rounded-2xl border border-indigo-200/80 space-y-3 shadow-2xs">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <span className="text-base">✨</span>
+                  <div>
+                    <h3 className="text-xs font-bold text-indigo-950">
+                      Auto-Extract Offer from Website / Brand (Tavily AI Search)
+                    </h3>
+                    <p className="text-[11px] text-indigo-700/80">
+                      Provide a website, pricing page, or brand name to automatically extract your value proposition.
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex flex-col sm:flex-row items-center gap-2">
+                <input
+                  type="text"
+                  value={brandInput}
+                  onChange={(e) => setBrandInput(e.target.value)}
+                  placeholder="e.g., https://jetdigitalpro.com or Acme Analytics pricing"
+                  className="w-full px-3.5 py-2 border border-indigo-200 bg-white rounded-xl text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                />
+                <button
+                  type="button"
+                  onClick={handleAutoResearchBrand}
+                  disabled={isResearchingBrand || !brandInput.trim()}
+                  className="w-full sm:w-auto px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-xl transition-all shadow-2xs flex items-center justify-center gap-1.5 whitespace-nowrap disabled:opacity-50"
+                >
+                  {isResearchingBrand ? (
+                    <>
+                      <span className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                      <span>Researching Brand...</span>
+                    </>
+                  ) : (
+                    <>
+                      <span>🔍</span>
+                      <span>Auto-Generate Offer</span>
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-1">
               <div>
                 <label className="block text-xs font-semibold text-slate-700 mb-1">Copy Tone</label>
                 <select
@@ -348,15 +428,16 @@ export default function NewOutreachCampaignPage() {
                 </select>
               </div>
             </div>
+
             <div>
               <label className="block text-xs font-semibold text-slate-700 mb-1">
-                Custom Value Proposition & Pain Points
+                Custom Value Proposition & Pain Points (Editable)
               </label>
               <textarea
                 rows={3}
                 value={promptInstructions}
                 onChange={(e) => setPromptInstructions(e.target.value)}
-                placeholder="Specify key angles, problems you solve, or call-to-actions you want included."
+                placeholder="Specify key value angles, pain points, or call-to-actions you want included in AI pitches."
                 className="w-full px-3.5 py-2.5 border border-slate-300 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-primary-500"
               />
             </div>
