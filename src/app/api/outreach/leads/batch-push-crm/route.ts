@@ -15,6 +15,8 @@ export async function POST(req: NextRequest) {
   try {
     const body = await req.json().catch(() => ({}));
     const leadIds: string[] = body.leadIds;
+    const boardId: string | undefined = body.boardId;
+    const columnId: string | undefined = body.columnId;
 
     if (!Array.isArray(leadIds) || leadIds.length === 0) {
       return NextResponse.json({ error: 'No leadIds provided' }, { status: 400 });
@@ -36,6 +38,8 @@ export async function POST(req: NextRequest) {
         const res = await convertOutreachLeadToKanbanCard({
           leadId: lead.id,
           tenantId,
+          boardId,
+          columnId,
         });
         results.push({ leadId: lead.id, cardId: res.cardId, success: true });
         convertedCount++;

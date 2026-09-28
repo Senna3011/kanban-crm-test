@@ -95,6 +95,9 @@ async function executeGoogleSearchScraper(
   const actorSlug = 'apify~google-search-scraper';
   const endpoint = `https://api.apify.com/v2/acts/${encodeURIComponent(actorSlug)}/run-sync-get-dataset-items?token=${encodeURIComponent(token)}`;
 
+  const maxPages = Math.min(Math.max(Math.ceil(limit / 10), 1), 5);
+  const resultsPerPage = Math.min(Math.max(limit * 2, 25), 100);
+
   const response = await fetch(endpoint, {
     method: 'POST',
     headers: {
@@ -104,8 +107,8 @@ async function executeGoogleSearchScraper(
     body: JSON.stringify({
       queries: query,
       countryCode,
-      maxPagesPerQuery: 1,
-      resultsPerPage: Math.max(limit * 2, 25),
+      maxPagesPerQuery: maxPages,
+      resultsPerPage,
     }),
   });
 
@@ -129,7 +132,7 @@ export async function scrapeApifyLeads(
   params: ApifySearchParams
 ): Promise<ApifyScrapedLead[]> {
   const token = params.apiToken || process.env.APIFY_API_TOKEN || process.env.APIFY_API_KEY;
-  const limit = Math.min(params.limit || 10, 50);
+  const limit = Math.min(params.limit || 10, 100);
 
   if (!token) {
     throw new Error('Lead Discovery API token is not configured. Please set your token in Outreach Settings or .env');

@@ -29,9 +29,12 @@ export async function POST(
   }
 
   try {
+    const body = await req.json().catch(() => ({}));
     const result = await convertOutreachLeadToKanbanCard({
       leadId: lead.id,
       tenantId,
+      boardId: body.boardId || undefined,
+      columnId: body.columnId || undefined,
     });
 
     return NextResponse.json({

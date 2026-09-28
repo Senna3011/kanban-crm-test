@@ -367,6 +367,40 @@ export default function CardDetailPanel({ card, onClose }: Props) {
   const [isMaximized, setIsMaximized] = useState(false);
   const [replyExpanded, setReplyExpanded] = useState(false);
 
+  // Edit card details state
+  const [isEditingCard, setIsEditingCard] = useState(false);
+  const [editSubject, setEditSubject] = useState(card.subject || '');
+  const [editFromName, setEditFromName] = useState(card.fromName || '');
+  const [editFromEmail, setEditFromEmail] = useState(card.fromEmail || '');
+  const [editBodyText, setEditBodyText] = useState(card.bodyText || '');
+  const [savingCardEdit, setSavingCardEdit] = useState(false);
+
+  async function handleSaveCardEdit() {
+    setSavingCardEdit(true);
+    try {
+      const res = await fetch(`/api/cards/${card.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          subject: editSubject.trim(),
+          fromName: editFromName.trim(),
+          fromEmail: editFromEmail.trim(),
+          bodyText: editBodyText.trim(),
+        }),
+      });
+      if (!res.ok) throw new Error('Failed to update card details');
+      const updated = await res.json();
+      setCardData((prev: any) => ({ ...prev, ...updated }));
+      setIsEditingCard(false);
+      toast.success('Card details updated successfully');
+      window.dispatchEvent(new Event('board-refresh'));
+    } catch (err: any) {
+      toast.error(err.message || 'Update failed');
+    } finally {
+      setSavingCardEdit(false);
+    }
+  }
+
   // SweetAlert2 style ConfirmDialog state
   const [confirmDialog, setConfirmDialog] = useState<{
     isOpen: boolean;
@@ -405,9 +439,10 @@ export default function CardDetailPanel({ card, onClose }: Props) {
     async function loadBackgroundDetails() {
       try {
         setBackgroundLoading(true);
-        const [cardRes, configRes, threadRes] = await Promise.allSettled([
+        const [cardRes, configRes, outreachAccRes, threadRes] = await Promise.allSettled([
           fetch(`/api/cards/${card.id}`),
           fetch(`/api/email-configs`),
+          fetch(`/api/outreach/accounts`),
           fetch(`/api/cards/${card.id}/thread`),
         ]);
 
@@ -425,14 +460,24 @@ export default function CardDetailPanel({ card, onClose }: Props) {
           }
         }
 
+        const addresses: string[] = [];
         if (configRes.status === 'fulfilled' && configRes.value.ok) {
           const configs = await configRes.value.json();
-          const addresses = configs.map((c: any) => c.smtpUser).filter(Boolean);
-          const uniqueAddrs = [...new Set(addresses)] as string[];
-          setFromAddresses(uniqueAddrs);
-          if (uniqueAddrs.length > 0) {
-            setSelectedFrom((prev) => prev || uniqueAddrs[0]);
+          if (Array.isArray(configs)) {
+            addresses.push(...configs.map((c: any) => c.smtpUser).filter(Boolean));
           }
+        }
+
+        if (outreachAccRes.status === 'fulfilled' && outreachAccRes.value.ok) {
+          const outreachAccs = await outreachAccRes.value.json();
+          const list = Array.isArray(outreachAccs) ? outreachAccs : outreachAccs.accounts || [];
+          addresses.push(...list.map((a: any) => a.senderEmail).filter(Boolean));
+        }
+
+        const uniqueAddrs = [...new Set(addresses)] as string[];
+        setFromAddresses(uniqueAddrs);
+        if (uniqueAddrs.length > 0) {
+          setSelectedFrom((prev) => prev || uniqueAddrs[0]);
         }
 
         if (threadRes.status === 'fulfilled' && threadRes.value.ok) {
@@ -730,6 +775,21 @@ export default function CardDetailPanel({ card, onClose }: Props) {
               Not a lead
             </button>
             <button
+              onClick={() => {
+                setEditSubject(cardData?.subject || card.subject || '');
+                setEditFromName(cardData?.fromName || card.fromName || '');
+                setEditFromEmail(cardData?.fromEmail || card.fromEmail || '');
+                setEditBodyText(cardData?.bodyText || card.bodyText || '');
+                setIsEditingCard(!isEditingCard);
+              }}
+              className="p-1.5 rounded-lg hover:bg-slate-200/70 text-slate-500 hover:text-indigo-600 transition-colors"
+              title="Edit card details"
+            >
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931zm0 0L19.5 7.125M18 14v4.75A2.25 2.25 0 0115.75 21H5.25A2.25 2.25 0 013 18.75V8.25A2.25 2.25 0 015.25 6H10" />
+              </svg>
+            </button>
+            <button
               onClick={handleToggleUnread}
               className="p-1.5 rounded-lg hover:bg-slate-200/70 text-slate-500 hover:text-slate-800 transition-colors"
               title={isUnread ? 'Mark as read' : 'Mark as unread'}
@@ -781,6 +841,71 @@ export default function CardDetailPanel({ card, onClose }: Props) {
             </button>
           </div>
         </div>
+
+        {/* Inline Card Editing Panel */}
+        {isEditingCard && (
+          <div className="px-4 sm:px-6 py-3 bg-indigo-50/80 border-b border-indigo-200/80 space-y-2.5 flex-shrink-0 animate-in fade-in">
+            <div className="flex items-center justify-between">
+              <h4 className="text-xs font-bold text-indigo-950 flex items-center gap-1.5">
+                <span>✏️</span>
+                <span>Edit Prospect & Card Information</span>
+              </h4>
+              <button
+                type="button"
+                onClick={() => setIsEditingCard(false)}
+                className="text-xs text-slate-400 hover:text-slate-600 font-medium"
+              >
+                ✕ Cancel
+              </button>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              <div>
+                <label className="block text-[10px] font-semibold text-slate-600 mb-0.5">Prospect Name</label>
+                <input
+                  type="text"
+                  value={editFromName}
+                  onChange={(e) => setEditFromName(e.target.value)}
+                  className="w-full px-2.5 py-1.5 border border-slate-300 rounded-lg text-xs bg-white text-slate-800 focus:ring-2 focus:ring-primary-500"
+                />
+              </div>
+              <div>
+                <label className="block text-[10px] font-semibold text-slate-600 mb-0.5">Prospect Email</label>
+                <input
+                  type="email"
+                  value={editFromEmail}
+                  onChange={(e) => setEditFromEmail(e.target.value)}
+                  className="w-full px-2.5 py-1.5 border border-slate-300 rounded-lg text-xs bg-white text-slate-800 font-mono focus:ring-2 focus:ring-primary-500"
+                />
+              </div>
+            </div>
+            <div>
+              <label className="block text-[10px] font-semibold text-slate-600 mb-0.5">Subject / Card Title</label>
+              <input
+                type="text"
+                value={editSubject}
+                onChange={(e) => setEditSubject(e.target.value)}
+                className="w-full px-2.5 py-1.5 border border-slate-300 rounded-lg text-xs bg-white text-slate-800 font-semibold focus:ring-2 focus:ring-primary-500"
+              />
+            </div>
+            <div className="flex justify-end gap-2 pt-1">
+              <button
+                type="button"
+                onClick={() => setIsEditingCard(false)}
+                className="px-3 py-1 text-xs text-slate-600 hover:bg-slate-200/60 rounded-lg font-medium"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={savingCardEdit}
+                onClick={handleSaveCardEdit}
+                className="px-3.5 py-1 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-lg disabled:opacity-50 shadow-2xs"
+              >
+                {savingCardEdit ? 'Saving...' : 'Save Changes'}
+              </button>
+            </div>
+          </div>
+        )}
 
         {/* AI Insight Banner */}
         {aiMeta && (

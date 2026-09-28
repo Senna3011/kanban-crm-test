@@ -70,15 +70,22 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
     }
   }
 
-  const updated = await prisma.card.update({
-    where: { id: id },
-    data: {
-      columnId: body.columnId,
+    const updateData: any = {
       status: body.status,
       highlighted: body.highlighted,
       assignedToId: body.assignedToId,
-    },
-  });
+    };
+
+    if (body.columnId !== undefined) updateData.columnId = body.columnId;
+    if (body.fromName !== undefined) updateData.fromName = body.fromName;
+    if (body.fromEmail !== undefined) updateData.fromEmail = body.fromEmail;
+    if (body.subject !== undefined) updateData.subject = body.subject;
+    if (body.bodyText !== undefined) updateData.bodyText = body.bodyText;
+
+    const updated = await prisma.card.update({
+      where: { id: id },
+      data: updateData,
+    });
 
   try {
     const { broadcastAppEvent } = await import('@/lib/events');

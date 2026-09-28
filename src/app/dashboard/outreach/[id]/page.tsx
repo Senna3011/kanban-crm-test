@@ -44,6 +44,12 @@ interface CampaignDetail {
   leads: Lead[];
 }
 
+interface BoardOption {
+  id: string;
+  title: string;
+  columns: { id: string; title: string; position: number }[];
+}
+
 export default function CampaignWorkspacePage({
   params,
 }: {
@@ -69,6 +75,13 @@ export default function CampaignWorkspacePage({
   const pageSize = 15;
   const [filterStatus, setFilterStatus] = useState('ALL');
 
+  // Push to CRM Modal State (with Board & Column selection)
+  const [isPushCrmModalOpen, setIsPushCrmModalOpen] = useState(false);
+  const [crmTargetLeadIds, setCrmTargetLeadIds] = useState<string[]>([]);
+  const [boardsList, setBoardsList] = useState<BoardOption[]>([]);
+  const [selectedBoardId, setSelectedBoardId] = useState('');
+  const [selectedColumnId, setSelectedColumnId] = useState('');
+
   // Selected Lead for Sequential Draft Review Modal
   const [selectedLead, setSelectedLead] = useState<Lead | null>(null);
   const [editSubject, setEditSubject] = useState('');
@@ -78,7 +91,6 @@ export default function CampaignWorkspacePage({
   const [regeneratingDraft, setRegeneratingDraft] = useState(false);
   const [savingDraft, setSavingDraft] = useState(false);
   const [sendingSingleTest, setSendingSingleTest] = useState(false);
-  const [pushingToCrmModal, setPushingToCrmModal] = useState(false);
 
   // Add Custom Lead Modal State
   const [isAddLeadOpen, setIsAddLeadOpen] = useState(false);
@@ -180,27 +192,26 @@ export default function CampaignWorkspacePage({
   }
 
   // 1. Source More Leads
-  async function handleSourceLeads(customLimit?: number | React.MouseEvent) {
-    const limitNum = typeof customLimit === 'number' ? customLimit : 10;
+  async function handleSourceLeads(customLimit?: number) {
     setActionLoading('scrape');
     try {
       const res = await fetch(`/api/outreach/campaigns/${campaignId}/scrape`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ limit: limitNum }),
+        body: JSON.stringify({ limit: customLimit || 10 }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Failed to source leads');
-      toast.success(`Successfully sourced ${data.count} new targeted prospects.`);
+      toast.success(`Successfully sourced ${data.count} targeted prospects.`);
       await fetchCampaign();
     } catch (err: any) {
-      toast.error(`Source error: ${err.message}`);
+      toast.error(`Discovery error: ${err.message}`);
     } finally {
       setActionLoading('');
     }
   }
 
-  // 2. Step 1: Get Candidate Emails (Find Emails)
+  // 2. Step 2: Get Candidate Emails
   async function handleFindEmails(targetLeadIds?: string[]) {
     const ids = targetLeadIds || (selectedIds.length > 0 ? selectedIds : undefined);
     if (targetLeadIds?.length === 1) {
@@ -216,7 +227,7 @@ export default function CampaignWorkspacePage({
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Failed to find candidate emails');
-      toast.success(`Found candidate emails for ${data.emailsFound} leads! Ready to verify deliverability.`);
+      toast.success(`Discovered emails for ${data.emailsFound} leads.`);
       await fetchCampaign();
     } catch (err: any) {
       toast.error(`Find email error: ${err.message}`);
@@ -229,7 +240,7 @@ export default function CampaignWorkspacePage({
     }
   }
 
-  // 3. Step 2: Verify Emails Deliverability via Reoon
+  // 3. Step 3: Verify Deliverability
   async function handleVerifyEmails(targetLeadIds?: string[]) {
     const ids = targetLeadIds || (selectedIds.length > 0 ? selectedIds : undefined);
     if (targetLeadIds?.length === 1) {
@@ -245,7 +256,7 @@ export default function CampaignWorkspacePage({
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Failed to verify emails');
-      toast.success(`Verification complete: ${data.safeCount} safe mailboxes verified.`);
+      toast.success(`Verification complete: ${data.safeCount} safe inboxes confirmed.`);
       await fetchCampaign();
     } catch (err: any) {
       toast.error(`Verification error: ${err.message}`);
@@ -258,7 +269,7 @@ export default function CampaignWorkspacePage({
     }
   }
 
-  // 4. Step 3: Generate AI Cold Email Drafts
+  // 4. Step 4: Generate Personalized AI Pitches
   async function handleGenerateDrafts(targetLeadIds?: string[]) {
     const ids = targetLeadIds || (selectedIds.length > 0 ? selectedIds : undefined);
     if (targetLeadIds?.length === 1) {
@@ -287,109 +298,78 @@ export default function CampaignWorkspacePage({
     }
   }
 
-  // 5. Batch or Single Dispatch Emails
-  function handleDispatchEmails(leadId?: string) {
-    const isSingle = Boolean(leadId);
-    const targetLead = isSingle ? campaign?.leads.find((l) => l.id === leadId) : null;
-    const targetCount = isSingle ? 1 : selectedIds.length > 0 ? selectedIds.length : readyDrafts;
-    const recipientInfo = targetLead ? `to "${targetLead.fullName}" (${targetLead.email})` : `to ${targetCount} selected prospects`;
-
-    setConfirmDialog({
-      isOpen: true,
-      title: isSingle ? 'Dispatch Cold Email?' : `Dispatch ${targetCount} Cold Emails?`,
-      message: `Are you ready to send outbound personalized emails ${recipientInfo}? Messages will be dispatched using your configured SMTP sender.`,
-      confirmText: isSingle ? 'Send Email Now' : 'Dispatch Emails',
-      variant: 'primary',
-      onConfirm: async () => {
-        setConfirmDialog((prev) => ({ ...prev, isLoading: true }));
-        if (leadId) {
-          setRowLoading((prev) => ({ ...prev, [`${leadId}-send`]: true }));
-        } else {
-          setActionLoading('dispatch');
-        }
-        try {
-          const ids = leadId ? [leadId] : selectedIds.length > 0 ? selectedIds : undefined;
-          const res = await fetch(`/api/outreach/campaigns/${campaignId}/dispatch`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(ids ? { leadIds: ids } : {}),
-          });
-          const data = await res.json();
-          if (!res.ok) throw new Error(data.error || 'Failed to dispatch emails');
-          toast.success(leadId ? 'Email dispatched successfully.' : `Batch dispatch executed: ${data.dispatchedCount} emails sent.`);
-          await fetchCampaign();
-        } catch (err: any) {
-          toast.error(`Dispatch error: ${err.message}`);
-        } finally {
-          setConfirmDialog((prev) => ({ ...prev, isOpen: false, isLoading: false }));
-          if (leadId) {
-            setRowLoading((prev) => ({ ...prev, [`${leadId}-send`]: false }));
-          } else {
-            setActionLoading('');
-          }
-        }
-      },
-    });
-  }
-
-  // 6. Push to Kanban CRM (Selected or Single or All)
-  function handlePushToCrm(targetLeadIds?: string[]) {
+  // 5. Open Push to Kanban CRM Modal (with Board & Column Selector)
+  async function openPushCrmModal(targetLeadIds?: string[]) {
     const ids = targetLeadIds || (selectedIds.length > 0 ? selectedIds : undefined);
-    const uncommittedLeads = (campaign?.leads || []).filter(
-      (l) => l.status !== 'CONVERTED' && (!ids || ids.includes(l.id))
+    const eligibleLeads = (campaign?.leads || []).filter(
+      (l) => l.status !== 'CONVERTED' && (!ids || ids.includes(l.id)) && l.verifyStatus !== 'INVALID'
     );
 
-    if (uncommittedLeads.length === 0) {
-      toast.error('Selected leads are already converted to Kanban CRM.');
+    if (eligibleLeads.length === 0) {
+      toast.error('No uncommitted valid leads available to push to CRM.');
       return;
     }
 
-    const title = uncommittedLeads.length === 1
-      ? `Push "${uncommittedLeads[0].fullName}" to Kanban CRM?`
-      : `Push ${uncommittedLeads.length} Leads to Kanban CRM?`;
+    setCrmTargetLeadIds(eligibleLeads.map((l) => l.id));
 
-    setConfirmDialog({
-      isOpen: true,
-      title,
-      message: `This will convert ${uncommittedLeads.length} prospect(s) into cards on your Kanban CRM board under the "Leads" column for immediate follow-up.`,
-      confirmText: `Push ${uncommittedLeads.length} Lead(s) to CRM`,
-      variant: 'info',
-      onConfirm: async () => {
-        setConfirmDialog((prev) => ({ ...prev, isLoading: true }));
-        if (targetLeadIds?.length === 1) {
-          setRowLoading((prev) => ({ ...prev, [`${targetLeadIds[0]}-push`]: true }));
-        } else {
-          setActionLoading('push-crm');
+    // Fetch tenant boards
+    try {
+      const res = await fetch('/api/boards');
+      if (res.ok) {
+        const data = await res.json();
+        const bList = Array.isArray(data) ? data : [];
+        setBoardsList(bList);
+        if (bList.length > 0) {
+          setSelectedBoardId(bList[0].id);
+          const cols = bList[0].columns || [];
+          const leadsCol = cols.find((c: any) => c.title.toLowerCase() === 'leads') || cols[0];
+          if (leadsCol) setSelectedColumnId(leadsCol.id);
         }
-        try {
-          const idsToPush = uncommittedLeads.map((l) => l.id);
-          const res = await fetch('/api/outreach/leads/batch-push-crm', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ leadIds: idsToPush }),
-          });
-          const data = await res.json();
-          if (!res.ok) throw new Error(data.error || 'Failed to push leads to CRM');
+      }
+    } catch (e) {
+      console.error('Failed to load boards', e);
+    }
 
-          const successCount = data.convertedCount ?? uncommittedLeads.length;
-          toast.success(`Successfully pushed ${successCount} leads into Kanban CRM!`);
-          clearSelection();
-          await fetchCampaign();
-        } catch (err: any) {
-          toast.error(`Push to CRM failed: ${err.message}`);
-        } finally {
-          setConfirmDialog((prev) => ({ ...prev, isOpen: false, isLoading: false }));
-          if (targetLeadIds?.length === 1) {
-            setRowLoading((prev) => ({ ...prev, [`${targetLeadIds[0]}-push`]: false }));
-          } else {
-            setActionLoading('');
-          }
-        }
-      },
-    });
+    setIsPushCrmModalOpen(true);
   }
 
-  // 7. Export Campaign Leads to CSV
+  function handleSelectBoard(boardId: string) {
+    setSelectedBoardId(boardId);
+    const b = boardsList.find((item) => item.id === boardId);
+    if (b && b.columns?.length > 0) {
+      const leadsCol = b.columns.find((c: any) => c.title.toLowerCase() === 'leads') || b.columns[0];
+      setSelectedColumnId(leadsCol?.id || '');
+    }
+  }
+
+  // Execute the Push to CRM
+  async function executePushCrm() {
+    if (crmTargetLeadIds.length === 0) return;
+    setActionLoading('push-crm');
+    try {
+      const res = await fetch('/api/outreach/leads/batch-push-crm', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          leadIds: crmTargetLeadIds,
+          boardId: selectedBoardId || undefined,
+          columnId: selectedColumnId || undefined,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to push leads to CRM');
+      toast.success(`Successfully pushed ${data.convertedCount || crmTargetLeadIds.length} leads into Kanban CRM!`);
+      clearSelection();
+      setIsPushCrmModalOpen(false);
+      await fetchCampaign();
+    } catch (err: any) {
+      toast.error(`Push to CRM failed: ${err.message}`);
+    } finally {
+      setActionLoading('');
+    }
+  }
+
+  // 6. Export Campaign Leads to CSV
   async function handleExportCsv() {
     if (!campaign?.leads || campaign.leads.length === 0) return;
     setExportingCsv(true);
@@ -419,7 +399,7 @@ export default function CampaignWorkspacePage({
     }
   }
 
-  // 8. Add Custom / Test Lead
+  // 7. Add Custom Lead
   async function handleAddCustomLead(e: React.FormEvent) {
     e.preventDefault();
     if (!customName.trim() || !customEmail.trim()) {
@@ -435,7 +415,7 @@ export default function CampaignWorkspacePage({
           fullName: customName.trim(),
           email: customEmail.trim().toLowerCase(),
           companyName: customCompany.trim() || 'Custom Org',
-          jobTitle: customRole.trim() || 'Director',
+          jobTitle: customRole.trim() || 'Executive',
         }),
       });
       const data = await res.json();
@@ -445,7 +425,7 @@ export default function CampaignWorkspacePage({
       setCustomEmail('');
       setCustomCompany('');
       setCustomRole('');
-      toast.success(`Custom lead "${customName}" added with AI draft!`);
+      toast.success(`Custom lead "${customName}" added!`);
       await fetchCampaign();
     } catch (err: any) {
       toast.error(`Add Lead error: ${err.message}`);
@@ -454,7 +434,7 @@ export default function CampaignWorkspacePage({
     }
   }
 
-  // 9. Direct Live Test Send
+  // 8. Direct Live Test Send
   async function handleSendDirectTest(e?: React.FormEvent) {
     if (e) e.preventDefault();
     if (!testTargetEmail.trim()) {
@@ -548,7 +528,6 @@ export default function CampaignWorkspacePage({
       });
       if (!res.ok) throw new Error('Failed to save draft changes');
 
-      // Update local state
       setCampaign((prev) => {
         if (!prev) return null;
         return {
@@ -644,9 +623,12 @@ export default function CampaignWorkspacePage({
   const leadsWithEmail = allLeads.filter((l) => Boolean(l.email)).length;
   const missingEmailCount = allLeads.length - leadsWithEmail;
   const safeLeads = allLeads.filter((l) => l.verifyStatus === 'SAFE').length;
+  const unverifiedCount = allLeads.filter((l) => Boolean(l.email) && (!l.verifyStatus || l.verifyStatus === 'UNVERIFIED')).length;
   const readyDrafts = allLeads.filter((l) => Boolean(l.aiDraftSubject) && Boolean(l.aiDraftBody)).length;
   const dispatchedLeads = allLeads.filter((l) => l.status === 'DISPATCHED' || l.status === 'CONVERTED').length;
   const convertedLeads = allLeads.filter((l) => l.status === 'CONVERTED').length;
+  const uncommittedSafeDrafts = allLeads.filter((l) => l.status !== 'CONVERTED' && l.verifyStatus === 'SAFE' && Boolean(l.aiDraftSubject)).length;
+  const uncommittedTotalLeads = allLeads.filter((l) => l.status !== 'CONVERTED').length;
 
   const filteredLeads = allLeads.filter((l) => {
     if (filterStatus === 'MISSING_EMAIL') return !l.email;
@@ -658,52 +640,88 @@ export default function CampaignWorkspacePage({
 
   const totalPages = Math.ceil(filteredLeads.length / pageSize) || 1;
   const paginatedLeads = filteredLeads.slice((currentPage - 1) * pageSize, currentPage * pageSize);
-
   const isAllSelected = paginatedLeads.length > 0 && paginatedLeads.every((l) => selectedIds.includes(l.id));
 
-  // Determine current active wizard step
+  // Selection metrics
+  const selectedLeadsList = allLeads.filter((l) => selectedIds.includes(l.id));
+  const selectedMissingEmail = selectedLeadsList.filter((l) => !l.email).length;
+  const selectedUnverified = selectedLeadsList.filter((l) => Boolean(l.email) && (!l.verifyStatus || l.verifyStatus === 'UNVERIFIED')).length;
+  const selectedNeedDraft = selectedLeadsList.filter((l) => l.verifyStatus === 'SAFE' && !l.aiDraftSubject).length;
+  const selectedUncommittedSafe = selectedLeadsList.filter((l) => l.status !== 'CONVERTED' && l.verifyStatus !== 'INVALID').length;
+
+  // Determine current active wizard step & Next-Best-Action (NBA) button
   let currentStepNumber = 1;
   let nextActionPrompt = 'Sourced leads ready. Click "Get Emails" to discover corporate addresses.';
   let nextActionLabel = 'Get Candidate Emails';
   let nextActionHandler: () => void | Promise<void> = async () => { await handleFindEmails(); };
   let nextActionColor = 'bg-indigo-600 hover:bg-indigo-700';
 
-  if (allLeads.length === 0) {
-    currentStepNumber = 1;
-    nextActionPrompt = 'Start by sourcing targeted prospects from LinkedIn.';
-    nextActionLabel = 'Source Target Leads';
-    nextActionHandler = async () => { await handleSourceLeads(); };
-    nextActionColor = 'bg-blue-600 hover:bg-blue-700';
-  } else if (missingEmailCount > 0 && leadsWithEmail === 0) {
-    currentStepNumber = 2;
-    nextActionPrompt = `Step 2: ${missingEmailCount} leads need email discovery. Click to extract business emails.`;
-    nextActionLabel = `Get Candidate Emails (${missingEmailCount})`;
-    nextActionHandler = async () => { await handleFindEmails(); };
-    nextActionColor = 'bg-indigo-600 hover:bg-indigo-700';
-  } else if (leadsWithEmail > 0 && safeLeads === 0) {
-    currentStepNumber = 3;
-    nextActionPrompt = `Step 3: ${leadsWithEmail} emails discovered. Verify deliverability to prevent bounces.`;
-    nextActionLabel = `Verify Deliverability (${leadsWithEmail})`;
-    nextActionHandler = async () => { await handleVerifyEmails(); };
-    nextActionColor = 'bg-emerald-600 hover:bg-emerald-700';
-  } else if (safeLeads > 0 && readyDrafts < safeLeads) {
-    currentStepNumber = 4;
-    nextActionPrompt = `Step 4: ${safeLeads} safe inboxes verified. Generate personalized AI cold copy.`;
-    nextActionLabel = `Generate AI Drafts (${safeLeads - readyDrafts} remaining)`;
-    nextActionHandler = async () => { await handleGenerateDrafts(); };
-    nextActionColor = 'bg-purple-600 hover:bg-purple-700';
-  } else if (readyDrafts > 0 && convertedLeads < readyDrafts) {
-    currentStepNumber = 5;
-    nextActionPrompt = `Step 5: ${readyDrafts} AI drafts ready! Push to Kanban CRM for pipeline tracking or send live.`;
-    nextActionLabel = `Push ${readyDrafts - convertedLeads} Leads to CRM`;
-    nextActionHandler = () => { handlePushToCrm(); };
-    nextActionColor = 'bg-amber-500 hover:bg-amber-600 text-slate-950';
-  } else if (convertedLeads > 0 && convertedLeads === allLeads.length) {
-    currentStepNumber = 5;
-    nextActionPrompt = 'Pipeline fully executed! All leads are active in Kanban CRM.';
-    nextActionLabel = 'View Kanban CRM Board';
-    nextActionHandler = () => { window.location.assign('/dashboard'); };
-    nextActionColor = 'bg-emerald-600 hover:bg-emerald-700';
+  if (selectedIds.length > 0) {
+    // Selection-specific contextual action
+    if (selectedMissingEmail > 0) {
+      currentStepNumber = 2;
+      nextActionPrompt = `Selected Batch: ${selectedMissingEmail} of ${selectedIds.length} checked leads need email discovery.`;
+      nextActionLabel = `Get Emails (${selectedIds.length} Selected)`;
+      nextActionHandler = async () => { await handleFindEmails(selectedIds); };
+      nextActionColor = 'bg-indigo-600 hover:bg-indigo-700';
+    } else if (selectedUnverified > 0) {
+      currentStepNumber = 3;
+      nextActionPrompt = `Selected Batch: ${selectedUnverified} of ${selectedIds.length} checked leads need deliverability verification.`;
+      nextActionLabel = `Verify (${selectedIds.length} Selected)`;
+      nextActionHandler = async () => { await handleVerifyEmails(selectedIds); };
+      nextActionColor = 'bg-emerald-600 hover:bg-emerald-700';
+    } else if (selectedNeedDraft > 0) {
+      currentStepNumber = 4;
+      nextActionPrompt = `Selected Batch: ${selectedNeedDraft} checked safe leads need personalized AI cold copy.`;
+      nextActionLabel = `Generate AI (${selectedIds.length} Selected)`;
+      nextActionHandler = async () => { await handleGenerateDrafts(selectedIds); };
+      nextActionColor = 'bg-purple-600 hover:bg-purple-700';
+    } else {
+      currentStepNumber = 5;
+      nextActionPrompt = `Selected Batch: Ready to push ${selectedUncommittedSafe} verified leads to Kanban CRM.`;
+      nextActionLabel = `Push ${selectedUncommittedSafe} Selected to CRM`;
+      nextActionHandler = () => { openPushCrmModal(selectedIds); };
+      nextActionColor = 'bg-amber-500 hover:bg-amber-600 text-slate-950';
+    }
+  } else {
+    // Global Pipeline Progression
+    if (allLeads.length === 0) {
+      currentStepNumber = 1;
+      nextActionPrompt = 'Start by sourcing targeted prospects from LinkedIn.';
+      nextActionLabel = 'Source Target Leads';
+      nextActionHandler = async () => { await handleSourceLeads(); };
+      nextActionColor = 'bg-blue-600 hover:bg-blue-700';
+    } else if (missingEmailCount > 0) {
+      currentStepNumber = 2;
+      nextActionPrompt = `Step 2: ${missingEmailCount} leads need email discovery. Click to extract business emails.`;
+      nextActionLabel = `Get Candidate Emails (${missingEmailCount})`;
+      nextActionHandler = async () => { await handleFindEmails(); };
+      nextActionColor = 'bg-indigo-600 hover:bg-indigo-700';
+    } else if (unverifiedCount > 0) {
+      currentStepNumber = 3;
+      nextActionPrompt = `Step 3: ${unverifiedCount} candidate emails need deliverability verification.`;
+      nextActionLabel = `Verify Deliverability (${unverifiedCount})`;
+      nextActionHandler = async () => { await handleVerifyEmails(); };
+      nextActionColor = 'bg-emerald-600 hover:bg-emerald-700';
+    } else if (safeLeads > 0 && readyDrafts < safeLeads) {
+      currentStepNumber = 4;
+      nextActionPrompt = `Step 4: ${safeLeads} safe inboxes verified. Generate personalized AI cold copy.`;
+      nextActionLabel = `Generate AI Drafts (${safeLeads - readyDrafts} remaining)`;
+      nextActionHandler = async () => { await handleGenerateDrafts(); };
+      nextActionColor = 'bg-purple-600 hover:bg-purple-700';
+    } else if (uncommittedSafeDrafts > 0) {
+      currentStepNumber = 5;
+      nextActionPrompt = `Step 5: ${uncommittedSafeDrafts} verified AI drafts ready! Push to Kanban CRM for pipeline tracking.`;
+      nextActionLabel = `Push ${uncommittedSafeDrafts} Leads to CRM`;
+      nextActionHandler = () => { openPushCrmModal(); };
+      nextActionColor = 'bg-amber-500 hover:bg-amber-600 text-slate-950';
+    } else if (convertedLeads > 0 && convertedLeads === allLeads.length) {
+      currentStepNumber = 5;
+      nextActionPrompt = 'Pipeline fully executed! All leads are active in Kanban CRM.';
+      nextActionLabel = 'View Kanban CRM Board';
+      nextActionHandler = () => { window.location.assign('/dashboard'); };
+      nextActionColor = 'bg-emerald-600 hover:bg-emerald-700';
+    }
   }
 
   // Selected lead index for modal navigation
@@ -754,7 +772,7 @@ export default function CampaignWorkspacePage({
             <button
               onClick={() => setIsTestSendOpen(true)}
               className="px-3 py-2 bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-300 text-xs font-bold rounded-xl transition-colors flex items-center gap-1.5 shadow-2xs"
-              title="Kirim email percobaan langsung ke inbox pribadi Anda"
+              title="Dispatch immediate test email to your personal inbox"
             >
               <span>⚡</span>
               <span>Test Send to My Email</span>
@@ -767,7 +785,7 @@ export default function CampaignWorkspacePage({
               <span>Add Custom Lead</span>
             </button>
             <button
-              onClick={handleSourceLeads}
+              onClick={() => handleSourceLeads()}
               disabled={Boolean(actionLoading) || loading}
               className="px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-800 text-xs font-semibold rounded-xl transition-colors disabled:opacity-50 flex items-center gap-1.5"
             >
@@ -848,15 +866,15 @@ export default function CampaignWorkspacePage({
             <p className="text-lg font-bold text-blue-400 mt-0.5">{allLeads.length}</p>
           </div>
 
-          {/* Step 2: Get Emails */}
-          <div className={`p-3.5 rounded-xl border transition-all ${currentStepNumber === 2 ? 'bg-white/15 border-amber-400 ring-2 ring-amber-400/30' : leadsWithEmail > 0 ? 'bg-emerald-950/30 border-emerald-500/30' : 'bg-white/5 border-white/10'} flex flex-col justify-between`}>
+          {/* Step 2: Candidate Emails */}
+          <div className={`p-3.5 rounded-xl border transition-all ${currentStepNumber === 2 ? 'bg-white/15 border-amber-400 ring-2 ring-amber-400/30' : missingEmailCount === 0 && allLeads.length > 0 ? 'bg-emerald-950/30 border-emerald-500/30' : 'bg-white/5 border-white/10'} flex flex-col justify-between`}>
             <div>
               <div className="flex items-center justify-between">
                 <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Step 2</span>
-                {leadsWithEmail > 0 ? (
+                {missingEmailCount === 0 && allLeads.length > 0 ? (
                   <span className="text-emerald-400 text-xs font-bold bg-emerald-500/20 px-1.5 py-0.5 rounded-md">✓ Done</span>
                 ) : (
-                  <span className="text-slate-500 text-[10px]">Pending</span>
+                  <span className="text-slate-500 text-[10px]">{missingEmailCount} Missing</span>
                 )}
               </div>
               <p className="text-xs font-semibold text-slate-200 mt-1">Candidate Emails</p>
@@ -864,12 +882,14 @@ export default function CampaignWorkspacePage({
             </div>
             <button
               onClick={() => handleFindEmails()}
-              disabled={Boolean(actionLoading) || allLeads.length === 0}
-              className="mt-2 w-full py-1 bg-indigo-600/80 hover:bg-indigo-600 text-white text-[11px] font-semibold rounded-lg transition-colors flex items-center justify-center gap-1 disabled:opacity-30"
-              title="Run pattern generator & domain lookup to find missing emails"
+              disabled={Boolean(actionLoading) || missingEmailCount === 0 || allLeads.length === 0}
+              className="mt-2 w-full py-1 bg-indigo-600 hover:bg-indigo-500 text-white text-[11px] font-semibold rounded-lg transition-colors flex items-center justify-center gap-1 disabled:opacity-40"
+              title="Run pattern generator & domain lookup to find candidate emails"
             >
               {actionLoading === 'find-emails' ? (
                 <span className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin" />
+              ) : missingEmailCount === 0 && allLeads.length > 0 ? (
+                <span>✓ All Found</span>
               ) : (
                 <span>📬 Get Emails</span>
               )}
@@ -877,14 +897,14 @@ export default function CampaignWorkspacePage({
           </div>
 
           {/* Step 3: Verify Emails */}
-          <div className={`p-3.5 rounded-xl border transition-all ${currentStepNumber === 3 ? 'bg-white/15 border-amber-400 ring-2 ring-amber-400/30' : safeLeads > 0 ? 'bg-emerald-950/30 border-emerald-500/30' : 'bg-white/5 border-white/10'} flex flex-col justify-between`}>
+          <div className={`p-3.5 rounded-xl border transition-all ${currentStepNumber === 3 ? 'bg-white/15 border-amber-400 ring-2 ring-amber-400/30' : unverifiedCount === 0 && leadsWithEmail > 0 ? 'bg-emerald-950/30 border-emerald-500/30' : 'bg-white/5 border-white/10'} flex flex-col justify-between`}>
             <div>
               <div className="flex items-center justify-between">
                 <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Step 3</span>
-                {safeLeads > 0 ? (
+                {unverifiedCount === 0 && leadsWithEmail > 0 ? (
                   <span className="text-emerald-400 text-xs font-bold bg-emerald-500/20 px-1.5 py-0.5 rounded-md">✓ Done</span>
                 ) : (
-                  <span className="text-slate-500 text-[10px]">Pending</span>
+                  <span className="text-slate-500 text-[10px]">{unverifiedCount} Unverified</span>
                 )}
               </div>
               <p className="text-xs font-semibold text-slate-200 mt-1">Deliverability</p>
@@ -892,12 +912,14 @@ export default function CampaignWorkspacePage({
             </div>
             <button
               onClick={() => handleVerifyEmails()}
-              disabled={Boolean(actionLoading) || leadsWithEmail === 0}
-              className="mt-2 w-full py-1 bg-emerald-600/80 hover:bg-emerald-600 text-white text-[11px] font-semibold rounded-lg transition-colors flex items-center justify-center gap-1 disabled:opacity-30"
-              title="Verify inbox existence via Reoon API"
+              disabled={Boolean(actionLoading) || unverifiedCount === 0 || leadsWithEmail === 0}
+              className="mt-2 w-full py-1 bg-emerald-600 hover:bg-emerald-500 text-white text-[11px] font-semibold rounded-lg transition-colors flex items-center justify-center gap-1 disabled:opacity-40"
+              title="Verify inbox existence via Reoon/Bouncer/Hunter fallback chain"
             >
               {actionLoading === 'verify' ? (
                 <span className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin" />
+              ) : unverifiedCount === 0 && leadsWithEmail > 0 ? (
+                <span>✓ Verified</span>
               ) : (
                 <span>🛡️ Verify</span>
               )}
@@ -905,14 +927,14 @@ export default function CampaignWorkspacePage({
           </div>
 
           {/* Step 4: AI Drafts */}
-          <div className={`p-3.5 rounded-xl border transition-all ${currentStepNumber === 4 ? 'bg-white/15 border-amber-400 ring-2 ring-amber-400/30' : readyDrafts > 0 ? 'bg-emerald-950/30 border-emerald-500/30' : 'bg-white/5 border-white/10'} flex flex-col justify-between`}>
+          <div className={`p-3.5 rounded-xl border transition-all ${currentStepNumber === 4 ? 'bg-white/15 border-amber-400 ring-2 ring-amber-400/30' : readyDrafts >= safeLeads && safeLeads > 0 ? 'bg-emerald-950/30 border-emerald-500/30' : 'bg-white/5 border-white/10'} flex flex-col justify-between`}>
             <div>
               <div className="flex items-center justify-between">
                 <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Step 4</span>
-                {readyDrafts > 0 ? (
+                {readyDrafts >= safeLeads && safeLeads > 0 ? (
                   <span className="text-emerald-400 text-xs font-bold bg-emerald-500/20 px-1.5 py-0.5 rounded-md">✓ Done</span>
                 ) : (
-                  <span className="text-slate-500 text-[10px]">Pending</span>
+                  <span className="text-slate-500 text-[10px]">{Math.max(safeLeads - readyDrafts, 0)} Needed</span>
                 )}
               </div>
               <p className="text-xs font-semibold text-slate-200 mt-1">AI Pitch Copy</p>
@@ -920,12 +942,14 @@ export default function CampaignWorkspacePage({
             </div>
             <button
               onClick={() => handleGenerateDrafts()}
-              disabled={Boolean(actionLoading) || safeLeads === 0}
-              className="mt-2 w-full py-1 bg-purple-600/80 hover:bg-purple-600 text-white text-[11px] font-semibold rounded-lg transition-colors flex items-center justify-center gap-1 disabled:opacity-30"
+              disabled={Boolean(actionLoading) || safeLeads === 0 || (readyDrafts >= safeLeads && safeLeads > 0)}
+              className="mt-2 w-full py-1 bg-purple-600 hover:bg-purple-500 text-white text-[11px] font-semibold rounded-lg transition-colors flex items-center justify-center gap-1 disabled:opacity-40"
               title="Generate personalized cold pitches with JetDigitalPro AI"
             >
               {actionLoading === 'draft' ? (
                 <span className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin" />
+              ) : readyDrafts >= safeLeads && safeLeads > 0 ? (
+                <span>✓ All Drafted</span>
               ) : (
                 <span>🤖 AI Drafts</span>
               )}
@@ -933,27 +957,29 @@ export default function CampaignWorkspacePage({
           </div>
 
           {/* Step 5: Push to CRM & Dispatch */}
-          <div className={`p-3.5 rounded-xl border transition-all ${currentStepNumber === 5 ? 'bg-white/15 border-amber-400 ring-2 ring-amber-400/30' : convertedLeads > 0 ? 'bg-emerald-950/30 border-emerald-500/30' : 'bg-white/5 border-white/10'} col-span-2 md:col-span-1 flex flex-col justify-between`}>
+          <div className={`p-3.5 rounded-xl border transition-all ${currentStepNumber === 5 ? 'bg-white/15 border-amber-400 ring-2 ring-amber-400/30' : uncommittedTotalLeads === 0 && allLeads.length > 0 ? 'bg-emerald-950/30 border-emerald-500/30' : 'bg-white/5 border-white/10'} col-span-2 md:col-span-1 flex flex-col justify-between`}>
             <div>
               <div className="flex items-center justify-between">
                 <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Step 5</span>
-                {convertedLeads > 0 ? (
+                {uncommittedTotalLeads === 0 && allLeads.length > 0 ? (
                   <span className="text-emerald-400 text-xs font-bold bg-emerald-500/20 px-1.5 py-0.5 rounded-md">✓ Done</span>
                 ) : (
-                  <span className="text-slate-500 text-[10px]">Pending</span>
+                  <span className="text-slate-500 text-[10px]">{uncommittedSafeDrafts} Ready</span>
                 )}
               </div>
-              <p className="text-xs font-semibold text-slate-200 mt-1">CRM / Dispatch</p>
+              <p className="text-xs font-semibold text-slate-200 mt-1">CRM Bridge</p>
               <p className="text-lg font-bold text-amber-400 mt-0.5">{convertedLeads} <span className="text-xs font-normal text-amber-300/70">in CRM</span></p>
             </div>
             <button
-              onClick={() => handlePushToCrm()}
-              disabled={Boolean(actionLoading) || allLeads.length === 0}
-              className="mt-2 w-full py-1 bg-amber-500 hover:bg-amber-400 text-slate-950 text-[11px] font-bold rounded-lg transition-colors flex items-center justify-center gap-1 disabled:opacity-30"
+              onClick={() => openPushCrmModal()}
+              disabled={Boolean(actionLoading) || uncommittedSafeDrafts === 0 || allLeads.length === 0}
+              className="mt-2 w-full py-1 bg-amber-500 hover:bg-amber-400 text-slate-950 text-[11px] font-bold rounded-lg transition-colors flex items-center justify-center gap-1 disabled:opacity-40"
               title="Bridge verified leads into Kanban CRM pipeline board"
             >
               {actionLoading === 'push-crm' ? (
                 <span className="w-3 h-3 border-2 border-slate-900 border-t-transparent rounded-full animate-spin" />
+              ) : uncommittedTotalLeads === 0 && allLeads.length > 0 ? (
+                <span>✓ All in CRM</span>
               ) : (
                 <span>📋 Push CRM</span>
               )}
@@ -970,7 +996,7 @@ export default function CampaignWorkspacePage({
               {selectedIds.length} Selected
             </span>
             <span className="text-xs text-primary-100">
-              Apply actions specifically to checked leads:
+              Apply actions specifically to checked prospects:
             </span>
           </div>
           <div className="flex flex-wrap items-center gap-2">
@@ -996,11 +1022,11 @@ export default function CampaignWorkspacePage({
               <span>🤖 AI Draft ({selectedIds.length})</span>
             </button>
             <button
-              onClick={() => handlePushToCrm(selectedIds)}
-              disabled={Boolean(actionLoading)}
-              className="px-3 py-1.5 bg-amber-500 hover:bg-amber-400 text-slate-950 text-xs font-bold rounded-xl transition-colors flex items-center gap-1"
+              onClick={() => openPushCrmModal(selectedIds)}
+              disabled={Boolean(actionLoading) || selectedUncommittedSafe === 0}
+              className="px-3 py-1.5 bg-amber-500 hover:bg-amber-400 text-slate-950 text-xs font-bold rounded-xl transition-colors flex items-center gap-1 disabled:opacity-50"
             >
-              <span>📋 Push to CRM ({selectedIds.length})</span>
+              <span>📋 Push to CRM ({selectedUncommittedSafe})</span>
             </button>
             <button
               onClick={clearSelection}
@@ -1033,7 +1059,7 @@ export default function CampaignWorkspacePage({
               <option value="MISSING_EMAIL">Missing Email ({missingEmailCount})</option>
               <option value="SAFE">Verified Safe ({safeLeads})</option>
               <option value="DRAFT_READY">AI Drafts Ready ({readyDrafts})</option>
-              <option value="DISPATCHED">Dispatched / Sent ({dispatchedLeads})</option>
+              <option value="DISPATCHED">Dispatched / In CRM ({dispatchedLeads})</option>
             </select>
 
             <button
@@ -1087,7 +1113,6 @@ export default function CampaignWorkspacePage({
                   const isFinding = rowLoading[`${lead.id}-find`];
                   const isVerifying = rowLoading[`${lead.id}-verify`];
                   const isDrafting = rowLoading[`${lead.id}-draft`];
-                  const isSending = rowLoading[`${lead.id}-send`];
                   const isPushing = rowLoading[`${lead.id}-push`];
 
                   return (
@@ -1205,8 +1230,8 @@ export default function CampaignWorkspacePage({
                         ) : (
                           <button
                             onClick={() => handleGenerateDrafts([lead.id])}
-                            disabled={isDrafting}
-                            className="px-2.5 py-1 bg-slate-100 hover:bg-purple-50 hover:text-purple-700 text-slate-600 text-[10px] font-bold rounded-lg transition-colors border border-slate-200"
+                            disabled={isDrafting || lead.verifyStatus === 'INVALID'}
+                            className="px-2.5 py-1 bg-slate-100 hover:bg-purple-50 hover:text-purple-700 text-slate-600 text-[10px] font-bold rounded-lg transition-colors border border-slate-200 disabled:opacity-40"
                           >
                             {isDrafting ? 'Writing AI...' : '🤖 Generate AI Copy'}
                           </button>
@@ -1223,18 +1248,23 @@ export default function CampaignWorkspacePage({
                             Review
                           </button>
                         )}
-                        {lead.status === 'CONVERTED' ? (
-                          <span className="px-2.5 py-1 bg-emerald-50 text-emerald-700 border border-emerald-200 text-[11px] font-bold rounded-lg">
-                            ✓ In CRM
-                          </span>
+                        {lead.status === 'CONVERTED' && lead.convertedCardId ? (
+                          <Link
+                            href={`/dashboard?cardId=${lead.convertedCardId}`}
+                            className="px-2.5 py-1 bg-emerald-50 text-emerald-800 border border-emerald-300 text-[11px] font-bold rounded-lg hover:bg-emerald-100 transition-colors inline-flex items-center gap-1 shadow-2xs"
+                            title="View Card on Kanban CRM Board"
+                          >
+                            <span>✓ In CRM</span>
+                            <span className="text-[10px]">↗</span>
+                          </Link>
                         ) : (
                           <button
-                            onClick={() => handlePushToCrm([lead.id])}
-                            disabled={isPushing}
-                            className="px-2.5 py-1 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 text-[11px] font-bold rounded-lg transition-colors disabled:opacity-50"
+                            onClick={() => openPushCrmModal([lead.id])}
+                            disabled={isPushing || lead.verifyStatus === 'INVALID'}
+                            className="px-2.5 py-1 bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-300 text-[11px] font-bold rounded-lg transition-colors disabled:opacity-40"
                             title="Convert immediately to Kanban CRM Lead Card"
                           >
-                            {isPushing ? 'Pushing...' : '+ Push to CRM'}
+                            <span>📋 Push CRM</span>
                           </button>
                         )}
                       </td>
@@ -1272,56 +1302,166 @@ export default function CampaignWorkspacePage({
         )}
       </div>
 
+      {/* Interactive Push to Kanban CRM Modal with Board & Column Selector */}
+      {isPushCrmModalOpen && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 z-50 animate-in fade-in">
+          <div className="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl border border-slate-200 space-y-4">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <div className="flex items-center gap-2">
+                <span className="text-xl">📋</span>
+                <div>
+                  <h3 className="text-sm font-bold text-slate-900">Push Leads to Kanban CRM</h3>
+                  <p className="text-xs text-slate-500">Select the target Kanban Board and Column for these prospects.</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setIsPushCrmModalOpen(false)}
+                className="text-slate-400 hover:text-slate-600"
+              >
+                ✕
+              </button>
+            </div>
+
+            {/* Target Count & Summary */}
+            <div className="p-3.5 bg-indigo-50/80 border border-indigo-100 rounded-xl text-xs space-y-1">
+              <div className="flex items-center justify-between font-bold text-indigo-950">
+                <span>Eligible Prospects to Push:</span>
+                <span className="bg-indigo-600 text-white px-2 py-0.5 rounded-full text-[11px]">
+                  {crmTargetLeadIds.length} Leads
+                </span>
+              </div>
+              <p className="text-[11px] text-indigo-700/80">
+                Each prospect will be converted into a Kanban card with their contact info, LinkedIn link, and generated AI pitch draft.
+              </p>
+            </div>
+
+            {/* Board & Column Selectors */}
+            <div className="space-y-3">
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">
+                  Select Target Board *
+                </label>
+                <select
+                  value={selectedBoardId}
+                  onChange={(e) => handleSelectBoard(e.target.value)}
+                  className="w-full px-3 py-2 border border-slate-300 rounded-xl text-xs bg-white text-slate-800 font-semibold focus:ring-2 focus:ring-primary-500"
+                >
+                  {boardsList.length === 0 && <option value="">Default Main Sales Board</option>}
+                  {boardsList.map((b) => (
+                    <option key={b.id} value={b.id}>
+                      {b.title} ({b.columns?.length || 0} columns)
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">
+                  Select Target Column *
+                </label>
+                <select
+                  value={selectedColumnId}
+                  onChange={(e) => setSelectedColumnId(e.target.value)}
+                  className="w-full px-3 py-2 border border-slate-300 rounded-xl text-xs bg-white text-slate-800 focus:ring-2 focus:ring-primary-500"
+                >
+                  {(() => {
+                    const currentBoard = boardsList.find((b) => b.id === selectedBoardId) || boardsList[0];
+                    const columns = currentBoard?.columns || [];
+                    if (columns.length === 0) {
+                      return <option value="">Default "Leads" Column</option>;
+                    }
+                    return columns.map((col: any) => (
+                      <option key={col.id} value={col.id}>
+                        {col.title}
+                      </option>
+                    ));
+                  })()}
+                </select>
+              </div>
+            </div>
+
+            {/* Modal Actions */}
+            <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-100">
+              <button
+                type="button"
+                onClick={() => setIsPushCrmModalOpen(false)}
+                className="px-4 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-100 rounded-xl"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={Boolean(actionLoading) || crmTargetLeadIds.length === 0}
+                onClick={executePushCrm}
+                className="px-5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl transition-all shadow-xs flex items-center gap-1.5 disabled:opacity-50"
+              >
+                {actionLoading === 'push-crm' ? (
+                  <>
+                    <span className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                    <span>Pushing to CRM...</span>
+                  </>
+                ) : (
+                  <>
+                    <span>✓</span>
+                    <span>Confirm & Push {crmTargetLeadIds.length} Leads</span>
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Sequential AI Draft Review & Edit Modal (Side-by-Side Split View) */}
       {selectedLead && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 z-50 animate-in fade-in">
           <div className="bg-white rounded-2xl max-w-4xl w-full p-5 sm:p-6 shadow-2xl border border-slate-200 space-y-4 max-h-[92vh] overflow-y-auto">
             {/* Modal Header with Sequential Lead Navigator */}
-            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-              <div className="flex items-center gap-2.5">
-                <div className="w-8 h-8 rounded-xl bg-purple-100 text-purple-700 flex items-center justify-center font-bold text-sm">
-                  🤖
-                </div>
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 pb-4">
+              <div className="flex items-center gap-3">
+                <span className="w-9 h-9 rounded-xl bg-purple-100 text-purple-700 flex items-center justify-center font-bold text-sm">
+                  {currentModalIndex >= 0 ? currentModalIndex + 1 : 1}
+                </span>
                 <div>
-                  <div className="flex items-center gap-2">
-                    <h3 className="text-sm font-bold text-slate-900">JetDigitalPro AI Draft Reviewer</h3>
-                    {currentModalIndex !== -1 && (
-                      <span className="text-[10px] font-bold bg-purple-50 text-purple-700 border border-purple-200/70 px-2 py-0.5 rounded-full">
-                        Lead {currentModalIndex + 1} of {filteredLeads.length}
+                  <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
+                    <span>{selectedLead.fullName}</span>
+                    {selectedLead.verifyStatus === 'SAFE' && (
+                      <span className="text-[10px] bg-emerald-100 text-emerald-800 font-bold px-2 py-0.5 rounded-full">
+                        🟢 Safe
                       </span>
                     )}
-                  </div>
+                  </h3>
                   <p className="text-xs text-slate-500">
-                    Review and tailor AI personalized pitch for <span className="font-semibold text-slate-800">{selectedLead.fullName}</span>
+                    {selectedLead.jobTitle || 'Executive'} at{' '}
+                    <span className="font-semibold text-slate-700">{selectedLead.companyName || 'Enterprise'}</span>
                   </p>
                 </div>
               </div>
 
-              {/* Prev / Next Lead Quick Navigation & Shortcuts */}
-              <div className="flex items-center gap-1.5">
+              {/* Sequential Navigator Controls */}
+              <div className="flex items-center gap-2">
+                <div className="text-xs font-semibold text-slate-400 mr-1">
+                  Lead {currentModalIndex + 1} of {filteredLeads.length}
+                </div>
                 <button
-                  type="button"
                   onClick={() => navigateDraftModal('prev')}
                   disabled={currentModalIndex <= 0}
-                  className="px-2.5 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold rounded-lg disabled:opacity-30 transition-colors flex items-center gap-1"
-                  title="Previous Lead (Alt + ←)"
+                  className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold rounded-xl transition-colors disabled:opacity-30"
+                  title="Previous Lead (Alt + Left Arrow)"
                 >
-                  <span>←</span>
-                  <span className="hidden sm:inline">Prev</span>
+                  ← Prev
                 </button>
                 <button
-                  type="button"
                   onClick={() => navigateDraftModal('next')}
                   disabled={currentModalIndex >= filteredLeads.length - 1}
-                  className="px-2.5 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold rounded-lg disabled:opacity-30 transition-colors flex items-center gap-1"
-                  title="Next Lead (Alt + →)"
+                  className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold rounded-xl transition-colors disabled:opacity-30"
+                  title="Next Lead (Alt + Right Arrow)"
                 >
-                  <span className="hidden sm:inline">Next</span>
-                  <span>→</span>
+                  Next →
                 </button>
                 <button
                   onClick={() => setSelectedLead(null)}
-                  className="text-slate-400 hover:text-slate-600 text-lg leading-none ml-2 px-1.5 py-1 rounded-lg hover:bg-slate-100"
+                  className="p-1.5 text-slate-400 hover:text-slate-600 rounded-xl"
                   title="Close (Esc)"
                 >
                   ✕
@@ -1329,148 +1469,96 @@ export default function CampaignWorkspacePage({
               </div>
             </div>
 
-            {/* Side-by-Side Content Grid */}
-            <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">
-              {/* Left Column (7 cols): Email Editor */}
-              <div className="lg:col-span-7 space-y-3.5">
-                <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1">
-                    Recipient Target Email
-                  </label>
-                  <input
-                    type="email"
-                    value={editEmail}
-                    onChange={(e) => setEditEmail(e.target.value)}
-                    placeholder="prospect@company.com"
-                    className="w-full px-3 py-2 border border-slate-300 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-primary-500 font-mono text-slate-800"
-                  />
-                </div>
-
-                <div>
-                  <div className="flex items-center justify-between mb-1">
-                    <label className="block text-xs font-semibold text-slate-700">Subject Line</label>
-                    {Boolean(selectedLead.metadata && (selectedLead.metadata as any).alternativeSubject) && (
-                      <button
-                        type="button"
-                        onClick={() => setEditSubject((selectedLead.metadata as any).alternativeSubject)}
-                        className="text-[10px] text-indigo-600 hover:text-indigo-800 font-semibold inline-flex items-center gap-1 bg-indigo-50 px-2 py-0.5 rounded-md border border-indigo-200"
-                        title="Use AI alternative subject"
-                      >
-                        <span>💡</span>
-                        <span>Switch to A/B Subject</span>
-                      </button>
-                    )}
-                  </div>
-                  <input
-                    type="text"
-                    value={editSubject}
-                    onChange={(e) => setEditSubject(e.target.value)}
-                    className="w-full px-3 py-2 border border-slate-300 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-primary-500 font-semibold text-slate-800"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1">Email Pitch Body</label>
-                  <textarea
-                    rows={8}
-                    value={editBody}
-                    onChange={(e) => setEditBody(e.target.value)}
-                    className="w-full px-3 py-2.5 border border-slate-300 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-primary-500 text-slate-800 leading-relaxed font-sans"
-                    placeholder="Enter pitch body..."
-                  />
-                </div>
+            {/* Email Edit Inputs */}
+            <div className="space-y-3">
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">
+                  Recipient Target Email <span className="text-slate-400 font-normal">(Verified or custom test email)</span>
+                </label>
+                <input
+                  type="email"
+                  value={editEmail}
+                  onChange={(e) => setEditEmail(e.target.value)}
+                  placeholder="e.g. prospect@company.com"
+                  className="w-full px-3 py-2 border border-slate-300 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-primary-500 font-mono text-slate-800"
+                />
               </div>
 
-              {/* Right Column (5 cols): Context & AI Assistant */}
-              <div className="lg:col-span-5 space-y-3">
-                {/* Lead Profile Context Card */}
-                <div className="p-3.5 bg-slate-50 rounded-xl border border-slate-200 space-y-2">
-                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Prospect Profile</span>
-                  <div className="space-y-1">
-                    <p className="text-xs font-bold text-slate-900">{selectedLead.fullName}</p>
-                    <p className="text-xs text-slate-600">{selectedLead.jobTitle || 'No title'} @ <span className="font-semibold text-slate-800">{selectedLead.companyName || 'Unknown company'}</span></p>
-                    {selectedLead.location && (
-                      <p className="text-[11px] text-slate-500">📍 {selectedLead.location}</p>
-                    )}
-                  </div>
-
-                  {/* Deliverability Badge */}
-                  <div className="pt-2 border-t border-slate-200 flex items-center justify-between">
-                    <span className="text-[11px] text-slate-500">Deliverability:</span>
-                    {selectedLead.verifyStatus === 'SAFE' ? (
-                      <span className="px-2 py-0.5 bg-emerald-100 text-emerald-800 font-bold text-[10px] rounded-full border border-emerald-300 flex items-center gap-1">
-                        <span>🛡️</span>
-                        <span>Safe (Score: {selectedLead.verifyScore ?? 100})</span>
-                      </span>
-                    ) : selectedLead.verifyStatus === 'INVALID' ? (
-                      <span className="px-2 py-0.5 bg-rose-100 text-rose-800 font-bold text-[10px] rounded-full border border-rose-300">
-                        ⚠️ Invalid / Risky
-                      </span>
-                    ) : (
-                      <span className="px-2 py-0.5 bg-slate-200 text-slate-700 font-medium text-[10px] rounded-full">
-                        Not Verified
-                      </span>
-                    )}
-                  </div>
+              <div>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="block text-xs font-semibold text-slate-700">Subject Line</label>
+                  {Boolean(selectedLead.metadata && (selectedLead.metadata as any).alternativeSubject) && (
+                    <button
+                      type="button"
+                      onClick={() => setEditSubject((selectedLead.metadata as any).alternativeSubject)}
+                      className="text-[10px] text-indigo-600 hover:text-indigo-800 font-medium"
+                      title="Use AI A/B testing alternative subject"
+                    >
+                      💡 Switch to A/B Subject
+                    </button>
+                  )}
                 </div>
+                <input
+                  type="text"
+                  value={editSubject}
+                  onChange={(e) => setEditSubject(e.target.value)}
+                  className="w-full px-3 py-2 border border-slate-300 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-primary-500 font-semibold text-slate-800"
+                />
+              </div>
 
-                {/* AI Assistant Directives Card */}
-                <div className="p-3.5 bg-purple-50/70 rounded-xl border border-purple-200/80 space-y-2.5">
-                  <div className="flex items-center justify-between">
-                    <label className="text-xs font-bold text-purple-900 flex items-center gap-1">
-                      <span>✨</span>
-                      <span>AI Directives</span>
-                    </label>
-                  </div>
-                  <p className="text-[11px] text-purple-700 leading-snug">
-                    Provide custom instructions to regenerate tailored copy for this lead.
-                  </p>
-                  <textarea
-                    rows={3}
-                    value={modalCustomPrompt}
-                    onChange={(e) => setModalCustomPrompt(e.target.value)}
-                    placeholder="e.g. Keep under 75 words, emphasize ROI and security, informal tone."
-                    className="w-full px-3 py-1.5 border border-purple-200 bg-white rounded-lg text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-purple-500"
-                  />
+              {/* Custom AI Regeneration Guidance */}
+              <div className="p-3 bg-purple-50/50 rounded-xl border border-purple-100 space-y-2">
+                <div className="flex items-center justify-between">
+                  <label className="text-[11px] font-bold text-purple-900 flex items-center gap-1">
+                    <span>✨</span>
+                    <span>AI Regeneration Directives for this Lead (Optional)</span>
+                  </label>
                   <button
                     type="button"
                     onClick={handleRegenerateModalDraft}
                     disabled={regeneratingDraft}
-                    className="w-full py-1.5 bg-purple-600 hover:bg-purple-700 text-white text-xs font-bold rounded-lg transition-colors flex items-center justify-center gap-1.5 shadow-xs disabled:opacity-50"
+                    className="text-[11px] text-purple-700 hover:text-purple-900 font-bold flex items-center gap-1 bg-white px-2 py-1 rounded-lg border border-purple-200 shadow-2xs"
                   >
-                    {regeneratingDraft ? (
-                      <>
-                        <span className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                        <span>Regenerating AI Copy...</span>
-                      </>
-                    ) : (
-                      <>
-                        <span>⚡</span>
-                        <span>Regenerate AI Copy</span>
-                      </>
-                    )}
+                    <span>{regeneratingDraft ? '⏳' : '⚡'}</span>
+                    <span>{regeneratingDraft ? 'Regenerating AI...' : 'Regenerate AI Copy'}</span>
                   </button>
                 </div>
+                <input
+                  type="text"
+                  value={modalCustomPrompt}
+                  onChange={(e) => setModalCustomPrompt(e.target.value)}
+                  placeholder="e.g. Make it under 80 words, emphasize cloud security, or use a conversational tone."
+                  className="w-full px-3 py-1.5 border border-purple-200 bg-white rounded-lg text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-purple-500"
+                />
+              </div>
 
-                <p className="text-[10px] text-slate-400 text-center italic">
-                  Keyboard: Esc to close | Alt + ← / → to browse
-                </p>
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">Email Pitch Body</label>
+                <textarea
+                  rows={7}
+                  value={editBody}
+                  onChange={(e) => setEditBody(e.target.value)}
+                  className="w-full px-3 py-2.5 border border-slate-300 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-primary-500 text-slate-800 leading-relaxed font-sans"
+                />
               </div>
             </div>
 
             {/* Clean Unified Action Footer */}
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-4 border-t border-slate-100">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pt-3 border-t border-slate-100">
               {/* Push / Approve to CRM Action */}
               <div>
-                {selectedLead.status === 'CONVERTED' ? (
-                  <span className="px-3 py-1.5 bg-emerald-50 text-emerald-800 border border-emerald-200 text-xs font-bold rounded-xl inline-flex items-center gap-1">
-                    <span>✓</span> Converted in Kanban CRM
-                  </span>
+                {selectedLead.status === 'CONVERTED' && selectedLead.convertedCardId ? (
+                  <Link
+                    href={`/dashboard?cardId=${selectedLead.convertedCardId}`}
+                    className="px-3 py-1.5 bg-emerald-50 text-emerald-800 border border-emerald-300 text-xs font-bold rounded-xl inline-flex items-center gap-1"
+                  >
+                    <span>✓ Converted in Kanban CRM</span>
+                    <span>↗</span>
+                  </Link>
                 ) : (
                   <button
                     type="button"
                     onClick={async () => {
-                      setPushingToCrmModal(true);
                       try {
                         await fetch(`/api/outreach/leads/${selectedLead.id}`, {
                           method: 'PATCH',
@@ -1481,18 +1569,17 @@ export default function CampaignWorkspacePage({
                             email: editEmail.trim() || undefined,
                           }),
                         });
-                        await handlePushToCrm([selectedLead.id]);
                         setSelectedLead(null);
-                      } finally {
-                        setPushingToCrmModal(false);
+                        openPushCrmModal([selectedLead.id]);
+                      } catch (err: any) {
+                        toast.error(`Save draft error: ${err.message}`);
                       }
                     }}
-                    disabled={pushingToCrmModal}
                     className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl transition-all inline-flex items-center gap-1.5 shadow-xs"
-                    title="Approve edited draft and convert directly to Kanban CRM lead card"
+                    title="Approve edited draft and choose board to convert into Kanban CRM"
                   >
                     <span>✓</span>
-                    <span>{pushingToCrmModal ? 'Approving & Pushing...' : 'Approve Draft & Push to CRM'}</span>
+                    <span>Approve Draft & Push to CRM</span>
                   </button>
                 )}
               </div>
@@ -1599,7 +1686,7 @@ export default function CampaignWorkspacePage({
                   disabled={addingCustomLead}
                   className="px-4 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-lg shadow-xs disabled:opacity-50"
                 >
-                  {addingCustomLead ? 'Adding...' : 'Add Lead & Create AI Draft'}
+                  {addingCustomLead ? 'Adding...' : 'Add Lead'}
                 </button>
               </div>
             </form>

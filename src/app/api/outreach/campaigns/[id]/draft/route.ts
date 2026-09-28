@@ -72,6 +72,8 @@ export async function POST(
       jobTitle: lead.jobTitle || undefined,
       companyName: lead.companyName || undefined,
       linkedinSummary,
+      location: lead.location || campaign.targetLocation || undefined,
+      industry: campaign.targetIndustry || undefined,
       senderName,
       senderCompany,
       companyKnowledge: parsedCompanyContext || undefined,

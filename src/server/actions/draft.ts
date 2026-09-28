@@ -21,7 +21,9 @@ export async function sendDraft(draftId: string, fromAddress?: string) {
   if (!draft || draft.tenantId !== tenantId) throw new Error('Not found');
 
   // Find the right email config: prefer one matching fromAddress, or card emailConfigId, else first active
-  let emailConfig;
+  let emailConfig: any = null;
+  let isOutreachAccount = false;
+
   if (fromAddress) {
     emailConfig = await prisma.emailConfig.findFirst({
       where: {
@@ -30,20 +32,40 @@ export async function sendDraft(draftId: string, fromAddress?: string) {
         OR: [{ smtpUser: fromAddress }, { imapUser: fromAddress }, { id: fromAddress }],
       },
     });
+
+    if (!emailConfig) {
+      emailConfig = await prisma.outreachAccountConfig.findFirst({
+        where: {
+          tenantId,
+          isActive: true,
+          OR: [{ senderEmail: fromAddress }, { smtpUser: fromAddress }, { id: fromAddress }],
+        },
+      });
+      if (emailConfig) isOutreachAccount = true;
+    }
   }
+
   if (!emailConfig && draft.card.emailConfigId) {
     emailConfig = await prisma.emailConfig.findFirst({
       where: { id: draft.card.emailConfigId, tenantId, isActive: true },
     });
   }
+
   if (!emailConfig) {
     emailConfig = await prisma.emailConfig.findFirst({ where: { tenantId, isActive: true } });
   }
-  if (!emailConfig) throw new Error('No active email mailbox configured in Settings.');
+
+  // Fallback to OutreachAccountConfig if main CRM email config is not configured
+  if (!emailConfig) {
+    emailConfig = await prisma.outreachAccountConfig.findFirst({ where: { tenantId, isActive: true } });
+    if (emailConfig) isOutreachAccount = true;
+  }
+
+  if (!emailConfig) throw new Error('No active email mailbox configured in Settings or Outreach Settings.');
 
   // Send via SMTP
-  const authConfig: any = { user: emailConfig.smtpUser };
-  if (emailConfig.authType === 'oauth2') {
+  const authConfig: any = { user: emailConfig.smtpUser || emailConfig.senderEmail };
+  if (!isOutreachAccount && emailConfig.authType === 'oauth2') {
     authConfig.type = 'OAuth2';
     authConfig.accessToken = await getValidZohoAccessToken(emailConfig.id);
   } else if (emailConfig.smtpPass) {
@@ -51,15 +73,15 @@ export async function sendDraft(draftId: string, fromAddress?: string) {
   }
 
   const transporter = createTransport({
-    host: emailConfig.smtpHost,
-    port: emailConfig.smtpPort,
+    host: emailConfig.smtpHost || 'smtp.zoho.com',
+    port: emailConfig.smtpPort || 465,
     secure: emailConfig.smtpPort === 465,
     requireTLS: emailConfig.smtpPort === 587,
     auth: authConfig,
   });
 
-  const sendFrom = fromAddress || emailConfig.smtpUser;
-  const senderDisplayName = (session.user as any).name || (session.user as any).tenantName || 'Support Team';
+  const sendFrom = fromAddress || emailConfig.senderEmail || emailConfig.smtpUser;
+  const senderDisplayName = emailConfig.senderName || (session.user as any).name || (session.user as any).tenantName || 'Support Team';
   const fromHeader = `"${senderDisplayName}" <${sendFrom}>`;
 
   try {

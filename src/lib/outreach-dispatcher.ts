@@ -227,6 +227,8 @@ export async function dispatchColdEmail(params: DispatchLeadEmailParams): Promis
 export async function convertOutreachLeadToKanbanCard(params: {
   leadId: string;
   tenantId: string;
+  boardId?: string;
+  columnId?: string;
   replySubject?: string;
   replyBody?: string;
 }): Promise<{ cardId: string }> {
@@ -251,34 +253,59 @@ export async function convertOutreachLeadToKanbanCard(params: {
     }
   }
 
-  // Find or use the primary board and "Leads" column
-  let board = await prisma.board.findFirst({
-    where: { tenantId: params.tenantId },
-    include: { columns: true },
-  });
+  // Find target column based on custom boardId/columnId or default board
+  let targetColumn;
 
-  if (!board) {
-    board = await prisma.board.create({
-      data: {
-        title: 'Main Sales Board',
-        tenantId: params.tenantId,
-        columns: {
-          create: [
-            { title: 'Leads', position: 0, color: '#3b82f6', isSystem: true },
-            { title: 'In Progress', position: 1, color: '#f59e0b', isSystem: false },
-            { title: 'Resolved', position: 2, color: '#10b981', isSystem: false },
-          ],
-        },
-      },
-      include: { columns: true },
+  if (params.columnId) {
+    targetColumn = await prisma.column.findFirst({
+      where: { id: params.columnId, board: { tenantId: params.tenantId } },
     });
   }
 
-  const leadsColumn = board.columns.find((c) => c.title.toLowerCase() === 'leads') || board.columns[0];
+  if (!targetColumn && params.boardId) {
+    const targetBoard = await prisma.board.findFirst({
+      where: { id: params.boardId, tenantId: params.tenantId },
+      include: { columns: { orderBy: { position: 'asc' } } },
+    });
+    if (targetBoard && targetBoard.columns.length > 0) {
+      targetColumn = targetBoard.columns.find((c) => c.title.toLowerCase() === 'leads') || targetBoard.columns[0];
+    }
+  }
 
-  const cardTitle = `${lead.fullName} - ${lead.companyName || 'Outreach Lead'}`;
-  const subject = params.replySubject || `Outreach Lead: ${lead.fullName}`;
-  const bodyText = params.replyBody || `Prospect sourced from campaign "${lead.campaign.name}".\n\nTitle: ${lead.jobTitle || 'N/A'}\nCompany: ${lead.companyName || 'N/A'}\nLinkedIn: ${lead.linkedinUrl || 'N/A'}\nEmail: ${lead.email || 'N/A'}\n\nLast Sent Email:\nSubject: ${lead.aiDraftSubject || ''}\nBody:\n${lead.aiDraftBody || ''}`;
+  if (!targetColumn) {
+    // Find or create primary board
+    let board = await prisma.board.findFirst({
+      where: { tenantId: params.tenantId },
+      include: { columns: { orderBy: { position: 'asc' } } },
+    });
+
+    if (!board) {
+      board = await prisma.board.create({
+        data: {
+          title: 'Main Sales Board',
+          tenantId: params.tenantId,
+          columns: {
+            create: [
+              { title: 'Leads', position: 0, color: '#3b82f6', isSystem: true },
+              { title: 'In Progress', position: 1, color: '#f59e0b', isSystem: false },
+              { title: 'Resolved', position: 2, color: '#10b981', isSystem: false },
+            ],
+          },
+        },
+        include: { columns: { orderBy: { position: 'asc' } } },
+      });
+    }
+
+    targetColumn = board.columns.find((c) => c.title.toLowerCase() === 'leads') || board.columns[0];
+  }
+
+  // Find an active email config to attach if available
+  const activeEmailConfig = await prisma.emailConfig.findFirst({
+    where: { tenantId: params.tenantId, isActive: true },
+  });
+
+  const subject = params.replySubject || `Outreach Lead: ${lead.fullName} (${lead.companyName || 'Enterprise'})`;
+  const bodyText = params.replyBody || `Prospect sourced from campaign "${lead.campaign.name}".\n\nTitle: ${lead.jobTitle || 'N/A'}\nCompany: ${lead.companyName || 'N/A'}\nLinkedIn: ${lead.linkedinUrl || 'N/A'}\nEmail: ${lead.email || 'N/A'}\nLocation: ${lead.location || 'N/A'}\n\nAI Cold Email Pitch:\nSubject: ${lead.aiDraftSubject || ''}\n\n${lead.aiDraftBody || ''}`;
 
   const card = await prisma.card.create({
     data: {
@@ -286,8 +313,9 @@ export async function convertOutreachLeadToKanbanCard(params: {
       fromEmail: lead.email || 'outreach-lead@prospect.com',
       fromName: lead.fullName,
       bodyText,
-      columnId: leadsColumn.id,
+      columnId: targetColumn.id,
       tenantId: params.tenantId,
+      emailConfigId: activeEmailConfig?.id || null,
       status: 'unread',
       channel: 'email',
       metadata: {
@@ -297,17 +325,35 @@ export async function convertOutreachLeadToKanbanCard(params: {
         jobTitle: lead.jobTitle,
         company: lead.companyName,
         linkedinUrl: lead.linkedinUrl,
+        location: lead.location,
+        aiDraftSubject: lead.aiDraftSubject,
+        aiDraftBody: lead.aiDraftBody,
       },
     },
   });
+
+  // If lead had an AI draft, create a pending draft message for this card
+  if (lead.aiDraftBody) {
+    await prisma.draftMessage.create({
+      data: {
+        subject: lead.aiDraftSubject || `Hello ${lead.fullName}`,
+        body: lead.aiDraftBody,
+        status: 'pending',
+        cardId: card.id,
+        tenantId: params.tenantId,
+      },
+    });
+  }
 
   // Create initial activity log
   await prisma.activityLog.create({
     data: {
       type: 'LEAD_CONVERTED',
       content: {
-        message: `Converted from Outreach Campaign: "${lead.campaign.name}"`,
+        message: `Converted from Outreach Campaign: "${lead.campaign.name}" to column "${targetColumn.title}"`,
         leadId: lead.id,
+        columnId: targetColumn.id,
+        columnTitle: targetColumn.title,
         convertedAt: new Date(),
       },
       cardId: card.id,

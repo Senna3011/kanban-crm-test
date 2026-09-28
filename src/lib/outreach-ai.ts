@@ -5,6 +5,8 @@ export interface GenerateColdEmailParams {
   jobTitle?: string;
   companyName?: string;
   linkedinSummary?: string;
+  location?: string;
+  industry?: string;
   senderName: string;
   senderCompany?: string;
   senderAddress?: string;
@@ -25,17 +27,10 @@ export interface ColdEmailDraftResult {
 
 const JETDIGITALPRO_DEFAULT_CONTEXT = `
 Company: JetDigitalPro (jetdigitalpro.com)
-Core Capabilities:
-- Custom Enterprise Web & Cloud Application Development (Next.js, Node.js, Microservices)
-- AI & LLM Automation Workflows (Intelligent Lead Scoring, Auto-Classification, AI Assistant Integration)
-- Omnichannel CRM & Inbound Pipeline Automation (Email, WhatsApp, Zoho, IMAP/SMTP Orchestration)
-- IT Infrastructure & Scalable Cloud Architecture Consulting
-
-Value Proposition:
-We help tech-forward leadership and enterprise teams eliminate manual sales/support bottlenecks, automate email pipelines, and build bespoke AI-driven software to accelerate operational efficiency.
-
-Call to Action:
-A brief 10-minute complimentary software & architecture review session.
+Core Offer: Bespoke Enterprise Software, Custom Cloud Applications & AI Workflow Automation.
+Key Value Proposition: We eliminate operational friction, automate sales/support email pipelines, and build scalable web platforms that accelerate revenue growth.
+Proof Points: Helped fast-scaling B2B & enterprise teams reduce manual operational overhead by up to 40%.
+Call to Action: A brief 9-minute introductory exchange or software architecture review.
 `;
 
 export async function generatePersonalizedColdEmail(
@@ -45,18 +40,31 @@ export async function generatePersonalizedColdEmail(
   const senderCompany = params.senderCompany || 'JetDigitalPro';
   const companyContext = params.companyKnowledge || params.productsOffer || JETDIGITALPRO_DEFAULT_CONTEXT;
   const customInstructions = params.customInstructions
-    ? `\nCampaign / Lead Specific Guidance:\n${params.customInstructions}\n`
+    ? `\nCampaign Custom Guidance:\n${params.customInstructions}\n`
     : '';
 
   const toneInstruction = params.tone === 'conversational'
-    ? 'Tone: Warm, approachable, peer-to-peer conversational.'
+    ? 'Tone: Warm, peer-to-peer conversational, friendly yet professional.'
     : params.tone === 'direct'
-    ? 'Tone: Highly direct, immediate value focus, zero fluff.'
-    : 'Tone: Executive, polished, and consultative.';
+    ? 'Tone: Direct, punchy, immediate value proposition, zero fluff.'
+    : 'Tone: Executive, consultative, polished, and respectful.';
 
   const lengthInstruction = params.length === 'detailed'
-    ? 'Keep the body between 100-140 words with 2 clear bullet points of value.'
-    : 'Keep the body under 90 words with maximum punchiness.';
+    ? 'Length: 100-130 words with 2 clear value bullet points and quantifiable proof.'
+    : 'Length: Under 85 words, concise, high-impact, mobile-friendly (scannable in 15 seconds).';
+
+  // Role-specific angle guidance
+  const roleLower = (params.jobTitle || '').toLowerCase();
+  let roleAngle = 'Focus on operational efficiency and driving scalable business outcomes.';
+  if (roleLower.includes('cto') || roleLower.includes('tech') || roleLower.includes('engineering') || roleLower.includes('developer')) {
+    roleAngle = 'Focus on developer velocity, reducing technical debt, robust API/cloud architecture, and eliminating manual engineering overhead.';
+  } else if (roleLower.includes('sales') || roleLower.includes('revenue') || roleLower.includes('growth')) {
+    roleAngle = 'Focus on inbound pipeline speed, automated lead qualification, eliminating CRM data-entry friction, and boosting deal velocity.';
+  } else if (roleLower.includes('marketing') || roleLower.includes('cmo')) {
+    roleAngle = 'Focus on multi-channel attribution, automated customer touchpoints, and higher conversion rates.';
+  } else if (roleLower.includes('ceo') || roleLower.includes('founder') || roleLower.includes('owner') || roleLower.includes('director')) {
+    roleAngle = 'Focus on strategic speed of execution, team productivity, cost-effective scaling, and measurable ROI.';
+  }
 
   try {
     if (!apiKey) {
@@ -67,43 +75,51 @@ export async function generatePersonalizedColdEmail(
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${apiKey}`,
+        Authorization: `Bearer ${apiKey}`,
       },
       body: JSON.stringify({
         model,
         messages: [
           {
             role: 'system',
-            content: `You are a world-class executive B2B sales copywriter crafting cold email introductions for ${params.senderName} representing ${senderCompany}.
+            content: `You are an elite B2B Cold Outreach Copywriter writing an ultra-personalized cold email on behalf of ${params.senderName} from ${senderCompany}.
 
-COMPANY & VALUE PROPOSITION CONTEXT:
+SENDER CONTEXT & OFFER:
 ${companyContext}
 
-STYLE & COPYWRITING RULES:
-1. Write exclusively in persuasive, clean American English.
-2. Address the prospect directly: "${params.prospectName}".
-3. Reference their role (${params.jobTitle || 'Executive'}) and organization (${params.companyName || 'their firm'}).
-4. Clearly articulate relevant value: enterprise web development, AI workflow automation, or pipeline efficiency tailored to their likely industry scale.
-5. ${toneInstruction}
-6. ${lengthInstruction}
-7. Provide a single, low-friction call-to-action: a complimentary 10-minute discovery call or architecture audit.
-8. ${customInstructions}
-9. Provide 2 distinct subject lines for A/B testing: primary "subject" and high-converting "alternativeSubject".
-10. Structure output STRICTLY in valid JSON format with keys: "subject", "alternativeSubject", and "body".`,
+COPYWRITING FRAMEWORK (8-POINT PERSONALIZATION):
+1. Natural Hook: Start with a natural, authentic 1-sentence observation tailored to their role (${params.jobTitle || 'Executive'}) at ${params.companyName || 'their company'}. Never use fake generic praise like "I hope this email finds you well" or "I came across your impressive profile".
+2. Role-Targeted Pain: ${roleAngle}
+3. Relevant Bridge: Connect the pain point directly to how ${senderCompany} delivers quantifiable results.
+4. Social Proof: Include a brief, believable metric or outcome.
+5. Low-Friction CTA: Ask for a casual 9-minute exchange or quick feedback.
+6. ${toneInstruction}
+7. ${lengthInstruction}
+8. Provide 2 distinct, highly clickable subject lines for A/B testing:
+   - "subject": Conversational & personalized (e.g. "quick question re: {companyName} systems")
+   - "alternativeSubject": Outcome & value-oriented (e.g. "accelerating pipeline efficiency at {companyName}")
+
+OUTPUT FORMAT: Strict JSON only with keys:
+- "subject": string
+- "alternativeSubject": string
+- "body": string`,
           },
           {
             role: 'user',
-            content: `Prospect Details:
-- Name: ${params.prospectName}
-- Job Title: ${params.jobTitle || 'Executive'}
-- Company: ${params.companyName || 'Enterprise Organization'}
-- Professional Background: ${params.linkedinSummary || 'Industry leader focused on operational excellence and scaling.'}
+            content: `PROSPECT PROFILE:
+- Full Name: ${params.prospectName}
+- Role / Title: ${params.jobTitle || 'Executive'}
+- Company: ${params.companyName || 'Enterprise'}
+- Location: ${params.location || 'Global'}
+- Industry: ${params.industry || 'Business & Technology'}
+- LinkedIn Info / Background: ${params.linkedinSummary || `Leading ${params.jobTitle || 'operations'} at ${params.companyName || 'their organization'}`}
+${customInstructions}
 
-Craft an authentic, high-converting cold email tailored to their profile.`,
+Craft an ultra-personalized, authentic cold email.`,
           },
         ],
-        temperature: 0.7,
-        max_tokens: 500,
+        temperature: 0.65,
+        max_tokens: 450,
       }),
     });
 
@@ -122,36 +138,36 @@ Craft an authentic, high-converting cold email tailored to their profile.`,
     }
 
     return {
-      subject: parsed.subject || `Strategy & Architecture for ${params.companyName || 'your team'}`,
-      alternativeSubject: parsed.alternativeSubject || `Quick idea regarding ${params.companyName || 'your team'} automation`,
+      subject: parsed.subject || `Quick question regarding ${params.companyName || 'your team'} systems`,
+      alternativeSubject: parsed.alternativeSubject || `Idea for ${params.companyName || 'your team'} efficiency`,
       body,
       isAiGenerated: true,
-      scoreEstimate: 92,
+      scoreEstimate: 95,
     };
   } catch (error) {
-    console.warn('[OUTREACH AI] Generation fallback applied:', error);
+    console.warn('[OUTREACH AI] Hyper-personalized generation fallback applied:', error);
     return {
-      subject: `Accelerating software & pipeline efficiency at ${params.companyName || 'your team'}`,
-      alternativeSubject: `Automation ideas for ${params.companyName || 'your team'}`,
+      subject: `Accelerating workflow efficiency at ${params.companyName || 'your team'}`,
+      alternativeSubject: `Question regarding ${params.companyName || 'your team'} automation`,
       body: generateFallbackBody(params),
       isAiGenerated: false,
-      scoreEstimate: 75,
+      scoreEstimate: 78,
     };
   }
 }
 
 function generateFallbackBody(params: GenerateColdEmailParams): string {
-  const company = params.companyName || 'your organization';
+  const company = params.companyName || 'your team';
   const role = params.jobTitle || 'your leadership position';
   const senderCompany = params.senderCompany || 'JetDigitalPro';
 
   return `Hi ${params.prospectName},
 
-I noticed your work as ${role} at ${company}. As enterprise teams scale, streamlining manual operational bottlenecks and architecting reliable software workflows often become key growth drivers.
+I noticed your work leading ${role} at ${company}. As enterprise teams scale, eliminating manual operational bottlenecks and architecting reliable software workflows often become key growth drivers.
 
-At ${senderCompany}, we partner with engineering and operational leaders to design high-performance web systems and AI-powered pipeline automations tailored to specific organizational workflows.
+At ${senderCompany}, we partner with leadership teams to design high-performance web systems and AI-powered pipeline automations tailored to specific business workflows.
 
-Would you be open to a brief 10-minute introductory conversation next week to exchange notes on your current technical priorities?
+Would you be open to a brief 9-minute introductory conversation next week to exchange notes on your current technical priorities?
 
 Best regards,
 ${params.senderName}
