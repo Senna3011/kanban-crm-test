@@ -454,15 +454,20 @@ export default function NewOutreachCampaignPage() {
             </div>
 
             <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1">
-                Custom Value Proposition & Pain Points (Editable)
-              </label>
+              <div className="flex items-center justify-between mb-1.5">
+                <label className="block text-sm font-bold text-slate-800">
+                  Custom Value Proposition & Pain Points (Editable)
+                </label>
+                <span className="text-xs text-slate-400 font-normal">
+                  Click to edit or refine generated pitch instructions
+                </span>
+              </div>
               <textarea
-                rows={3}
+                rows={6}
                 value={promptInstructions}
                 onChange={(e) => setPromptInstructions(e.target.value)}
                 placeholder="Specify key value angles, pain points, or call-to-actions you want included in AI pitches."
-                className="w-full px-3.5 py-2.5 border border-slate-300 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-primary-500"
+                className="w-full p-4 border border-slate-300 rounded-xl text-sm leading-relaxed text-slate-900 bg-slate-50/50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-primary-500 font-sans shadow-2xs transition-all"
               />
             </div>
           </div>
