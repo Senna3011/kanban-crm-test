@@ -783,7 +783,8 @@ export default function CampaignWorkspacePage({
           <div className="flex flex-wrap items-center gap-2">
             <button
               onClick={() => setIsTestSendOpen(true)}
-              className="px-3 py-2 bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-300 text-xs font-bold rounded-xl transition-colors flex items-center gap-1.5 shadow-2xs"
+              disabled={Boolean(actionLoading) || loading}
+              className="px-3 py-2 bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-300 text-xs font-bold rounded-xl transition-colors flex items-center gap-1.5 shadow-2xs disabled:opacity-50"
               title="Dispatch immediate test email to your personal inbox"
             >
               <span>⚡</span>
@@ -791,7 +792,8 @@ export default function CampaignWorkspacePage({
             </button>
             <button
               onClick={() => setIsAddLeadOpen(true)}
-              className="px-3 py-2 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-300 text-xs font-bold rounded-xl transition-colors flex items-center gap-1.5 shadow-2xs"
+              disabled={Boolean(actionLoading) || loading}
+              className="px-3 py-2 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-300 text-xs font-bold rounded-xl transition-colors flex items-center gap-1.5 shadow-2xs disabled:opacity-50"
             >
               <span>➕</span>
               <span>Add Custom Lead</span>
@@ -815,8 +817,9 @@ export default function CampaignWorkspacePage({
             </button>
             <button
               onClick={handleExportCsv}
-              disabled={exportingCsv || Boolean(actionLoading) || loading}
+              disabled={exportingCsv || Boolean(actionLoading) || loading || allLeads.length === 0}
               className="px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold rounded-xl transition-colors flex items-center gap-1.5 disabled:opacity-50"
+              title={allLeads.length === 0 ? 'No leads available to export' : 'Export leads to CSV'}
             >
               <span>📊</span>
               <span>Export CSV</span>
@@ -1086,14 +1089,27 @@ export default function CampaignWorkspacePage({
         </div>
 
         {allLeads.length === 0 ? (
-          <div className="p-12 text-center text-xs text-slate-400 space-y-2">
-            <p>No leads sourced yet for this campaign.</p>
-            <button
-              onClick={() => handleSourceLeads()}
-              className="px-4 py-2 bg-primary-600 text-white font-bold rounded-xl text-xs"
-            >
-              Source Target Leads Now →
-            </button>
+          <div className="p-12 text-center text-xs text-slate-400 space-y-3">
+            {actionLoading === 'scrape' ? (
+              <div className="space-y-3 max-w-sm mx-auto animate-in fade-in">
+                <div className="w-8 h-8 border-3 border-primary-600 border-t-transparent rounded-full animate-spin mx-auto" />
+                <p className="text-sm font-bold text-slate-800">Searching Initial Prospects from LinkedIn...</p>
+                <p className="text-xs text-slate-500">
+                  Please wait while the discovery engine extracts targeted leads matching your ICP criteria.
+                </p>
+              </div>
+            ) : (
+              <>
+                <p>No leads sourced yet for this campaign.</p>
+                <button
+                  onClick={() => handleSourceLeads()}
+                  disabled={Boolean(actionLoading) || loading}
+                  className="px-4 py-2 bg-primary-600 hover:bg-primary-700 text-white font-bold rounded-xl text-xs transition-colors shadow-xs disabled:opacity-50"
+                >
+                  Source Target Leads Now →
+                </button>
+              </>
+            )}
           </div>
         ) : (
           <div className="overflow-x-auto">
