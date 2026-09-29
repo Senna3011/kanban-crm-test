@@ -16,7 +16,14 @@ export async function GET() {
     boards = await prisma.board.findMany({
       where: { tenantId },
       orderBy: { createdAt: 'asc' },
-      select: { id: true, title: true },
+      select: {
+        id: true,
+        title: true,
+        columns: {
+          select: { id: true, title: true, position: true },
+          orderBy: { position: 'asc' },
+        },
+      },
     });
   } else {
     // Check if user has specific assigned boards inside tenant companyInfo or default to all
@@ -39,14 +46,28 @@ export async function GET() {
       boards = await prisma.board.findMany({
         where: { tenantId, id: { in: allowedIds } },
         orderBy: { createdAt: 'asc' },
-        select: { id: true, title: true },
+        select: {
+          id: true,
+          title: true,
+          columns: {
+            select: { id: true, title: true, position: true },
+            orderBy: { position: 'asc' },
+          },
+        },
       });
     } else {
       // Default: see all boards in tenant
       boards = await prisma.board.findMany({
         where: { tenantId },
         orderBy: { createdAt: 'asc' },
-        select: { id: true, title: true },
+        select: {
+          id: true,
+          title: true,
+          columns: {
+            select: { id: true, title: true, position: true },
+            orderBy: { position: 'asc' },
+          },
+        },
       });
     }
   }

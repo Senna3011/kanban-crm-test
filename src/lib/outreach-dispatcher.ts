@@ -375,10 +375,11 @@ export async function convertOutreachLeadToKanbanCard(params: {
     data: {
       type: 'LEAD_CONVERTED',
       content: {
-        message: `Converted from Outreach Campaign: "${lead.campaign.name}" to column "${targetColumn.title}"`,
+        message: `Imported from Outreach Campaign: "${lead.campaign.name}" to column "${targetColumn.title}"`,
+        campaignName: lead.campaign.name,
+        columnTitle: targetColumn.title,
         leadId: lead.id,
         columnId: targetColumn.id,
-        columnTitle: targetColumn.title,
         convertedAt: new Date(),
       },
       cardId: card.id,

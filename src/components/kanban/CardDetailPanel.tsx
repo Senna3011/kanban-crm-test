@@ -101,6 +101,15 @@ function parseActivityPayload(type: string, rawContent: any): { title: string; s
         summary: `Card moved ${from} ${to}`.trim(),
       };
     }
+    case 'LEAD_CONVERTED':
+    case 'lead_converted': {
+      const campaignName = c?.campaignName || (typeof c?.message === 'string' ? c.message.match(/Campaign:\s*"([^"]+)"/)?.[1] : null) || 'Outreach Campaign';
+      const colTitle = c?.columnTitle || 'Leads';
+      return {
+        title: 'Lead Imported',
+        summary: `Imported from campaign "${campaignName}" into "${colTitle}" stage.`,
+      };
+    }
     default: {
       const fallbackTitle = type.replace(/_/g, ' ').replace(/\b\w/g, (l) => l.toUpperCase());
       let fallbackSummary = '';
