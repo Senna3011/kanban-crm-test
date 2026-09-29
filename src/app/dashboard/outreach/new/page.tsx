@@ -347,14 +347,14 @@ export default function NewOutreachCampaignPage() {
                 </select>
               </div>
               <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">Discovery Engine Provider</label>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">Lead Discovery Channel</label>
                 <select
                   value={leadProvider}
                   onChange={(e) => setLeadProvider(e.target.value as 'apify' | 'outscraper')}
                   className="w-full px-3.5 py-2.5 border border-slate-300 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-primary-500 bg-white font-medium"
                 >
-                  <option value="apify">Apify (LinkedIn B2B Executives & Decision Makers)</option>
-                  <option value="outscraper">Outscraper (Google Maps & Business Contacts)</option>
+                  <option value="apify">Executive Search (B2B Leaders & Decision Makers)</option>
+                  <option value="outscraper">Business & Local Search (Commercial Places & Direct Contacts)</option>
                 </select>
               </div>
               <div>

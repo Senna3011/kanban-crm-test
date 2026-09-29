@@ -158,7 +158,13 @@ export default function CampaignWorkspacePage({
     setLoading(true);
     setError('');
     try {
-      const res = await fetch(`/api/outreach/campaigns/${campaignId}`);
+      const res = await fetch(`/api/outreach/campaigns/${campaignId}`, {
+        cache: 'no-store',
+        headers: {
+          'Cache-Control': 'no-cache, no-store, must-revalidate',
+          Pragma: 'no-cache',
+        },
+      });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Failed to load campaign');
       setCampaign(data);
@@ -920,7 +926,7 @@ export default function CampaignWorkspacePage({
               onClick={() => handleVerifyEmails()}
               disabled={Boolean(actionLoading) || unverifiedCount === 0 || leadsWithEmail === 0}
               className="mt-2 w-full py-1 bg-emerald-600 hover:bg-emerald-500 text-white text-[11px] font-semibold rounded-lg transition-colors flex items-center justify-center gap-1 disabled:opacity-40"
-              title="Verify inbox existence via Reoon/Bouncer/Hunter fallback chain"
+              title="Verify mailbox deliverability and safety score"
             >
               {actionLoading === 'verify' ? (
                 <span className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin" />

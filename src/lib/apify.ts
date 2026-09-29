@@ -148,7 +148,7 @@ async function runActorAsync(
 
   if (!startRes.ok) {
     const err = await startRes.text();
-    throw new Error(`Failed to start Apify actor ${actorSlug} (${startRes.status}): ${err}`);
+    throw new Error(`Failed to start lead discovery actor (${startRes.status}): ${err}`);
   }
 
   const runData = await startRes.json();
@@ -156,7 +156,7 @@ async function runActorAsync(
   const defaultDatasetId = runData.data?.defaultDatasetId;
 
   if (!runId) {
-    throw new Error('Apify did not return a valid run ID');
+    throw new Error('Lead discovery did not return a valid task ID');
   }
 
   const startTime = Date.now();
@@ -176,7 +176,7 @@ async function runActorAsync(
       onProgress({
         fetched: 0,
         target: 0,
-        status: `Apify Actor ${actorSlug} status: ${status}...`,
+        status: `Discovery service status: ${status}...`,
       });
     }
 
@@ -185,35 +185,98 @@ async function runActorAsync(
     }
 
     if (status === 'FAILED' || status === 'ABORTED' || status === 'TIMED-OUT') {
-      throw new Error(`Apify Actor ${actorSlug} ended with status: ${status}`);
+      throw new Error(`Discovery service ended with status: ${status}`);
     }
   }
 
-  throw new Error(`Apify Actor ${actorSlug} timed out after ${timeoutSec}s`);
+  throw new Error(`Discovery service timed out after ${timeoutSec}s`);
 }
 
 /**
- * Executes a search run against Google Search Scraper Actor (supports sync for small and async for bulk)
+ * Generates multi-line query variations to bypass single-query search ceilings (yields 100-1,000+ leads)
+ */
+function buildMultiLineSearchQueries(params: ApifySearchParams, isTargetingIndonesia: boolean, countryCode: string): string {
+  const role = (params.role || params.query || 'Executive').trim();
+  const loc = (params.location || '').trim();
+  const industry = (params.industry || '').trim();
+
+  const queries: string[] = [];
+
+  // Synonyms mapping for high-yield B2B role variations
+  const roleLower = role.toLowerCase();
+  const roleSynonyms: string[] = [role];
+
+  if (roleLower.includes('technology') || roleLower.includes('cto')) {
+    roleSynonyms.push('CTO', 'Chief Technology Officer', 'Head of Engineering', 'VP Engineering', 'Director of Technology');
+  } else if (roleLower.includes('sales') || roleLower.includes('revenue') || roleLower.includes('cro')) {
+    roleSynonyms.push('VP Sales', 'Head of Sales', 'Sales Director', 'Chief Commercial Officer', 'Business Development Director');
+  } else if (roleLower.includes('marketing') || roleLower.includes('cmo')) {
+    roleSynonyms.push('CMO', 'Chief Marketing Officer', 'Head of Marketing', 'VP Marketing', 'Marketing Director');
+  } else if (roleLower.includes('ceo') || roleLower.includes('founder') || roleLower.includes('owner')) {
+    roleSynonyms.push('CEO', 'Founder', 'Co-Founder', 'Managing Director', 'President Director');
+  } else if (roleLower.includes('finance') || roleLower.includes('cfo')) {
+    roleSynonyms.push('CFO', 'Chief Financial Officer', 'Finance Director', 'Head of Finance');
+  } else if (roleLower.includes('product') || roleLower.includes('cpo')) {
+    roleSynonyms.push('CPO', 'Chief Product Officer', 'Head of Product', 'VP Product');
+  } else if (roleLower.includes('operations') || roleLower.includes('coo')) {
+    roleSynonyms.push('COO', 'Chief Operating Officer', 'Operations Director', 'Head of Operations');
+  }
+
+  const uniqueRoles = Array.from(new Set(roleSynonyms)).slice(0, 5);
+
+  for (const r of uniqueRoles) {
+    if (isTargetingIndonesia) {
+      queries.push(`site:id.linkedin.com/in/ "${r}"`);
+      queries.push(`site:linkedin.com/in/ "${r}" "Indonesia"`);
+      if (loc && loc.toLowerCase() !== 'indonesia') {
+        queries.push(`site:linkedin.com/in/ "${r}" "${loc}"`);
+      }
+    } else if (countryCode === 'sg') {
+      queries.push(`site:sg.linkedin.com/in/ "${r}"`);
+      queries.push(`site:linkedin.com/in/ "${r}" "Singapore"`);
+    } else if (countryCode === 'gb') {
+      queries.push(`site:uk.linkedin.com/in/ "${r}"`);
+      queries.push(`site:linkedin.com/in/ "${r}" "United Kingdom"`);
+    } else {
+      queries.push(`site:linkedin.com/in/ "${r}" ${loc ? `"${loc}"` : '"United States"'}`);
+    }
+  }
+
+  if (industry && !industry.toLowerCase().includes('all')) {
+    queries.push(`site:linkedin.com/in/ "${role}" "${industry}" ${loc ? `"${loc}"` : ''}`.trim());
+  }
+
+  if (params.query && !params.role) {
+    queries.push(`site:linkedin.com/in/ ${params.query}`);
+  }
+
+  return Array.from(new Set(queries)).join('\n');
+}
+
+/**
+ * Executes a search run against Google Search Scraper Actor with multi-page aggregation
  */
 async function executeGoogleSearchScraper(
-  query: string,
+  multiQuery: string,
   countryCode: string,
   limit: number,
   token: string,
   onProgress?: (progress: { fetched: number; target: number; status: string }) => void
 ): Promise<any[]> {
   const actorSlug = 'apify~google-search-scraper';
-  const maxPages = Math.min(Math.max(Math.ceil(limit / 10), 1), 100);
+  // Scale pages and results according to target limit
+  const queryCount = multiQuery.split('\n').filter(Boolean).length || 1;
+  const maxPages = Math.min(Math.max(Math.ceil((limit * 1.5) / (queryCount * 10)), 1), 10);
   const resultsPerPage = Math.min(Math.max(limit, 25), 100);
 
-  // Fast synchronous path for small limits (<= 50)
-  if (limit <= 50) {
+  // Fast synchronous path for small limits (<= 30)
+  if (limit <= 30) {
     const endpoint = `https://api.apify.com/v2/acts/${encodeURIComponent(actorSlug)}/run-sync-get-dataset-items?token=${encodeURIComponent(token)}`;
     const response = await fetch(endpoint, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
       body: JSON.stringify({
-        queries: query,
+        queries: multiQuery,
         countryCode,
         maxPagesPerQuery: maxPages,
         resultsPerPage,
@@ -222,22 +285,31 @@ async function executeGoogleSearchScraper(
 
     if (!response.ok) {
       const errText = await response.text();
-      throw new Error(`Lead search request failed (${response.status}): ${errText || 'Invalid token or quota exceeded'}`);
+      throw new Error(`Lead search request failed (${response.status}): ${errText || 'Invalid credentials or quota limit'}`);
     }
 
     const data = await response.json();
-    const organicResults: any[] = Array.isArray(data) && data[0]?.organicResults
-      ? data[0].organicResults
-      : (Array.isArray(data) ? data : []);
+    const allOrganic: any[] = [];
 
-    return organicResults.filter((item) => item.url && item.url.includes('linkedin.com/in/'));
+    // Aggregates across all returned pages (fixes 10-lead single page ceiling!)
+    if (Array.isArray(data)) {
+      for (const page of data) {
+        if (page?.organicResults && Array.isArray(page.organicResults)) {
+          allOrganic.push(...page.organicResults);
+        } else if (page?.url) {
+          allOrganic.push(page);
+        }
+      }
+    }
+
+    return allOrganic.filter((item) => item.url && item.url.includes('linkedin.com/in/'));
   }
 
-  // Asynchronous dataset streaming for bulk scale (> 50 to 50,000)
+  // Asynchronous dataset streaming for bulk scale (> 30 to 50,000)
   const datasetId = await runActorAsync(
     actorSlug,
     {
-      queries: query,
+      queries: multiQuery,
       countryCode,
       maxPagesPerQuery: maxPages,
       resultsPerPage,
@@ -247,7 +319,7 @@ async function executeGoogleSearchScraper(
     onProgress
   );
 
-  const rawItems = await fetchAllDatasetItems(datasetId, token, limit * 2, onProgress);
+  const rawItems = await fetchAllDatasetItems(datasetId, token, limit * 3, onProgress);
   const allResults: any[] = [];
   for (const page of rawItems) {
     if (page?.organicResults && Array.isArray(page.organicResults)) {
@@ -267,7 +339,7 @@ export async function scrapeApifyLeads(
   const limit = Math.max(params.limit || 10, 1);
 
   if (!token) {
-    throw new Error('Lead Discovery API token is not configured. Please set your token in Outreach Settings or .env');
+    throw new Error('Lead Discovery service is temporarily unconfigured. Please check system credentials.');
   }
 
   if (params.linkedinUrls && params.linkedinUrls.length > 0) {
@@ -282,61 +354,47 @@ export async function scrapeApifyLeads(
     locLower === 'us' ||
     locLower.includes('america');
 
-  const isTargetingIndonesia = locLower.includes('indonesia') || locLower.includes('jakarta');
+  const isTargetingIndonesia = locLower.includes('indonesia') || locLower.includes('jakarta') || locLower.includes('surabaya') || locLower.includes('bandung') || locLower.includes('bali');
   const isTargetingSingapore = locLower.includes('singapore');
   const isTargetingUK = locLower.includes('uk') || locLower.includes('united kingdom');
 
   const countryCode = isTargetingUS ? 'us' : isTargetingIndonesia ? 'id' : isTargetingSingapore ? 'sg' : isTargetingUK ? 'gb' : 'us';
 
-  const searchTerms: string[] = [];
-  if (params.role) searchTerms.push(`"${params.role.trim()}"`);
-  if (isTargetingUS) searchTerms.push('"United States"');
-  else if (isTargetingIndonesia) searchTerms.push('"Indonesia"');
-  else if (isTargetingSingapore) searchTerms.push('"Singapore"');
-  else if (isTargetingUK) searchTerms.push('"United Kingdom"');
-  else if (params.location) searchTerms.push(`"${params.location.trim()}"`);
+  const multiQuery = buildMultiLineSearchQueries(params, isTargetingIndonesia, countryCode);
 
-  if (params.query && !params.role) searchTerms.push(params.query.trim());
+  const rawLinkedinResults = await executeGoogleSearchScraper(multiQuery, countryCode, limit, token, params.onProgress);
 
-  const combinedSearch = searchTerms.filter(Boolean).join(' ');
-  const primaryQuery = `site:linkedin.com/in/ ${combinedSearch}`.trim();
+  // Geographic Filter & Deduplication
+  const seenUrls = new Set<string>();
+  const candidates: ApifyScrapedLead[] = [];
 
-  let rawLinkedinResults = await executeGoogleSearchScraper(primaryQuery, countryCode, limit, token, params.onProgress);
+  for (const item of rawLinkedinResults) {
+    const url = (item.url || '').split('?')[0].toLowerCase();
+    if (!url || seenUrls.has(url)) continue;
 
-  if (rawLinkedinResults.length === 0) {
-    const relaxedTerms = [params.role, params.location].filter(Boolean).join(' ');
-    const relaxedQuery = `site:linkedin.com/in/ ${relaxedTerms}`.trim();
-    try {
-      rawLinkedinResults = await executeGoogleSearchScraper(relaxedQuery, countryCode, limit, token, params.onProgress);
-    } catch {
-      // Keep empty if relaxed query fails
+    if (isTargetingUS) {
+      let isForeign = false;
+      for (const sub of FOREIGN_SUBDOMAINS) {
+        if (url.includes(`://${sub}.linkedin.com/in/`)) {
+          isForeign = true;
+          break;
+        }
+      }
+      if (isForeign) continue;
+    }
+
+    if (isTargetingIndonesia) {
+      if (url.includes('in.linkedin.com') || url.includes('pk.linkedin.com')) continue;
+    }
+
+    seenUrls.add(url);
+    const parsed = parseGoogleOrganicToLead(item, params, isTargetingUS ? 'United States' : isTargetingIndonesia ? 'Indonesia' : undefined);
+    if (isValidHumanProspect(parsed)) {
+      candidates.push(parsed);
     }
   }
 
-  const geoFilteredResults = rawLinkedinResults.filter((item) => {
-    const url = (item.url || '').toLowerCase();
-    if (isTargetingUS) {
-      for (const sub of FOREIGN_SUBDOMAINS) {
-        if (url.includes(`://${sub}.linkedin.com/in/`)) return false;
-      }
-      return true;
-    }
-    if (isTargetingIndonesia) {
-      if (url.includes('in.linkedin.com') || url.includes('pk.linkedin.com')) return false;
-      return true;
-    }
-    return true;
-  });
-
-  const candidates = (geoFilteredResults.length > 0 ? geoFilteredResults : rawLinkedinResults)
-    .map((item) => parseGoogleOrganicToLead(item, params, isTargetingUS ? 'United States' : undefined))
-    .filter(isValidHumanProspect);
-
-  const finalCandidates = candidates.length > 0
-    ? candidates
-    : rawLinkedinResults.map((item) => parseGoogleOrganicToLead(item, params, isTargetingUS ? 'United States' : undefined)).filter(isValidHumanProspect);
-
-  return finalCandidates.slice(0, limit);
+  return candidates.slice(0, limit);
 }
 
 async function scrapeDirectLinkedInUrls(
@@ -359,7 +417,7 @@ async function scrapeDirectLinkedInUrls(
     });
 
     if (!response.ok) {
-      throw new Error(`Profile scraper responded with ${response.status}`);
+      throw new Error(`Profile discovery service returned status ${response.status}`);
     }
 
     const items = await response.json();
@@ -382,7 +440,7 @@ async function scrapeDirectLinkedInUrls(
 function mapHarvestItemToLead(item: any): ApifyScrapedLead {
   const company = item.company || item.companyName || '';
   return {
-    fullName: `${item.firstName || ''} ${item.lastName || ''}`.trim() || item.name || 'LinkedIn Prospect',
+    fullName: `${item.firstName || ''} ${item.lastName || ''}`.trim() || item.name || 'Prospect Contact',
     firstName: item.firstName || undefined,
     lastName: item.lastName || undefined,
     jobTitle: item.headline || item.title || item.occupation || 'Executive',
@@ -393,7 +451,7 @@ function mapHarvestItemToLead(item: any): ApifyScrapedLead {
     email: item.email || (Array.isArray(item.emails) ? item.emails[0] : undefined),
     summary: item.summary || item.about || undefined,
     metadata: {
-      source: 'harvestapi-direct',
+      source: 'profile-discovery-direct',
       scrapedAt: new Date().toISOString(),
     },
   };
@@ -461,9 +519,8 @@ function parseGoogleOrganicToLead(item: any, params: ApifySearchParams, forcedLo
     linkedinUrl: cleanUrl,
     location,
     summary: item.description || `Experienced ${jobTitle} at ${companyName}.`,
-    // Lean metadata to prevent Supabase 500MB DB bloat
     metadata: {
-      source: 'linkedin-google-live',
+      source: 'discovery-live',
       scrapedAt: new Date().toISOString(),
     },
   };
