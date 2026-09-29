@@ -39,6 +39,9 @@ const GENERIC_NON_COMPANY_PATTERNS = [
   'none',
 ];
 
+// In-memory LRU Cache for high-scale batch operations (max 5,000 entries)
+const domainCache = new Map<string, string | null>();
+
 /**
  * Checks whether a given string is a generic industry/placeholder, not a specific company name.
  */
@@ -71,11 +74,16 @@ export function sanitizeCompanyName(companyName: string): string {
 }
 
 /**
- * Primary domain lookup via Clearbit Autocomplete API (Free, high-accuracy).
+ * Primary domain lookup via Clearbit Autocomplete API with caching.
  */
 export async function lookupDomainViaClearbit(companyName: string): Promise<string | null> {
   const sanitized = sanitizeCompanyName(companyName);
   if (!sanitized || sanitized.length < 2) return null;
+
+  const cacheKey = sanitized.toLowerCase();
+  if (domainCache.has(cacheKey)) {
+    return domainCache.get(cacheKey) || null;
+  }
 
   try {
     const controller = new AbortController();
@@ -89,15 +97,21 @@ export async function lookupDomainViaClearbit(companyName: string): Promise<stri
     });
     clearTimeout(timeout);
 
-    if (!res.ok) return null;
+    if (!res.ok) {
+      if (domainCache.size < 5000) domainCache.set(cacheKey, null);
+      return null;
+    }
 
     const data = await res.json();
     if (Array.isArray(data) && data.length > 0 && data[0]?.domain) {
       const resolvedDomain = String(data[0].domain).toLowerCase().trim();
       if (resolvedDomain.includes('.') && !resolvedDomain.includes(' ')) {
+        if (domainCache.size < 5000) domainCache.set(cacheKey, resolvedDomain);
         return resolvedDomain;
       }
     }
+
+    if (domainCache.size < 5000) domainCache.set(cacheKey, null);
     return null;
   } catch {
     return null;
@@ -107,7 +121,7 @@ export async function lookupDomainViaClearbit(companyName: string): Promise<stri
 /**
  * Comprehensive Domain Resolver:
  * 1. Validates company name (rejects generic industry categories).
- * 2. Attempts Clearbit Autocomplete for authentic corporate domain.
+ * 2. Attempts Clearbit Autocomplete with cache for authentic corporate domain.
  * 3. Falls back to sanitized slug domain if lookup fails.
  */
 export async function resolveCompanyDomain(

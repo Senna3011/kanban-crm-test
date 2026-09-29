@@ -128,9 +128,10 @@ export default function CampaignWorkspacePage({
     fetchCampaign().then((loadedCampaign) => {
       const autoSource = searchParams?.get('autoSource');
       const limit = Number(searchParams?.get('limit')) || 10;
+      const provider = searchParams?.get('provider') || undefined;
       if (autoSource === 'true' && !autoSourceTriggered.current && loadedCampaign?.leads?.length === 0) {
         autoSourceTriggered.current = true;
-        handleSourceLeads(limit);
+        handleSourceLeads(limit, provider);
       }
     });
   }, [campaignId]);
@@ -192,17 +193,22 @@ export default function CampaignWorkspacePage({
   }
 
   // 1. Source More Leads
-  async function handleSourceLeads(customLimit?: number) {
+  async function handleSourceLeads(customLimit?: number, customProvider?: string) {
     setActionLoading('scrape');
     try {
+      const provider = customProvider || searchParams?.get('provider') || 'apify';
       const res = await fetch(`/api/outreach/campaigns/${campaignId}/scrape`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ limit: customLimit || 10 }),
+        body: JSON.stringify({ limit: customLimit || 10, provider }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Failed to source leads');
-      toast.success(`Successfully sourced ${data.count} targeted prospects.`);
+      if (data.queued) {
+        toast.success(data.message || `Pencarian ${customLimit || 10} leads dijadwalkan di background worker.`);
+      } else {
+        toast.success(`Successfully sourced ${data.count} targeted prospects.`);
+      }
       await fetchCampaign();
     } catch (err: any) {
       toast.error(`Discovery error: ${err.message}`);

@@ -43,3 +43,25 @@ export interface OutreachDispatchJob {
   tenantId: string;
   leadId: string;
 }
+
+export interface OutreachScrapeJob {
+  type: 'outreach_scrape';
+  tenantId: string;
+  campaignId: string;
+  query?: string;
+  role?: string;
+  location?: string;
+  industry?: string;
+  limit: number;
+  provider?: 'apify' | 'outscraper';
+  apiToken?: string;
+}
+
+export interface OutreachVerifyJob {
+  type: 'outreach_verify_batch';
+  tenantId: string;
+  campaignId: string;
+  leadIds?: string[];
+  reoonApiKey?: string;
+}
+

@@ -6,9 +6,31 @@ import { processAutoAdvance } from './auto-advance';
 import { processNotification } from './notification';
 import { processAIClassify, processAIDraft } from './ai-processor';
 import { processOutreachDispatch } from './outreach-dispatch';
+import { processOutreachScrape } from './outreach-scrape';
+import { processOutreachVerify } from './outreach-verify';
 import { startSchedulers } from './scheduler';
 
 console.log('[Worker] Starting all workers...');
+
+// Outreach scrape worker (handles bulk Apify & Outscraper discovery)
+new Worker(
+  QueueNames.OUTREACH_SCRAPE,
+  async (job) => processOutreachScrape(job.data),
+  {
+    connection,
+    concurrency: 2,
+  }
+);
+
+// Outreach verify worker (handles Reoon bulk & multi-provider verification)
+new Worker(
+  QueueNames.OUTREACH_VERIFY,
+  async (job) => processOutreachVerify(job.data),
+  {
+    connection,
+    concurrency: 3,
+  }
+);
 
 // Outreach dispatch worker
 new Worker(

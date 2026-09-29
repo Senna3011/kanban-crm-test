@@ -52,28 +52,27 @@ export async function POST(
   let fallbackSyncCount = 0;
 
   try {
-    // Enqueue jobs to BullMQ background queue with staggered delays
-    for (let i = 0; i < leads.length; i++) {
-      const lead = leads[i];
-      await outreachDispatchQueue.add(
-        'outreach_dispatch',
-        {
-          type: 'outreach_dispatch',
-          tenantId,
-          leadId: lead.id,
-        },
-        {
-          delay: i * 2000, // Stagger 2s per lead
-          attempts: 2,
-          backoff: { type: 'exponential', delay: 5000 },
-          removeOnComplete: true,
-        }
-      );
-      enqueuedCount++;
-    }
+    // Bulk enqueue to BullMQ with staggered delay per email (prevents N Redis network roundtrips)
+    const bulkJobs = leads.map((lead, i) => ({
+      name: 'outreach_dispatch',
+      data: {
+        type: 'outreach_dispatch' as const,
+        tenantId,
+        leadId: lead.id,
+      },
+      opts: {
+        delay: i * 2000, // Stagger 2s per lead
+        attempts: 2,
+        backoff: { type: 'exponential', delay: 5000 },
+        removeOnComplete: true,
+      },
+    }));
+
+    await outreachDispatchQueue.addBulk(bulkJobs);
+    enqueuedCount = bulkJobs.length;
   } catch (queueError) {
     console.warn('[OUTREACH DISPATCH] Queue unavailable, falling back to direct dispatch:', queueError);
-    for (let i = 0; i < leads.length; i++) {
+    for (let i = 0; i < Math.min(leads.length, 20); i++) {
       const lead = leads[i];
       await dispatchColdEmail({ leadId: lead.id, tenantId });
       fallbackSyncCount++;

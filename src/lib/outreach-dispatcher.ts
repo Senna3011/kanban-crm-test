@@ -1,4 +1,4 @@
-import nodemailer from 'nodemailer';
+import nodemailer, { Transporter } from 'nodemailer';
 import { prisma } from './prisma';
 
 export async function waitWithJitter(baseMs = 3000, jitterMs = 6000): Promise<void> {
@@ -15,6 +15,38 @@ export interface DispatchResult {
   success: boolean;
   messageId?: string;
   error?: string;
+}
+
+const transporterPool = new Map<string, Transporter>();
+
+function getPooledTransporter(
+  host: string,
+  port: number,
+  user: string,
+  pass: string
+): Transporter {
+  const key = `${host}:${port}:${user}`;
+  let transporter = transporterPool.get(key);
+  if (!transporter) {
+    transporter = nodemailer.createTransport({
+      host,
+      port,
+      secure: port === 465,
+      pool: true,
+      maxConnections: 5,
+      maxMessages: 100,
+      auth: {
+        user,
+        pass,
+      },
+      tls: {
+        rejectUnauthorized: process.env.NODE_ENV === 'production',
+        minVersion: 'TLSv1.2',
+      },
+    });
+    transporterPool.set(key, transporter);
+  }
+  return transporter;
 }
 
 export async function dispatchColdEmail(params: DispatchLeadEmailParams): Promise<DispatchResult> {
@@ -166,19 +198,12 @@ export async function dispatchColdEmail(params: DispatchLeadEmailParams): Promis
   </div>`;
 
   try {
-    const transporter = nodemailer.createTransport({
-      host: smtpHost,
-      port: smtpPort,
-      secure: smtpPort === 465,
-      auth: {
-        user: smtpUser,
-        pass: smtpPass,
-      },
-      tls: {
-        rejectUnauthorized: process.env.NODE_ENV === 'production',
-        minVersion: 'TLSv1.2',
-      },
-    });
+    const transporter = getPooledTransporter(
+      smtpHost || 'smtp.zoho.com',
+      Number(smtpPort) || 465,
+      smtpUser,
+      smtpPass
+    );
 
     const info = await transporter.sendMail({
       from: `"${senderName}" <${senderEmail}>`,

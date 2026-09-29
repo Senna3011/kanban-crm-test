@@ -355,6 +355,12 @@ model OutreachLead {
   campaign   OutreachCampaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
 
   @@index([campaignId])
+  @@index([campaignId, status])
+  @@index([campaignId, verifyStatus])
+  @@index([campaignId, email])
+  @@index([campaignId, linkedinUrl])
+  @@index([status])
+  @@index([verifyStatus])
   @@index([email])
 }
 

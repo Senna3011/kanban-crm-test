@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
+import ConfirmDialog from '@/components/ui/ConfirmDialog';
 
 interface OutreachAccount {
   id: string;
@@ -45,6 +46,8 @@ export default function OutreachSettingsPage() {
   const [knowledgeBase, setKnowledgeBase] = useState('We partner with tech-forward enterprises to build custom software, eliminate sales/support bottlenecks, and scale operations.');
   const [customPrompt, setCustomPrompt] = useState('Offer a complimentary 10-minute discovery call and software architecture audit. Focus on how automation eliminates manual workload.');
   const [savingPrompt, setSavingPrompt] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<{ id: string; name: string } | null>(null);
+  const [deleting, setDeleting] = useState(false);
 
   useEffect(() => {
     fetchAccounts();
@@ -213,16 +216,20 @@ export default function OutreachSettingsPage() {
     }
   }
 
-  async function handleDelete(id: string, accName: string) {
-    if (!confirm(`Are you sure you want to delete account "${accName}"?`)) return;
+  async function confirmDeleteAccount() {
+    if (!deleteTarget) return;
+    setDeleting(true);
     try {
-      const res = await fetch(`/api/outreach/accounts/${id}`, { method: 'DELETE' });
+      const res = await fetch(`/api/outreach/accounts/${deleteTarget.id}`, { method: 'DELETE' });
       if (!res.ok) throw new Error('Failed to delete account');
       setSuccess('Account deleted successfully.');
-      if (editingId === id) resetFormNew();
+      if (editingId === deleteTarget.id) resetFormNew();
+      setDeleteTarget(null);
       await fetchAccounts();
     } catch (err: any) {
       setError(err.message);
+    } finally {
+      setDeleting(false);
     }
   }
 
@@ -337,7 +344,7 @@ export default function OutreachSettingsPage() {
                         <button
                           onClick={(e) => {
                             e.stopPropagation();
-                            handleDelete(acc.id, acc.name);
+                            setDeleteTarget({ id: acc.id, name: acc.name });
                           }}
                           className="text-red-500 hover:text-red-700 font-semibold"
                         >
@@ -583,6 +590,19 @@ export default function OutreachSettingsPage() {
           </div>
         </form>
       )}
+
+      {/* Delete Confirmation Modal */}
+      <ConfirmDialog
+        isOpen={Boolean(deleteTarget)}
+        title="Delete Mailbox Account"
+        message={`Are you sure you want to delete mailbox account "${deleteTarget?.name}"? Any campaigns attached will need a new sender configured.`}
+        confirmText="Delete Mailbox"
+        cancelText="Cancel"
+        variant="danger"
+        isLoading={deleting}
+        onConfirm={confirmDeleteAccount}
+        onCancel={() => setDeleteTarget(null)}
+      />
     </div>
   );
 }

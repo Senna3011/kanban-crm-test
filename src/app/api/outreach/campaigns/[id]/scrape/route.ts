@@ -3,6 +3,8 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/server/auth';
 import prisma from '@/lib/prisma';
 import { scrapeApifyLeads } from '@/lib/apify';
+import { scrapeOutscraperLeads } from '@/lib/outscraper';
+import { outreachScrapeQueue } from '@/../queue';
 
 export async function POST(
   req: NextRequest,
@@ -33,22 +35,61 @@ export async function POST(
     const location = body.location || campaign.targetLocation || undefined;
     const industry = body.industry || campaign.targetIndustry || undefined;
     const limit = Number(body.limit) || 10;
+    const provider = (body.provider === 'outscraper' ? 'outscraper' : 'apify') as 'apify' | 'outscraper';
     const linkedinUrls = Array.isArray(body.linkedinUrls) ? body.linkedinUrls : undefined;
 
-    // Use account specific token if configured, otherwise env default
-    const apiToken = campaign.account?.apifyApiToken || process.env.APIFY_API_TOKEN || process.env.APIFY_API_KEY;
-    const actorId = process.env.APIFY_ACTOR_ID || 'harvestapi/linkedin-profile-scraper';
+    // For massive scale (> 30 leads or async requested), enqueue to BullMQ background worker
+    if (limit > 30 || body.async === true) {
+      const job = await outreachScrapeQueue.add(
+        'outreach_scrape',
+        {
+          type: 'outreach_scrape',
+          tenantId,
+          campaignId: campaign.id,
+          query,
+          role,
+          location,
+          industry,
+          limit,
+          provider,
+          apiToken: campaign.account?.apifyApiToken || process.env.APIFY_API_TOKEN,
+        },
+        {
+          attempts: 2,
+          backoff: { type: 'exponential', delay: 5000 },
+          removeOnComplete: true,
+        }
+      );
 
-    const scrapedLeads = await scrapeApifyLeads({
-      query,
-      role,
-      location,
-      industry,
-      limit,
-      linkedinUrls,
-      apiToken,
-      actorId,
-    });
+      return NextResponse.json({
+        success: true,
+        queued: true,
+        jobId: job.id,
+        message: `Pencarian ${limit} leads dijadwalkan di background worker (${provider.toUpperCase()}).`,
+      });
+    }
+
+    // Fast synchronous scrape for interactive UI (<= 30 items)
+    const apiToken = campaign.account?.apifyApiToken || process.env.APIFY_API_TOKEN || process.env.APIFY_API_KEY;
+
+    let scrapedLeads = [];
+    if (provider === 'outscraper' || (!apiToken && process.env.OUTSCRAPER_API_KEY)) {
+      scrapedLeads = await scrapeOutscraperLeads({
+        query: query || role || 'Business Executive',
+        location: location || 'Indonesia',
+        limit,
+      });
+    } else {
+      scrapedLeads = await scrapeApifyLeads({
+        query,
+        role,
+        location,
+        industry,
+        limit,
+        linkedinUrls,
+        apiToken,
+      });
+    }
 
     // Check leads existing specifically in this campaign
     const campaignLeads = await prisma.outreachLead.findMany({
@@ -85,8 +126,7 @@ export async function POST(
           status: 'SCRAPED',
           metadata: {
             summary: lead.summary ? String(lead.summary) : undefined,
-            source: 'linkedin-discovery',
-            ...(lead.metadata || {}),
+            source: lead.metadata?.source || 'discovery-live',
             scrapedAt: new Date().toISOString(),
           },
           campaignId: campaign.id,

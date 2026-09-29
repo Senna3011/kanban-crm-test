@@ -5,6 +5,7 @@ import prisma from '@/lib/prisma';
 import { findAndVerifyProspectEmail, verifyEmailAddress } from '@/lib/email-verifier';
 import { resolveCompanyDomain } from '@/lib/domain-resolver';
 import { generateEmailPermutations } from '@/lib/email-pattern-generator';
+import { outreachVerifyQueue } from '@/../queue';
 
 export async function POST(
   req: NextRequest,
@@ -31,6 +32,39 @@ export async function POST(
 
     const body = await req.json().catch(() => ({}));
     const leadIds: string[] | undefined = body.leadIds;
+
+    const leadsCount = await prisma.outreachLead.count({
+      where: {
+        campaignId: campaign.id,
+        ...(leadIds && leadIds.length > 0 ? { id: { in: leadIds } } : {}),
+      },
+    });
+
+    // For large batches (> 30 leads) or explicit async, process via BullMQ worker
+    if (leadsCount > 30 || body.async === true) {
+      const job = await outreachVerifyQueue.add(
+        'outreach_verify_batch',
+        {
+          type: 'outreach_verify_batch',
+          tenantId,
+          campaignId: campaign.id,
+          leadIds,
+          reoonApiKey: campaign.account?.reoonApiKey || process.env.REOON_API_KEY,
+        },
+        {
+          attempts: 2,
+          backoff: { type: 'exponential', delay: 5000 },
+          removeOnComplete: true,
+        }
+      );
+
+      return NextResponse.json({
+        success: true,
+        queued: true,
+        jobId: job.id,
+        message: `Verifikasi ${leadsCount} leads dijadwalkan di background worker.`,
+      });
+    }
 
     const leads = await prisma.outreachLead.findMany({
       where: {
@@ -78,7 +112,7 @@ export async function POST(
         if (verified.status === 'INVALID' && companyDomain) {
           const permutations = generateEmailPermutations(lead.fullName, companyDomain);
           for (const candidate of permutations) {
-            if (candidate.toLowerCase() === email.toLowerCase()) continue; // Skip already failed candidate
+            if (candidate.toLowerCase() === email.toLowerCase()) continue;
 
             const candidateRes = await verifyEmailAddress(candidate, apiKey);
             if (candidateRes.status === 'SAFE') {

@@ -42,6 +42,7 @@ export default function NewOutreachCampaignPage() {
   const [targetIndustry, setTargetIndustry] = useState('Information Technology & Services');
   const [searchQuery, setSearchQuery] = useState('');
   const [leadCount, setLeadCount] = useState(10);
+  const [leadProvider, setLeadProvider] = useState<'apify' | 'outscraper'>('apify');
 
   // Step 3: AI Copywriting Strategy & Brand Research
   const [aiTone, setAiTone] = useState<'formal' | 'conversational' | 'direct'>('formal');
@@ -180,7 +181,7 @@ export default function NewOutreachCampaignPage() {
       }
 
       const campaign = await res.json();
-      router.push(`/dashboard/outreach/${campaign.id}?autoSource=true&limit=${leadCount}`);
+      router.push(`/dashboard/outreach/${campaign.id}?autoSource=true&limit=${leadCount}&provider=${leadProvider}`);
     } catch (err: any) {
       setError(err.message || 'An error occurred while creating the campaign.');
       setLoading(false);
@@ -346,16 +347,30 @@ export default function NewOutreachCampaignPage() {
                 </select>
               </div>
               <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">Initial Prospect Count</label>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">Discovery Engine Provider</label>
+                <select
+                  value={leadProvider}
+                  onChange={(e) => setLeadProvider(e.target.value as 'apify' | 'outscraper')}
+                  className="w-full px-3.5 py-2.5 border border-slate-300 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-primary-500 bg-white font-medium"
+                >
+                  <option value="apify">Apify (LinkedIn B2B Executives & Decision Makers)</option>
+                  <option value="outscraper">Outscraper (Google Maps & Business Contacts)</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">Target Prospect Batch Size</label>
                 <select
                   value={leadCount}
                   onChange={(e) => setLeadCount(Number(e.target.value))}
-                  className="w-full px-3.5 py-2.5 border border-slate-300 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-primary-500 bg-white"
+                  className="w-full px-3.5 py-2.5 border border-slate-300 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-primary-500 bg-white font-medium"
                 >
                   <option value={5}>5 Leads (Quick Test)</option>
-                  <option value={10}>10 Leads (Recommended Batch)</option>
+                  <option value={10}>10 Leads (Recommended Interactive)</option>
                   <option value={25}>25 Leads (Standard Sourcing)</option>
-                  <option value={50}>50 Leads (Comprehensive)</option>
+                  <option value={50}>50 Leads (Large Batch)</option>
+                  <option value={100}>100 Leads (Bulk Worker Queue)</option>
+                  <option value={500}>500 Leads (Massive Scale Queue)</option>
+                  <option value={1000}>1,000 Leads (High Volume Enterprise)</option>
                 </select>
               </div>
               <div className="sm:col-span-2">
