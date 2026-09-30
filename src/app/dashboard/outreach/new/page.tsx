@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import toast, { Toaster } from 'react-hot-toast';
 
-interface OutreachAccountOption {
+interface OutreachAccount {
   id: string;
   name: string;
   senderEmail: string;
@@ -14,35 +14,50 @@ interface OutreachAccountOption {
 
 const INDUSTRY_OPTIONS = [
   'Information Technology & Services',
-  'Software & SaaS',
+  'Computer Software / SaaS',
   'Financial Services & Fintech',
-  'Healthcare & Biotechnology',
-  'E-commerce & Retail',
-  'Management Consulting & Professional Services',
+  'Healthcare & Medical',
+  'E-Commerce & Retail',
   'Marketing & Advertising',
   'Real Estate & Construction',
-  'Manufacturing & Supply Chain',
-  'Education & EdTech',
-  'Energy & Utilities',
-  'Other / Custom Niche',
+  'Manufacturing & Logistics',
+  'Education Management',
+  'Hospitality & Tourism',
+  'Legal & Consulting',
+  'All Industries (Broad)',
+];
+
+const BUSINESS_CATEGORY_PRESETS = [
+  'Software House & Development Agency',
+  'Digital Marketing & Advertising Agency',
+  'IT Consulting & Managed Services (MSP)',
+  'Clinic, Dental & Healthcare Practice',
+  'Accounting & Financial Advisory Firm',
+  'Real Estate Agency & Property Developer',
+  'Logistics, Freight & Warehouse Facility',
+  'Commercial Law Firm & Legal Office',
+  'Architecture & Interior Design Studio',
+  'Retail, Restaurant & F&B Franchise',
+  'Manufacturing & Industrial Supplier',
 ];
 
 export default function NewOutreachCampaignPage() {
   const router = useRouter();
-  const [step, setStep] = useState<1 | 2 | 3>(1);
+  const [step, setStep] = useState(1);
 
   // Step 1: Basics
   const [name, setName] = useState('');
-  const [selectedAccountId, setSelectedAccountId] = useState<string>('');
-  const [outreachAccounts, setOutreachAccounts] = useState<OutreachAccountOption[]>([]);
+  const [outreachAccounts, setOutreachAccounts] = useState<OutreachAccount[]>([]);
+  const [selectedAccountId, setSelectedAccountId] = useState('');
 
-  // Step 2: Targeting
+  // Step 2: Target Lead Parameters
+  const [leadProvider, setLeadProvider] = useState<'apify' | 'outscraper'>('apify');
   const [targetRole, setTargetRole] = useState('Chief Technology Officer');
   const [targetLocation, setTargetLocation] = useState('United States');
   const [targetIndustry, setTargetIndustry] = useState('Information Technology & Services');
+  const [businessCategory, setBusinessCategory] = useState('Software House & Development Agency');
   const [searchQuery, setSearchQuery] = useState('');
   const [leadCount, setLeadCount] = useState(10);
-  const [leadProvider, setLeadProvider] = useState<'apify' | 'outscraper'>('apify');
 
   // Step 3: AI Copywriting Strategy & Brand Research
   const [aiTone, setAiTone] = useState<'formal' | 'conversational' | 'direct'>('formal');
@@ -133,8 +148,19 @@ export default function NewOutreachCampaignPage() {
       }
       setStep(2);
     } else if (step === 2) {
-      if (!targetRole.trim() && !searchQuery.trim()) {
-        setError('Please specify a target role or a custom search query.');
+      if (leadProvider === 'apify') {
+        if (!targetRole.trim() && !searchQuery.trim()) {
+          setError('Please specify a target executive job title or custom search query.');
+          return;
+        }
+      } else {
+        if (!businessCategory.trim() && !searchQuery.trim()) {
+          setError('Please specify a business category or company type.');
+          return;
+        }
+      }
+      if (!targetLocation.trim()) {
+        setError('Please specify a geographic location or target city.');
         return;
       }
       setStep(3);
@@ -161,14 +187,17 @@ export default function NewOutreachCampaignPage() {
     try {
       const fullPromptInstructions = `[Tone: ${aiTone}, Length: ${aiLength}] ${promptInstructions}`.trim();
 
+      const finalRole = leadProvider === 'apify' ? targetRole.trim() : businessCategory.trim();
+      const finalIndustry = leadProvider === 'apify' ? targetIndustry.trim() : businessCategory.trim();
+
       const res = await fetch('/api/outreach/campaigns', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           name: name.trim(),
-          targetRole: targetRole.trim(),
+          targetRole: finalRole,
           targetLocation: targetLocation.trim(),
-          targetIndustry: targetIndustry.trim(),
+          targetIndustry: finalIndustry,
           searchQuery: searchQuery.trim() || undefined,
           promptInstructions: fullPromptInstructions,
           accountId: selectedAccountId || undefined,
@@ -213,34 +242,47 @@ export default function NewOutreachCampaignPage() {
       <div className="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-xs">
         <div className="flex items-center justify-between max-w-2xl mx-auto">
           <div className="flex items-center gap-2">
-            <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold ${step >= 1 ? 'bg-primary-600 text-white' : 'bg-slate-100 text-slate-500'}`}>
+            <span
+              className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold ${
+                step >= 1 ? 'bg-primary-600 text-white' : 'bg-slate-100 text-slate-400'
+              }`}
+            >
               1
-            </div>
-            <span className={`text-xs font-bold ${step >= 1 ? 'text-slate-900' : 'text-slate-400'}`}>
+            </span>
+            <span className={`text-xs font-semibold ${step >= 1 ? 'text-slate-900' : 'text-slate-400'}`}>
               Basics & Mailbox
             </span>
           </div>
-          <div className={`flex-1 h-0.5 mx-4 ${step >= 2 ? 'bg-primary-600' : 'bg-slate-200'}`} />
+          <div className="h-0.5 w-12 bg-slate-200" />
           <div className="flex items-center gap-2">
-            <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold ${step >= 2 ? 'bg-primary-600 text-white' : 'bg-slate-100 text-slate-500'}`}>
+            <span
+              className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold ${
+                step >= 2 ? 'bg-primary-600 text-white' : 'bg-slate-100 text-slate-400'
+              }`}
+            >
               2
-            </div>
-            <span className={`text-xs font-bold ${step >= 2 ? 'text-slate-900' : 'text-slate-400'}`}>
-              Targeting Criteria
+            </span>
+            <span className={`text-xs font-semibold ${step >= 2 ? 'text-slate-900' : 'text-slate-400'}`}>
+              Discovery Strategy
             </span>
           </div>
-          <div className={`flex-1 h-0.5 mx-4 ${step >= 3 ? 'bg-primary-600' : 'bg-slate-200'}`} />
+          <div className="h-0.5 w-12 bg-slate-200" />
           <div className="flex items-center gap-2">
-            <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold ${step >= 3 ? 'bg-primary-600 text-white' : 'bg-slate-100 text-slate-500'}`}>
+            <span
+              className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold ${
+                step >= 3 ? 'bg-primary-600 text-white' : 'bg-slate-100 text-slate-400'
+              }`}
+            >
               3
-            </div>
-            <span className={`text-xs font-bold ${step >= 3 ? 'text-slate-900' : 'text-slate-400'}`}>
-              AI Strategy & Offer
+            </span>
+            <span className={`text-xs font-semibold ${step >= 3 ? 'text-slate-900' : 'text-slate-400'}`}>
+              AI Pitch Strategy
             </span>
           </div>
         </div>
       </div>
 
+      {/* Form Container */}
       <form
         onSubmit={handleSubmit}
         onKeyDown={(e) => {
@@ -304,85 +346,214 @@ export default function NewOutreachCampaignPage() {
 
         {/* STEP 2: STRUCTURED TARGETING CRITERIA */}
         {step === 2 && (
-          <div className="space-y-4 animate-in fade-in">
+          <div className="space-y-5 animate-in fade-in">
             <div>
               <h2 className="text-sm font-bold text-slate-900">Step 2: Target Lead Parameters (Prospect Discovery)</h2>
-              <p className="text-xs text-slate-500 mt-0.5">Define your ideal customer profile (ICP) by role, location, and industry.</p>
+              <p className="text-xs text-slate-500 mt-0.5">Choose your discovery channel and define the target parameters.</p>
             </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2">
-              <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">Target Job Title / Role *</label>
-                <input
-                  type="text"
-                  required
-                  placeholder="e.g., Chief Technology Officer, VP Sales, Founder"
-                  value={targetRole}
-                  onChange={(e) => setTargetRole(e.target.value)}
-                  className="w-full px-3.5 py-2.5 border border-slate-300 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-primary-500"
-                />
+
+            {/* Visual Channel / Mode Selector */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5 pt-1">
+              <div
+                onClick={() => setLeadProvider('apify')}
+                className={`p-4 rounded-2xl border-2 cursor-pointer transition-all ${
+                  leadProvider === 'apify'
+                    ? 'border-primary-600 bg-primary-50/50 shadow-xs ring-1 ring-primary-500/20'
+                    : 'border-slate-200/90 bg-white hover:border-slate-300 hover:bg-slate-50/60'
+                }`}
+              >
+                <div className="flex items-center justify-between mb-1.5">
+                  <div className="flex items-center gap-2">
+                    <span className="text-lg">🎯</span>
+                    <h3 className="text-xs font-bold text-slate-900">Executive Search</h3>
+                  </div>
+                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-primary-100 text-primary-800">
+                    B2B Leaders
+                  </span>
+                </div>
+                <p className="text-[11px] text-slate-600 leading-relaxed">
+                  Target specific individual decision makers (CTOs, CEOs, Directors) across companies with verified professional profiles.
+                </p>
               </div>
-              <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">Geographic Location *</label>
-                <input
-                  type="text"
-                  required
-                  placeholder="e.g., United States, Singapore, Jakarta, United Kingdom"
-                  value={targetLocation}
-                  onChange={(e) => setTargetLocation(e.target.value)}
-                  className="w-full px-3.5 py-2.5 border border-slate-300 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-primary-500"
-                />
+
+              <div
+                onClick={() => setLeadProvider('outscraper')}
+                className={`p-4 rounded-2xl border-2 cursor-pointer transition-all ${
+                  leadProvider === 'outscraper'
+                    ? 'border-indigo-600 bg-indigo-50/50 shadow-xs ring-1 ring-indigo-500/20'
+                    : 'border-slate-200/90 bg-white hover:border-slate-300 hover:bg-slate-50/60'
+                }`}
+              >
+                <div className="flex items-center justify-between mb-1.5">
+                  <div className="flex items-center gap-2">
+                    <span className="text-lg">🏢</span>
+                    <h3 className="text-xs font-bold text-slate-900">Business & Local Directory</h3>
+                  </div>
+                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-indigo-100 text-indigo-800">
+                    Direct Contact & Phone
+                  </span>
+                </div>
+                <p className="text-[11px] text-slate-600 leading-relaxed">
+                  Discover commercial businesses, agencies, clinics, and offices in specific cities with direct emails, phones, and addresses.
+                </p>
               </div>
-              <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">Target Industry / Niche</label>
-                <select
-                  value={targetIndustry}
-                  onChange={(e) => setTargetIndustry(e.target.value)}
-                  className="w-full px-3.5 py-2.5 border border-slate-300 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-primary-500 bg-white"
-                >
-                  {INDUSTRY_OPTIONS.map((ind) => (
-                    <option key={ind} value={ind}>
-                      {ind}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">Lead Discovery Channel</label>
-                <select
-                  value={leadProvider}
-                  onChange={(e) => setLeadProvider(e.target.value as 'apify' | 'outscraper')}
-                  className="w-full px-3.5 py-2.5 border border-slate-300 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-primary-500 bg-white font-medium"
-                >
-                  <option value="apify">Executive Search (B2B Leaders & Decision Makers)</option>
-                  <option value="outscraper">Business & Local Search (Commercial Places & Direct Contacts)</option>
-                </select>
-              </div>
-              <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">Target Prospect Batch Size</label>
-                <select
-                  value={leadCount}
-                  onChange={(e) => setLeadCount(Number(e.target.value))}
-                  className="w-full px-3.5 py-2.5 border border-slate-300 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-primary-500 bg-white font-medium"
-                >
-                  <option value={5}>5 Leads (Quick Test)</option>
-                  <option value={10}>10 Leads (Recommended Interactive)</option>
-                  <option value={25}>25 Leads (Standard Sourcing)</option>
-                  <option value={50}>50 Leads (Large Batch)</option>
-                  <option value={100}>100 Leads (Bulk Worker Queue)</option>
-                  <option value={500}>500 Leads (Massive Scale Queue)</option>
-                  <option value={1000}>1,000 Leads (High Volume Enterprise)</option>
-                </select>
-              </div>
-              <div className="sm:col-span-2">
-                <label className="block text-xs font-semibold text-slate-700 mb-1">Custom Search Query (Optional)</label>
-                <input
-                  type="text"
-                  placeholder="e.g., B2B SaaS Series A funding scale"
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className="w-full px-3.5 py-2.5 border border-slate-300 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-primary-500"
-                />
-              </div>
+            </div>
+
+            {/* Dynamic Adaptive Form Fields based on Mode */}
+            <div className="p-4 bg-slate-50/80 rounded-2xl border border-slate-200/80 space-y-4">
+              {leadProvider === 'apify' ? (
+                /* EXECUTIVE MODE INPUTS */
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 animate-in fade-in">
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-700 mb-1">
+                      Target Executive Job Title / Role <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      placeholder="e.g., Chief Technology Officer, VP Sales, Founder, Head of IT"
+                      value={targetRole}
+                      onChange={(e) => setTargetRole(e.target.value)}
+                      className="w-full px-3.5 py-2.5 border border-slate-300 rounded-xl text-xs bg-white focus:outline-none focus:ring-2 focus:ring-primary-500"
+                    />
+                    <p className="text-[10px] text-slate-400 mt-1">
+                      The discovery engine will automatically expand synonyms (e.g. CTO, VP of Tech).
+                    </p>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-700 mb-1">
+                      Target Country / Region <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      placeholder="e.g., United States, Indonesia, Singapore, United Kingdom"
+                      value={targetLocation}
+                      onChange={(e) => setTargetLocation(e.target.value)}
+                      className="w-full px-3.5 py-2.5 border border-slate-300 rounded-xl text-xs bg-white focus:outline-none focus:ring-2 focus:ring-primary-500"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-700 mb-1">
+                      Target Industry Niche
+                    </label>
+                    <select
+                      value={targetIndustry}
+                      onChange={(e) => setTargetIndustry(e.target.value)}
+                      className="w-full px-3.5 py-2.5 border border-slate-300 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-primary-500 bg-white"
+                    >
+                      {INDUSTRY_OPTIONS.map((ind) => (
+                        <option key={ind} value={ind}>
+                          {ind}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-700 mb-1">
+                      Target Prospect Batch Size
+                    </label>
+                    <select
+                      value={leadCount}
+                      onChange={(e) => setLeadCount(Number(e.target.value))}
+                      className="w-full px-3.5 py-2.5 border border-slate-300 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-primary-500 bg-white font-medium"
+                    >
+                      <option value={5}>5 Leads (Quick Test)</option>
+                      <option value={10}>10 Leads (Recommended Interactive)</option>
+                      <option value={25}>25 Leads (Standard Sourcing)</option>
+                      <option value={50}>50 Leads (Large Batch)</option>
+                      <option value={100}>100 Leads (Bulk Worker Queue)</option>
+                      <option value={500}>500 Leads (Massive Scale Queue)</option>
+                      <option value={1000}>1,000 Leads (High Volume Enterprise)</option>
+                    </select>
+                  </div>
+
+                  <div className="sm:col-span-2">
+                    <label className="block text-xs font-semibold text-slate-700 mb-1">
+                      Additional Search Qualifier (Optional)
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="e.g., B2B SaaS Series A funding scale"
+                      value={searchQuery}
+                      onChange={(e) => setSearchQuery(e.target.value)}
+                      className="w-full px-3.5 py-2.5 border border-slate-300 rounded-xl text-xs bg-white focus:outline-none focus:ring-2 focus:ring-primary-500"
+                    />
+                  </div>
+                </div>
+              ) : (
+                /* BUSINESS DIRECTORY MODE INPUTS */
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 animate-in fade-in">
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-700 mb-1">
+                      Business Niche / Category <span className="text-red-500">*</span>
+                    </label>
+                    <select
+                      value={businessCategory}
+                      onChange={(e) => setBusinessCategory(e.target.value)}
+                      className="w-full px-3.5 py-2.5 border border-slate-300 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white font-medium"
+                    >
+                      {BUSINESS_CATEGORY_PRESETS.map((cat) => (
+                        <option key={cat} value={cat}>
+                          {cat}
+                        </option>
+                      ))}
+                    </select>
+                    <p className="text-[10px] text-slate-400 mt-1">
+                      Targeting commercial organizations and businesses under this industry.
+                    </p>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-700 mb-1">
+                      Target City / Area <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      placeholder="e.g., Jakarta, Surabaya, California, London, Singapore"
+                      value={targetLocation}
+                      onChange={(e) => setTargetLocation(e.target.value)}
+                      className="w-full px-3.5 py-2.5 border border-slate-300 rounded-xl text-xs bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-700 mb-1">
+                      Target Prospect Batch Size
+                    </label>
+                    <select
+                      value={leadCount}
+                      onChange={(e) => setLeadCount(Number(e.target.value))}
+                      className="w-full px-3.5 py-2.5 border border-slate-300 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white font-medium"
+                    >
+                      <option value={5}>5 Leads (Quick Test)</option>
+                      <option value={10}>10 Leads (Recommended Interactive)</option>
+                      <option value={25}>25 Leads (Standard Sourcing)</option>
+                      <option value={50}>50 Leads (Large Batch)</option>
+                      <option value={100}>100 Leads (Bulk Worker Queue)</option>
+                      <option value={500}>500 Leads (Massive Scale Queue)</option>
+                      <option value={1000}>1,000 Leads (High Volume Enterprise)</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-700 mb-1">
+                      Custom Business Keyword (Optional)
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="e.g., ERP software, Cloud Migration"
+                      value={searchQuery}
+                      onChange={(e) => setSearchQuery(e.target.value)}
+                      className="w-full px-3.5 py-2.5 border border-slate-300 rounded-xl text-xs bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    />
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         )}
@@ -407,134 +578,148 @@ export default function NewOutreachCampaignPage() {
                       Auto-Extract Offer from Website / Brand
                     </h3>
                     <p className="text-[11px] text-indigo-700/80">
-                      Provide a website, pricing page, or brand name to automatically extract your value proposition.
+                      AI will analyze your landing page, pricing, and services to build a compelling outreach pitch.
                     </p>
                   </div>
                 </div>
               </div>
 
-              <div className="flex flex-col sm:flex-row items-center gap-2">
+              <div className="flex gap-2">
                 <input
                   type="text"
+                  placeholder="https://yourcompany.com or brand name"
                   value={brandInput}
                   onChange={(e) => setBrandInput(e.target.value)}
-                  placeholder="e.g., https://jetdigitalpro.com or Acme Analytics pricing"
-                  className="w-full px-3.5 py-2 border border-indigo-200 bg-white rounded-xl text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault();
+                      handleAutoResearchBrand();
+                    }
+                  }}
+                  className="flex-1 px-3.5 py-2 bg-white border border-indigo-200 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500 text-slate-800 placeholder:text-slate-400"
                 />
                 <button
                   type="button"
                   onClick={() => handleAutoResearchBrand()}
-                  disabled={isResearchingBrand || !brandInput.trim()}
-                  className="w-full sm:w-auto px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-xl transition-all shadow-2xs flex items-center justify-center gap-1.5 whitespace-nowrap disabled:opacity-50"
+                  disabled={isResearchingBrand}
+                  className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold rounded-xl transition-all shadow-xs disabled:opacity-50 flex items-center gap-1.5 flex-shrink-0"
                 >
                   {isResearchingBrand ? (
                     <>
                       <span className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                      <span>Researching Brand...</span>
+                      <span>Extracting...</span>
                     </>
                   ) : (
-                    <>
-                      <span>🔍</span>
-                      <span>Auto-Generate Offer</span>
-                    </>
+                    <span>Auto-Generate Offer</span>
                   )}
                 </button>
               </div>
             </div>
 
+            {/* Tone & Length Controls */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-1">
               <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">Copy Tone</label>
-                <select
-                  value={aiTone}
-                  onChange={(e) => handleToneChange(e.target.value as any)}
-                  className="w-full px-3.5 py-2.5 border border-slate-300 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-primary-500 bg-white"
-                >
-                  <option value="formal">Formal & Consultative (Executive)</option>
-                  <option value="conversational">Conversational & Friendly (Peer-to-Peer)</option>
-                  <option value="direct">Direct & Value-Focused (Zero Fluff)</option>
-                </select>
+                <label className="block text-xs font-semibold text-slate-700 mb-1.5">Communication Tone</label>
+                <div className="grid grid-cols-3 gap-2">
+                  {(['formal', 'conversational', 'direct'] as const).map((t) => (
+                    <button
+                      key={t}
+                      type="button"
+                      onClick={() => handleToneChange(t)}
+                      className={`py-2 px-3 text-xs font-medium rounded-xl border transition-all capitalize ${
+                        aiTone === t
+                          ? 'bg-primary-50 border-primary-500 text-primary-700 font-semibold shadow-2xs'
+                          : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'
+                      }`}
+                    >
+                      {t}
+                    </button>
+                  ))}
+                </div>
               </div>
+
               <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">Copy Length</label>
-                <select
-                  value={aiLength}
-                  onChange={(e) => handleLengthChange(e.target.value as any)}
-                  className="w-full px-3.5 py-2.5 border border-slate-300 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-primary-500 bg-white"
-                >
-                  <option value="concise">Concise (Under 90 words, high punchiness)</option>
-                  <option value="detailed">Detailed (100-140 words, 2 value bullet points)</option>
-                </select>
+                <label className="block text-xs font-semibold text-slate-700 mb-1.5">Email Length</label>
+                <div className="grid grid-cols-2 gap-2">
+                  {(['concise', 'detailed'] as const).map((l) => (
+                    <button
+                      key={l}
+                      type="button"
+                      onClick={() => handleLengthChange(l)}
+                      className={`py-2 px-3 text-xs font-medium rounded-xl border transition-all capitalize ${
+                        aiLength === l
+                          ? 'bg-primary-50 border-primary-500 text-primary-700 font-semibold shadow-2xs'
+                          : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'
+                      }`}
+                    >
+                      {l === 'concise' ? 'Concise (Short)' : 'Detailed (Value-add)'}
+                    </button>
+                  ))}
+                </div>
               </div>
             </div>
 
+            {/* Prompt Instructions Editor */}
             <div>
               <div className="flex items-center justify-between mb-1.5">
-                <label className="block text-sm font-bold text-slate-800">
-                  Custom Value Proposition & Pain Points (Editable)
+                <label className="block text-xs font-semibold text-slate-700">
+                  AI Value Proposition & Outreach Strategy Instructions
                 </label>
-                <span className="text-xs text-slate-400 font-normal">
-                  Click to edit or refine generated pitch instructions
-                </span>
+                <span className="text-[11px] text-slate-400">Customizable prompt</span>
               </div>
               <textarea
-                rows={6}
+                rows={5}
                 value={promptInstructions}
                 onChange={(e) => setPromptInstructions(e.target.value)}
-                placeholder="Specify key value angles, pain points, or call-to-actions you want included in AI pitches."
-                className="w-full p-4 border border-slate-300 rounded-xl text-sm leading-relaxed text-slate-900 bg-slate-50/50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-primary-500 font-sans shadow-2xs transition-all"
+                placeholder="Describe your offer, USP, key client benefits, and call to action..."
+                className="w-full px-3.5 py-3 border border-slate-300 rounded-xl text-sm leading-relaxed focus:outline-none focus:ring-2 focus:ring-primary-500 bg-white text-slate-800"
               />
+              <p className="text-[11px] text-slate-400 mt-1">
+                The AI copywriter will tailor this pitch for each recipient using their role, company domain, and background.
+              </p>
             </div>
           </div>
         )}
 
-        {/* Wizard Navigation Footer */}
+        {/* Footer Navigation */}
         <div className="flex items-center justify-between pt-4 border-t border-slate-100">
-          <div>
-            {step > 1 ? (
-              <button
-                type="button"
-                onClick={() => setStep((s) => (s - 1) as any)}
-                className="px-4 py-2.5 text-xs font-semibold text-slate-600 hover:bg-slate-100 rounded-xl transition-colors"
-              >
-                ← Back
-              </button>
-            ) : (
-              <Link
-                href="/dashboard/outreach"
-                className="px-4 py-2.5 text-xs font-semibold text-slate-600 hover:bg-slate-100 rounded-xl transition-colors inline-block"
-              >
-                Cancel
-              </Link>
-            )}
-          </div>
+          {step > 1 ? (
+            <button
+              type="button"
+              onClick={() => setStep((s) => s - 1)}
+              disabled={loading}
+              className="px-4 py-2 border border-slate-300 hover:bg-slate-50 text-slate-700 text-xs font-semibold rounded-xl transition-colors disabled:opacity-50"
+            >
+              Back
+            </button>
+          ) : (
+            <div />
+          )}
 
-          <div>
-            {step < 3 ? (
-              <button
-                type="button"
-                onClick={handleNextStep}
-                className="px-6 py-2.5 bg-primary-600 hover:bg-primary-700 text-white text-xs font-semibold rounded-xl shadow-xs transition-colors"
-              >
-                Continue to Next Step →
-              </button>
-            ) : (
-              <button
-                type="submit"
-                disabled={loading}
-                className="px-6 py-2.5 bg-primary-600 hover:bg-primary-700 text-white text-xs font-semibold rounded-xl shadow-xs transition-colors disabled:opacity-50 flex items-center gap-2"
-              >
-                {loading ? (
-                  <>
-                    <span className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                    <span>{loadingStep || 'Creating Workspace...'}</span>
-                  </>
-                ) : (
-                  <span>🚀 Create Campaign & Start Sourcing</span>
-                )}
-              </button>
-            )}
-          </div>
+          {step < 3 ? (
+            <button
+              type="button"
+              onClick={handleNextStep}
+              className="px-6 py-2 bg-primary-600 hover:bg-primary-700 text-white text-xs font-semibold rounded-xl shadow-xs transition-colors"
+            >
+              Continue to Step {step + 1} →
+            </button>
+          ) : (
+            <button
+              type="submit"
+              disabled={loading}
+              className="px-6 py-2.5 bg-primary-600 hover:bg-primary-700 text-white text-xs font-bold rounded-xl shadow-xs transition-colors disabled:opacity-50 flex items-center gap-2"
+            >
+              {loading ? (
+                <>
+                  <span className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                  <span>{loadingStep || 'Creating Campaign...'}</span>
+                </>
+              ) : (
+                <span>Launch Outreach Workspace & Discover Leads →</span>
+              )}
+            </button>
+          )}
         </div>
       </form>
     </div>

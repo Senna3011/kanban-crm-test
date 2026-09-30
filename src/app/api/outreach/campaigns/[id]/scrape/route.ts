@@ -30,9 +30,9 @@ export async function POST(
 
   try {
     const body = await req.json().catch(() => ({}));
-    const query = body.query || campaign.searchQuery || campaign.targetRole || 'VP of Technology';
-    const role = body.role || campaign.targetRole || undefined;
-    const location = body.location || campaign.targetLocation || undefined;
+    const query = body.query || campaign.searchQuery || undefined;
+    const role = body.role || campaign.targetRole || 'Chief Technology Officer';
+    const location = body.location || campaign.targetLocation || 'United States';
     const industry = body.industry || campaign.targetIndustry || undefined;
     const limit = Number(body.limit) || 10;
     const provider = (body.provider === 'outscraper' ? 'outscraper' : 'apify') as 'apify' | 'outscraper';
@@ -65,7 +65,7 @@ export async function POST(
         success: true,
         queued: true,
         jobId: job.id,
-        message: `Pencarian ${limit} leads dijadwalkan di background worker (${provider.toUpperCase()}).`,
+        message: `Pencarian ${limit} leads dijadwalkan di background worker.`,
       });
     }
 
@@ -73,10 +73,12 @@ export async function POST(
     const apiToken = campaign.account?.apifyApiToken || process.env.APIFY_API_TOKEN || process.env.APIFY_API_KEY;
 
     let scrapedLeads = [];
-    if (provider === 'outscraper' || (!apiToken && process.env.OUTSCRAPER_API_KEY)) {
+    if (provider === 'outscraper') {
       scrapedLeads = await scrapeOutscraperLeads({
-        query: query || role || 'Business Executive',
-        location: location || 'Indonesia',
+        query,
+        role,
+        location,
+        industry,
         limit,
       });
     } else {
@@ -94,11 +96,12 @@ export async function POST(
     // Check leads existing specifically in this campaign
     const campaignLeads = await prisma.outreachLead.findMany({
       where: { campaignId: campaign.id },
-      select: { linkedinUrl: true, email: true },
+      select: { linkedinUrl: true, email: true, companyName: true },
     });
 
     const campaignUrls = new Set(campaignLeads.map((l) => l.linkedinUrl).filter(Boolean));
     const campaignEmails = new Set(campaignLeads.map((l) => l.email).filter(Boolean));
+    const campaignCompanies = new Set(campaignLeads.map((l) => l.companyName?.toLowerCase().trim()).filter(Boolean));
 
     const createdLeads = [];
     let skippedDuplicates = 0;
@@ -106,8 +109,9 @@ export async function POST(
     for (const lead of scrapedLeads) {
       const isDuplicateUrl = lead.linkedinUrl && campaignUrls.has(lead.linkedinUrl);
       const isDuplicateEmail = lead.email && campaignEmails.has(lead.email);
+      const isDuplicateCompany = !lead.linkedinUrl && !lead.email && lead.companyName && campaignCompanies.has(lead.companyName.toLowerCase().trim());
 
-      if (isDuplicateUrl || isDuplicateEmail) {
+      if (isDuplicateUrl || isDuplicateEmail || isDuplicateCompany) {
         skippedDuplicates++;
         continue;
       }
@@ -127,6 +131,7 @@ export async function POST(
           metadata: {
             summary: lead.summary ? String(lead.summary) : undefined,
             source: lead.metadata?.source || 'discovery-live',
+            ...(lead.metadata || {}),
             scrapedAt: new Date().toISOString(),
           },
           campaignId: campaign.id,
@@ -135,7 +140,13 @@ export async function POST(
 
       if (lead.linkedinUrl) campaignUrls.add(lead.linkedinUrl);
       if (lead.email) campaignEmails.add(lead.email);
+      if (lead.companyName) campaignCompanies.add(lead.companyName.toLowerCase().trim());
       createdLeads.push(created);
+
+      // Stop once we have reached the exact requested limit of newly inserted leads
+      if (createdLeads.length >= limit) {
+        break;
+      }
     }
 
     return NextResponse.json({

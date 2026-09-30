@@ -193,61 +193,61 @@ async function runActorAsync(
 }
 
 /**
- * Generates multi-line query variations to bypass single-query search ceilings (yields 100-1,000+ leads)
+ * Generates search queries for Apify Google Scraper scaled to target lead volume
  */
-function buildMultiLineSearchQueries(params: ApifySearchParams, isTargetingIndonesia: boolean, countryCode: string): string {
-  const role = (params.role || params.query || 'Executive').trim();
-  const loc = (params.location || '').trim();
-  const industry = (params.industry || '').trim();
+function buildTargetSearchQuery(params: ApifySearchParams, isTargetingIndonesia: boolean, countryCode: string, isSmallBatch: boolean): string {
+  if (params.query && !params.role) {
+    return `site:linkedin.com/in/ ${params.query}`.trim();
+  }
 
+  const role = (params.role || 'Executive').trim();
+  const loc = (params.location || (isTargetingIndonesia ? 'Indonesia' : 'United States')).trim();
+  const industry = (params.industry && !params.industry.toLowerCase().includes('all')) ? params.industry.trim() : '';
+
+  // For small batches (limit <= 10), use single Boolean OR query
+  if (isSmallBatch) {
+    const roleLower = role.toLowerCase();
+    let queryRole = `"${role}"`;
+
+    if (roleLower.includes('cto') || roleLower.includes('technology')) {
+      queryRole = '(CTO OR "Chief Technology Officer")';
+    } else if (roleLower.includes('ceo') || roleLower.includes('founder')) {
+      queryRole = '(CEO OR Founder OR "Managing Director")';
+    } else if (roleLower.includes('cfo') || roleLower.includes('finance')) {
+      queryRole = '(CFO OR "Chief Financial Officer")';
+    } else if (roleLower.includes('cmo') || roleLower.includes('marketing')) {
+      queryRole = '(CMO OR "Chief Marketing Officer" OR "VP Marketing")';
+    } else if (roleLower.includes('sales') || roleLower.includes('commercial')) {
+      queryRole = '("VP Sales" OR "Head of Sales" OR "Sales Director")';
+    }
+
+    const locFilter = isTargetingIndonesia ? '"Indonesia"' : loc ? `"${loc}"` : '"United States"';
+    const indFilter = industry ? ` "${industry}"` : '';
+
+    return `site:linkedin.com/in/ ${queryRole} ${locFilter}${indFilter}`.trim();
+  }
+
+  // For larger batches (limit >= 25), construct 2-3 diversified queries to pull across multiple SERP pages
   const queries: string[] = [];
-
-  // Synonyms mapping for high-yield B2B role variations
   const roleLower = role.toLowerCase();
   const roleSynonyms: string[] = [role];
 
   if (roleLower.includes('technology') || roleLower.includes('cto')) {
-    roleSynonyms.push('CTO', 'Chief Technology Officer', 'Head of Engineering', 'VP Engineering', 'Director of Technology');
-  } else if (roleLower.includes('sales') || roleLower.includes('revenue') || roleLower.includes('cro')) {
-    roleSynonyms.push('VP Sales', 'Head of Sales', 'Sales Director', 'Chief Commercial Officer', 'Business Development Director');
+    roleSynonyms.push('CTO', 'Chief Technology Officer', 'Head of Engineering', 'VP Engineering', 'Director of Engineering');
+  } else if (roleLower.includes('sales') || roleLower.includes('revenue')) {
+    roleSynonyms.push('VP Sales', 'Head of Sales', 'Sales Director', 'Business Development Director');
   } else if (roleLower.includes('marketing') || roleLower.includes('cmo')) {
-    roleSynonyms.push('CMO', 'Chief Marketing Officer', 'Head of Marketing', 'VP Marketing', 'Marketing Director');
-  } else if (roleLower.includes('ceo') || roleLower.includes('founder') || roleLower.includes('owner')) {
-    roleSynonyms.push('CEO', 'Founder', 'Co-Founder', 'Managing Director', 'President Director');
-  } else if (roleLower.includes('finance') || roleLower.includes('cfo')) {
-    roleSynonyms.push('CFO', 'Chief Financial Officer', 'Finance Director', 'Head of Finance');
-  } else if (roleLower.includes('product') || roleLower.includes('cpo')) {
-    roleSynonyms.push('CPO', 'Chief Product Officer', 'Head of Product', 'VP Product');
-  } else if (roleLower.includes('operations') || roleLower.includes('coo')) {
-    roleSynonyms.push('COO', 'Chief Operating Officer', 'Operations Director', 'Head of Operations');
+    roleSynonyms.push('CMO', 'Chief Marketing Officer', 'Head of Marketing', 'VP Marketing');
+  } else if (roleLower.includes('ceo') || roleLower.includes('founder')) {
+    roleSynonyms.push('CEO', 'Founder', 'Managing Director', 'Co-Founder');
   }
 
-  const uniqueRoles = Array.from(new Set(roleSynonyms)).slice(0, 5);
-
-  for (const r of uniqueRoles) {
+  for (const r of roleSynonyms.slice(0, 3)) {
     if (isTargetingIndonesia) {
-      queries.push(`site:id.linkedin.com/in/ "${r}"`);
-      queries.push(`site:linkedin.com/in/ "${r}" "Indonesia"`);
-      if (loc && loc.toLowerCase() !== 'indonesia') {
-        queries.push(`site:linkedin.com/in/ "${r}" "${loc}"`);
-      }
-    } else if (countryCode === 'sg') {
-      queries.push(`site:sg.linkedin.com/in/ "${r}"`);
-      queries.push(`site:linkedin.com/in/ "${r}" "Singapore"`);
-    } else if (countryCode === 'gb') {
-      queries.push(`site:uk.linkedin.com/in/ "${r}"`);
-      queries.push(`site:linkedin.com/in/ "${r}" "United Kingdom"`);
+      queries.push(`site:linkedin.com/in/ ${r} Indonesia`);
     } else {
-      queries.push(`site:linkedin.com/in/ "${r}" ${loc ? `"${loc}"` : '"United States"'}`);
+      queries.push(`site:linkedin.com/in/ ${r} ${loc ? loc : 'United States'}`);
     }
-  }
-
-  if (industry && !industry.toLowerCase().includes('all')) {
-    queries.push(`site:linkedin.com/in/ "${role}" "${industry}" ${loc ? `"${loc}"` : ''}`.trim());
-  }
-
-  if (params.query && !params.role) {
-    queries.push(`site:linkedin.com/in/ ${params.query}`);
   }
 
   return Array.from(new Set(queries)).join('\n');
@@ -257,26 +257,29 @@ function buildMultiLineSearchQueries(params: ApifySearchParams, isTargetingIndon
  * Executes a search run against Google Search Scraper Actor with multi-page aggregation
  */
 async function executeGoogleSearchScraper(
-  multiQuery: string,
+  query: string,
   countryCode: string,
   limit: number,
   token: string,
   onProgress?: (progress: { fetched: number; target: number; status: string }) => void
 ): Promise<any[]> {
   const actorSlug = 'apify~google-search-scraper';
-  // Scale pages and results according to target limit
-  const queryCount = multiQuery.split('\n').filter(Boolean).length || 1;
-  const maxPages = Math.min(Math.max(Math.ceil((limit * 1.5) / (queryCount * 10)), 1), 10);
-  const resultsPerPage = Math.min(Math.max(limit, 25), 100);
+  const queryCount = query.split('\n').filter(Boolean).length || 1;
 
-  // Fast synchronous path for small limits (<= 30)
+  // Scale pages to always request at least 2x-3x the target limit to cover deduplication
+  const targetBuffer = Math.max(limit * 2, 25);
+  const calculatedPages = Math.ceil(targetBuffer / (queryCount * 10));
+  const maxPages = Math.min(Math.max(calculatedPages, 1), 6);
+  const resultsPerPage = 20;
+
+  // Fast synchronous path for interactive UI (<= 30 leads)
   if (limit <= 30) {
     const endpoint = `https://api.apify.com/v2/acts/${encodeURIComponent(actorSlug)}/run-sync-get-dataset-items?token=${encodeURIComponent(token)}`;
     const response = await fetch(endpoint, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
       body: JSON.stringify({
-        queries: multiQuery,
+        queries: query,
         countryCode,
         maxPagesPerQuery: maxPages,
         resultsPerPage,
@@ -291,7 +294,6 @@ async function executeGoogleSearchScraper(
     const data = await response.json();
     const allOrganic: any[] = [];
 
-    // Aggregates across all returned pages (fixes 10-lead single page ceiling!)
     if (Array.isArray(data)) {
       for (const page of data) {
         if (page?.organicResults && Array.isArray(page.organicResults)) {
@@ -309,17 +311,17 @@ async function executeGoogleSearchScraper(
   const datasetId = await runActorAsync(
     actorSlug,
     {
-      queries: multiQuery,
+      queries: query,
       countryCode,
       maxPagesPerQuery: maxPages,
-      resultsPerPage,
+      resultsPerPage: 100,
     },
     token,
     600,
     onProgress
   );
 
-  const rawItems = await fetchAllDatasetItems(datasetId, token, limit * 3, onProgress);
+  const rawItems = await fetchAllDatasetItems(datasetId, token, targetBuffer, onProgress);
   const allResults: any[] = [];
   for (const page of rawItems) {
     if (page?.organicResults && Array.isArray(page.organicResults)) {
@@ -360,9 +362,10 @@ export async function scrapeApifyLeads(
 
   const countryCode = isTargetingUS ? 'us' : isTargetingIndonesia ? 'id' : isTargetingSingapore ? 'sg' : isTargetingUK ? 'gb' : 'us';
 
-  const multiQuery = buildMultiLineSearchQueries(params, isTargetingIndonesia, countryCode);
+  const isSmallBatch = limit <= 10;
+  const targetQuery = buildTargetSearchQuery(params, isTargetingIndonesia, countryCode, isSmallBatch);
 
-  const rawLinkedinResults = await executeGoogleSearchScraper(multiQuery, countryCode, limit, token, params.onProgress);
+  const rawLinkedinResults = await executeGoogleSearchScraper(targetQuery, countryCode, limit, token, params.onProgress);
 
   // Geographic Filter & Deduplication
   const seenUrls = new Set<string>();
@@ -394,7 +397,8 @@ export async function scrapeApifyLeads(
     }
   }
 
-  return candidates.slice(0, limit);
+  // Return up to 2x requested limit to allow DB deduplication filter to reach requested limit
+  return candidates.slice(0, Math.max(limit * 2, 50));
 }
 
 async function scrapeDirectLinkedInUrls(
