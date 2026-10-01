@@ -144,48 +144,64 @@ export async function scrapeOutscraperBusinessLeads(
     throw new Error('Outscraper API Key is not configured. Please set it in Outreach Settings or .env');
   }
 
-  // 1. Build authentic LinkedIn Personal Search Query
-  let searchDork = `site:linkedin.com/in/ "${role}" "${location}"`.trim();
+  // 1. Primary: Natural LinkedIn Personal Search
+  const searchQueries = [
+    `site:linkedin.com/in/ ${role} ${location}`,
+    `site:linkedin.com/in/ "${role}" "${location}"`,
+  ];
+
   if (params.query) {
-    searchDork = `site:linkedin.com/in/ ${params.query}`.trim();
+    searchQueries.unshift(`site:linkedin.com/in/ ${params.query}`);
   }
 
-  // 2. Query Outscraper Google Search endpoint for LinkedIn personnel
-  try {
-    const searchUrl = `https://api.app.outscraper.com/google-search?query=${encodeURIComponent(
-      searchDork
-    )}&limit=${Math.min(Math.max(limit * 2, 20), 100)}&async=false`;
+  for (const query of searchQueries) {
+    try {
+      const searchUrl = `https://api.app.outscraper.com/google-search?query=${encodeURIComponent(
+        query
+      )}&limit=${Math.min(Math.max(limit * 3, 30), 100)}&async=false`;
 
-    const res = await fetch(searchUrl, {
-      method: 'GET',
-      headers: {
-        'X-API-KEY': apiKey,
-        Accept: 'application/json',
-      },
-    });
+      const res = await fetch(searchUrl, {
+        method: 'GET',
+        headers: {
+          'X-API-KEY': apiKey,
+          Accept: 'application/json',
+        },
+      });
 
-    if (res.ok) {
-      const data = await res.json();
-      const rawResults: any[] = Array.isArray(data?.data) ? data.data.flat() : [];
-      const linkedinResults = rawResults.filter(
-        (item) => (item.link && item.link.includes('linkedin.com/in/')) || (item.url && item.url.includes('linkedin.com/in/'))
-      );
+      if (res.ok) {
+        const data = await res.json();
+        const rawResults: any[] = Array.isArray(data?.data) ? data.data.flat() : [];
 
-      if (linkedinResults.length > 0) {
-        const parsedLeads = linkedinResults
-          .map((item) => parseGoogleOrganicItem(item, params))
-          .filter(isValidHumanLead);
+        // Check if items are in organic_results or directly in flat list
+        const items: any[] = [];
+        for (const entry of rawResults) {
+          if (entry?.organic_results && Array.isArray(entry.organic_results)) {
+            items.push(...entry.organic_results);
+          } else if (entry?.link || entry?.url || entry?.title) {
+            items.push(entry);
+          }
+        }
 
-        if (parsedLeads.length > 0) {
-          return parsedLeads.slice(0, limit);
+        const linkedinResults = items.filter(
+          (item) => (item.link && item.link.includes('linkedin.com/in/')) || (item.url && item.url.includes('linkedin.com/in/'))
+        );
+
+        if (linkedinResults.length > 0) {
+          const parsedLeads = linkedinResults
+            .map((item) => parseGoogleOrganicItem(item, params))
+            .filter(isValidHumanLead);
+
+          if (parsedLeads.length > 0) {
+            return parsedLeads.slice(0, limit);
+          }
         }
       }
+    } catch (err) {
+      console.warn('[OUTSCRAPER GOOGLE SEARCH ERROR]', err);
     }
-  } catch (err) {
-    console.warn('[OUTSCRAPER GOOGLE SEARCH ERROR]', err);
   }
 
-  // 3. Fallback: Query Maps / Places and strictly extract personnel contacts
+  // 2. Secondary Fallback: Maps / Places endpoint with strict executive personnel structuring
   const mapQuery = `${role}, ${location}`;
   const mapSearchUrl = `https://api.app.outscraper.com/maps/search-v2?query=${encodeURIComponent(
     mapQuery
@@ -218,7 +234,6 @@ export async function scrapeOutscraperBusinessLeads(
       }
     }
 
-    // Strict Human Name formatting: Never allow company name to become person's name
     const executiveName = `${role} at ${cleanCompany}`;
     const nameParts = executiveName.split(/\s+/);
 
