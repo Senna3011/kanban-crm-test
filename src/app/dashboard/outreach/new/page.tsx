@@ -323,8 +323,57 @@ export default function NewOutreachCampaignPage() {
         {step === 2 && (
           <div className="space-y-5 animate-in fade-in">
             <div>
-              <h2 className="text-sm font-bold text-slate-900">Step 2: Target Lead Parameters (Decision Makers)</h2>
-              <p className="text-xs text-slate-500 mt-0.5">Define your target prospect role, geography, industry, and discovery engine.</p>
+              <h2 className="text-sm font-bold text-slate-900">Step 2: Target Lead Parameters (Prospect Discovery)</h2>
+              <p className="text-xs text-slate-500 mt-0.5">Define your ideal customer profile (ICP) and select the discovery engine.</p>
+            </div>
+
+            {/* Discovery Engine Selector Toggle */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+              <button
+                type="button"
+                onClick={() => setLeadProvider('apify')}
+                className={`p-3.5 rounded-xl border text-left transition-all relative ${
+                  leadProvider === 'apify'
+                    ? 'border-indigo-600 bg-indigo-50/70 ring-2 ring-indigo-500/20'
+                    : 'border-slate-200 bg-white hover:border-slate-300'
+                }`}
+              >
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold text-slate-900 flex items-center gap-1.5">
+                    <span>👤</span>
+                    <span>LinkedIn Decision Makers</span>
+                  </span>
+                  <span className="text-[10px] font-bold text-indigo-700 bg-indigo-100 px-2 py-0.5 rounded-full">
+                    Recommended
+                  </span>
+                </div>
+                <p className="text-[11px] text-slate-500 mt-1.5 leading-relaxed">
+                  Discovers authentic individual executive profiles (CTO, VP, CEO, Founder) with personal LinkedIn links.
+                </p>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setLeadProvider('outscraper')}
+                className={`p-3.5 rounded-xl border text-left transition-all relative ${
+                  leadProvider === 'outscraper'
+                    ? 'border-indigo-600 bg-indigo-50/70 ring-2 ring-indigo-500/20'
+                    : 'border-slate-200 bg-white hover:border-slate-300'
+                }`}
+              >
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold text-slate-900 flex items-center gap-1.5">
+                    <span>🏢</span>
+                    <span>Company & Business Directory</span>
+                  </span>
+                  <span className="text-[10px] font-semibold text-slate-600 bg-slate-100 px-2 py-0.5 rounded-full">
+                    Outscraper
+                  </span>
+                </div>
+                <p className="text-[11px] text-slate-500 mt-1.5 leading-relaxed">
+                  Discovers commercial organizations, local business directories, and corporate domain contacts.
+                </p>
+              </button>
             </div>
 
             {/* Structured Inputs */}

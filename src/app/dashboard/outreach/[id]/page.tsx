@@ -244,7 +244,7 @@ export default function CampaignWorkspacePage({
   async function handleSourceLeads(customLimit?: number, customProvider?: string) {
     setActionLoading('scrape');
     try {
-      const provider = customProvider || searchParams?.get('provider') || 'outscraper';
+      const provider = customProvider || searchParams?.get('provider') || 'apify';
       const res = await fetch(`/api/outreach/campaigns/${campaignId}/scrape`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
