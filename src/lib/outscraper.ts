@@ -1,4 +1,4 @@
-import { ApifyScrapedLead, isValidHumanProspect } from './apify';
+import { ApifyScrapedLead } from './apify';
 
 export interface OutscraperSearchParams {
   query?: string;
@@ -7,54 +7,60 @@ export interface OutscraperSearchParams {
   industry?: string;
   limit?: number;
   apiKey?: string;
-  language?: string;
+}
+
+const LEGAL_ENTITY_REGEX = /\b(PT\.?|CV\.?|Inc\.?|LLC|Ltd\.?|Limited|Tbk\.?|Corp\.?|Corporation|Pte\.?|GmbH|Co\.?|Foundation|Yayasan|Agency|Studio|Software House|Konsultan|Consultant|Services)\b/i;
+
+function cleanCorporateName(rawName: string): string {
+  if (!rawName) return 'Enterprise Organization';
+  return rawName
+    .replace(/\s*\|.*$/, '')
+    .replace(/\s*-.*PT.*$/i, '')
+    .trim();
 }
 
 /**
- * Searches business leads using Outscraper API.
- * Employs multi-line query generation and intelligent fallback to deliver full target batches.
+ * Normalizes and extracts authentic personnel representation from Outscraper data
  */
-export async function scrapeOutscraperLeads(
+export const scrapeOutscraperLeads = scrapeOutscraperBusinessLeads;
+
+export async function scrapeOutscraperBusinessLeads(
   params: OutscraperSearchParams
 ): Promise<ApifyScrapedLead[]> {
-  const apiKey = params.apiKey || process.env.OUTSCRAPER_API_KEY;
+  const apiKey =
+    params.apiKey ||
+    process.env.OUTSCRAPER_API_KEY ||
+    process.env.APIFY_API_TOKEN ||
+    process.env.APIFY_API_KEY;
+
+  const limit = Math.min(params.limit || 10, 50);
+  const location = params.location || 'Indonesia';
+  const role = params.role || 'Director';
+  const industry = params.industry || 'Technology & Services';
+
   if (!apiKey) {
-    throw new Error('Lead discovery service is unconfigured. Please check system credentials.');
+    throw new Error('Outscraper API Key is not configured. Please set it in Outreach Settings or .env');
   }
 
-  const limit = Math.max(params.limit || 10, 1);
-  const role = (params.role || '').trim();
-  const industry = (params.industry || '').trim();
-  const location = (params.location || 'Indonesia').trim();
-  const customQuery = (params.query || '').trim();
-
-  // 1. Build high-yield search queries
+  // 1. Build targeted search queries
   const searchQueries: string[] = [];
 
-  if (customQuery) {
-    searchQueries.push(`${customQuery}, ${location}`);
-  }
-
-  // Map industry / role to commercial entity keywords for high-density Google Maps results
-  if (industry && !industry.toLowerCase().includes('all')) {
+  if (params.query) {
+    searchQueries.push(`${params.query}, ${location}`);
+  } else if (industry && !industry.toLowerCase().includes('other') && !industry.toLowerCase().includes('custom')) {
     searchQueries.push(`${industry}, ${location}`);
-  }
-
-  if (role) {
+    if (role) {
+      searchQueries.push(`${role} ${industry}, ${location}`);
+    }
+  } else if (role) {
     const rLow = role.toLowerCase();
-    if (rLow.includes('tech') || rLow.includes('cto') || rLow.includes('software') || rLow.includes('engineer')) {
+    if (rLow.includes('tech') || rLow.includes('cto') || rLow.includes('developer') || rLow.includes('it')) {
       searchQueries.push(`Software Company, ${location}`);
       searchQueries.push(`IT Consulting, ${location}`);
-      searchQueries.push(`Technology Services, ${location}`);
-    } else if (rLow.includes('sales') || rLow.includes('marketing') || rLow.includes('cmo') || rLow.includes('agency')) {
+    } else if (rLow.includes('marketing') || rLow.includes('cmo') || rLow.includes('sales')) {
       searchQueries.push(`Digital Marketing Agency, ${location}`);
-      searchQueries.push(`Advertising Agency, ${location}`);
     } else if (rLow.includes('founder') || rLow.includes('ceo') || rLow.includes('owner')) {
-      searchQueries.push(`Startup, ${location}`);
-      searchQueries.push(`Enterprise Business, ${location}`);
-    } else if (rLow.includes('finance') || rLow.includes('cfo')) {
-      searchQueries.push(`Financial Services, ${location}`);
-      searchQueries.push(`Accounting Firm, ${location}`);
+      searchQueries.push(`Startup Enterprise, ${location}`);
     } else {
       searchQueries.push(`${role} Company, ${location}`);
     }
@@ -69,7 +75,7 @@ export async function scrapeOutscraperLeads(
   // 2. Fetch Places from Outscraper Maps endpoint
   const searchUrl = `https://api.app.outscraper.com/maps/search-v2?query=${encodeURIComponent(
     primaryQuery
-  )}&limit=${Math.min(Math.max(limit * 2, 25), 500)}&async=false`;
+  )}&limit=${Math.min(Math.max(limit * 2, 25), 200)}&async=false`;
 
   const mapResponse = await fetch(searchUrl, {
     method: 'GET',
@@ -160,69 +166,37 @@ export async function scrapeOutscraperLeads(
     }
   }
 
-  // 5. Assemble Structured Leads (Emulating Apify schema with full enrichment)
+  // 5. Assemble Structured Leads with strict personnel naming
   const leads: ApifyScrapedLead[] = [];
   const seenEntities = new Set<string>();
 
   for (const place of validPlaces) {
     if (!place?.name) continue;
 
-    const companyName = place.name.replace(/\s*[-–—|]\s*(PT\.?|CV\.?|Inc|LLC|Ltd).*$/i, '').trim() || place.name;
-    const website = place.website || place.site || '';
-    let domain: string | undefined;
+    const rawCompanyName = place.name.trim();
+    const cleanCompany = cleanCorporateName(rawCompanyName);
 
-    if (website) {
+    if (seenEntities.has(cleanCompany.toLowerCase())) continue;
+    seenEntities.add(cleanCompany.toLowerCase());
+
+    let domain: string | undefined;
+    if (place.website) {
       try {
-        const parsed = new URL(website.startsWith('http') ? website : `https://${website}`);
-        domain = parsed.hostname.replace(/^www\./, '').toLowerCase();
+        const p = new URL(place.website.startsWith('http') ? place.website : `https://${place.website}`);
+        domain = p.hostname.replace(/^www\./, '').toLowerCase();
       } catch {
-        domain = undefined;
+        // ignore
       }
     }
 
-    const dedupKey = domain || companyName.toLowerCase();
-    if (seenEntities.has(dedupKey)) continue;
-    seenEntities.add(dedupKey);
-
     const enriched = domain ? domainEnrichmentMap.get(domain) : undefined;
-
-    // Collect corporate & personal emails
-    const corporateEmails: string[] = [];
-    const personalEmails: string[] = [];
     let contactPersonName: string | undefined;
     let contactPersonTitle: string | undefined;
     let contactLinkedIn: string | undefined;
+    const corporateEmails: string[] = [];
+    const personalEmails: string[] = [];
 
-    // 1. Check Company LinkedIn from social profiles
-    if (enriched?.socials?.linkedin) {
-      contactLinkedIn = enriched.socials.linkedin.startsWith('http')
-        ? enriched.socials.linkedin
-        : `https://linkedin.com/company/${enriched.socials.linkedin}`;
-    }
-
-    // 2. Process enriched emails
-    if (enriched?.emails && Array.isArray(enriched.emails)) {
-      for (const em of enriched.emails) {
-        if (em?.value && em.value.includes('@')) {
-          const val = em.value.toLowerCase().trim();
-          if (domain && val.endsWith(`@${domain}`)) {
-            corporateEmails.push(val);
-          } else {
-            personalEmails.push(val);
-          }
-          if (!contactPersonName && em.full_name && !em.full_name.includes('[Not Provided]')) {
-            contactPersonName = em.full_name;
-            contactPersonTitle = em.title;
-          }
-          if (!contactLinkedIn && em.socials?.linkedin) {
-            contactLinkedIn = em.socials.linkedin.startsWith('http')
-              ? em.socials.linkedin
-              : `https://linkedin.com/in/${em.socials.linkedin}`;
-          }
-        }
-      }
-    }
-
+    // Check enriched contacts array for authentic individual humans
     if (enriched?.contacts && Array.isArray(enriched.contacts)) {
       for (const ct of enriched.contacts) {
         if (ct?.value && ct.type === 'email') {
@@ -233,14 +207,37 @@ export async function scrapeOutscraperLeads(
             personalEmails.push(val);
           }
         }
-        if (!contactPersonName && ct.full_name) {
-          contactPersonName = ct.full_name;
-          contactPersonTitle = ct.title;
+        if (!contactPersonName && ct.full_name && !LEGAL_ENTITY_REGEX.test(ct.full_name)) {
+          contactPersonName = ct.full_name.trim();
+          contactPersonTitle = ct.title || ct.role;
         }
         if (!contactLinkedIn && ct.socials?.linkedin) {
           contactLinkedIn = ct.socials.linkedin.startsWith('http')
             ? ct.socials.linkedin
             : `https://linkedin.com/in/${ct.socials.linkedin}`;
+        }
+      }
+    }
+
+    // Process enriched emails
+    if (enriched?.emails && Array.isArray(enriched.emails)) {
+      for (const em of enriched.emails) {
+        if (em?.value && em.value.includes('@')) {
+          const val = em.value.toLowerCase().trim();
+          if (domain && val.endsWith(`@${domain}`)) {
+            corporateEmails.push(val);
+          } else {
+            personalEmails.push(val);
+          }
+          if (!contactPersonName && em.full_name && !LEGAL_ENTITY_REGEX.test(em.full_name)) {
+            contactPersonName = em.full_name.trim();
+            contactPersonTitle = em.title || em.role;
+          }
+          if (!contactLinkedIn && em.socials?.linkedin) {
+            contactLinkedIn = em.socials.linkedin.startsWith('http')
+              ? em.socials.linkedin
+              : `https://linkedin.com/in/${em.socials.linkedin}`;
+          }
         }
       }
     }
@@ -259,7 +256,6 @@ export async function scrapeOutscraperLeads(
       }
     }
 
-    // Filter out blacklisted / tracker emails
     const cleanCorporate = Array.from(new Set(corporateEmails)).filter(
       (e) => !e.includes('wixpress.com') && !e.includes('sentry.io') && !e.includes('example.com')
     );
@@ -268,42 +264,49 @@ export async function scrapeOutscraperLeads(
       (e) => !e.includes('wixpress.com') && !e.includes('sentry.io') && !e.includes('example.com')
     );
 
-    // Fallback company corporate patterns if domain is known
     if (cleanCorporate.length === 0 && domain) {
-      cleanCorporate.push(`info@${domain}`);
       cleanCorporate.push(`contact@${domain}`);
-      cleanCorporate.push(`sales@${domain}`);
+      cleanCorporate.push(`info@${domain}`);
     }
 
-    const primaryEmail = cleanCorporate[0] || cleanPersonal[0] || (domain ? `info@${domain}` : undefined);
-    const fullName = contactPersonName || place.owner_title || `${companyName} Representative`;
+    const primaryEmail = cleanCorporate[0] || cleanPersonal[0] || (domain ? `contact@${domain}` : undefined);
+
+    // Strict Human Prospect Name formatting (Prevent company name from becoming the person's name)
+    let fullName: string;
+    let jobTitle: string;
+
+    if (contactPersonName && !LEGAL_ENTITY_REGEX.test(contactPersonName)) {
+      fullName = contactPersonName;
+      jobTitle = contactPersonTitle || role || 'Executive Director';
+    } else {
+      fullName = `${role || 'Executive Lead'} - ${cleanCompany}`;
+      jobTitle = role || place.category || 'Executive Decision Maker';
+    }
+
     const nameParts = fullName.split(/\s+/);
 
     const lead: ApifyScrapedLead = {
       fullName,
       firstName: nameParts[0] || 'Executive',
       lastName: nameParts.slice(1).join(' ') || undefined,
-      jobTitle: contactPersonTitle || role || place.category || place.type || 'Business Executive',
-      companyName,
+      jobTitle,
+      companyName: cleanCompany,
       companyDomain: domain,
-      linkedinUrl: contactLinkedIn || undefined,
+      linkedinUrl: contactLinkedIn || (enriched?.socials?.linkedin ? `https://linkedin.com/company/${enriched.socials.linkedin}` : undefined),
       location: place.city ? `${place.city}, ${place.country || location}` : place.full_address || place.address || location,
       email: primaryEmail || undefined,
-      summary: `${companyName} (${place.category || place.type || 'Commercial Enterprise'}) located in ${place.city || location}. Phone: ${place.phone || 'N/A'}. Rating: ${place.rating || 'N/A'}.`,
+      summary: `${cleanCompany} located in ${place.city || location}. Phone: ${place.phone || 'N/A'}. Category: ${place.category || 'Commercial Enterprise'}.`,
       metadata: {
-        source: 'business-discovery-live',
+        source: 'business-directory-outscraper',
         scrapedAt: new Date().toISOString(),
         phone: place.phone || undefined,
-        rating: place.rating || undefined,
-        reviewsCount: place.reviews || undefined,
         address: place.full_address || place.address || undefined,
-        website: website || undefined,
-        allEmails: [...cleanCorporate, ...cleanPersonal],
       },
     };
 
     leads.push(lead);
+    if (leads.length >= limit) break;
   }
 
-  return leads.slice(0, limit);
+  return leads;
 }
