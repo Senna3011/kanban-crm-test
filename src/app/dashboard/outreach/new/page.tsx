@@ -27,20 +27,6 @@ const INDUSTRY_OPTIONS = [
   'All Industries (Broad)',
 ];
 
-const BUSINESS_CATEGORY_PRESETS = [
-  'Software House & Development Agency',
-  'Digital Marketing & Advertising Agency',
-  'IT Consulting & Managed Services (MSP)',
-  'Clinic, Dental & Healthcare Practice',
-  'Accounting & Financial Advisory Firm',
-  'Real Estate Agency & Property Developer',
-  'Logistics, Freight & Warehouse Facility',
-  'Commercial Law Firm & Legal Office',
-  'Architecture & Interior Design Studio',
-  'Retail, Restaurant & F&B Franchise',
-  'Manufacturing & Industrial Supplier',
-];
-
 export default function NewOutreachCampaignPage() {
   const router = useRouter();
   const [step, setStep] = useState(1);
@@ -55,7 +41,6 @@ export default function NewOutreachCampaignPage() {
   const [targetRole, setTargetRole] = useState('Chief Technology Officer');
   const [targetLocation, setTargetLocation] = useState('United States');
   const [targetIndustry, setTargetIndustry] = useState('Information Technology & Services');
-  const [businessCategory, setBusinessCategory] = useState('Software House & Development Agency');
   const [searchQuery, setSearchQuery] = useState('');
   const [leadCount, setLeadCount] = useState(10);
 
@@ -148,19 +133,12 @@ export default function NewOutreachCampaignPage() {
       }
       setStep(2);
     } else if (step === 2) {
-      if (leadProvider === 'apify') {
-        if (!targetRole.trim() && !searchQuery.trim()) {
-          setError('Please specify a target executive job title or custom search query.');
-          return;
-        }
-      } else {
-        if (!businessCategory.trim() && !searchQuery.trim()) {
-          setError('Please specify a business category or company type.');
-          return;
-        }
+      if (!targetRole.trim() && !searchQuery.trim()) {
+        setError('Please specify a target executive job title or search query.');
+        return;
       }
       if (!targetLocation.trim()) {
-        setError('Please specify a geographic location or target city.');
+        setError('Please specify a geographic location or target country/city.');
         return;
       }
       setStep(3);
@@ -187,17 +165,14 @@ export default function NewOutreachCampaignPage() {
     try {
       const fullPromptInstructions = `[Tone: ${aiTone}, Length: ${aiLength}] ${promptInstructions}`.trim();
 
-      const finalRole = leadProvider === 'apify' ? targetRole.trim() : businessCategory.trim();
-      const finalIndustry = leadProvider === 'apify' ? targetIndustry.trim() : businessCategory.trim();
-
       const res = await fetch('/api/outreach/campaigns', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           name: name.trim(),
-          targetRole: finalRole,
+          targetRole: targetRole.trim(),
           targetLocation: targetLocation.trim(),
-          targetIndustry: finalIndustry,
+          targetIndustry: targetIndustry.trim(),
           searchQuery: searchQuery.trim() || undefined,
           promptInstructions: fullPromptInstructions,
           accountId: selectedAccountId || undefined,
@@ -263,7 +238,7 @@ export default function NewOutreachCampaignPage() {
               2
             </span>
             <span className={`text-xs font-semibold ${step >= 2 ? 'text-slate-900' : 'text-slate-400'}`}>
-              Discovery Strategy
+              Prospect Targeting
             </span>
           </div>
           <div className="h-0.5 w-12 bg-slate-200" />
@@ -348,212 +323,143 @@ export default function NewOutreachCampaignPage() {
         {step === 2 && (
           <div className="space-y-5 animate-in fade-in">
             <div>
-              <h2 className="text-sm font-bold text-slate-900">Step 2: Target Lead Parameters (Prospect Discovery)</h2>
-              <p className="text-xs text-slate-500 mt-0.5">Choose your discovery channel and define the target parameters.</p>
+              <h2 className="text-sm font-bold text-slate-900">Step 2: Target Lead Parameters (Decision Makers)</h2>
+              <p className="text-xs text-slate-500 mt-0.5">Define your target prospect role, geography, industry, and discovery engine.</p>
             </div>
 
-            {/* Visual Channel / Mode Selector */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5 pt-1">
-              <div
-                onClick={() => setLeadProvider('apify')}
-                className={`p-4 rounded-2xl border-2 cursor-pointer transition-all ${
-                  leadProvider === 'apify'
-                    ? 'border-primary-600 bg-primary-50/50 shadow-xs ring-1 ring-primary-500/20'
-                    : 'border-slate-200/90 bg-white hover:border-slate-300 hover:bg-slate-50/60'
-                }`}
-              >
-                <div className="flex items-center justify-between mb-1.5">
-                  <div className="flex items-center gap-2">
-                    <span className="text-lg">🎯</span>
-                    <h3 className="text-xs font-bold text-slate-900">Executive Search</h3>
-                  </div>
-                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-primary-100 text-primary-800">
-                    B2B Leaders
-                  </span>
-                </div>
-                <p className="text-[11px] text-slate-600 leading-relaxed">
-                  Target specific individual decision makers (CTOs, CEOs, Directors) across companies with verified professional profiles.
+            {/* Structured Inputs */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-1">
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">
+                  Target Job Title / Decision Maker Role <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  required
+                  placeholder="e.g., Chief Technology Officer, VP Sales, Founder, Head of Marketing"
+                  value={targetRole}
+                  onChange={(e) => setTargetRole(e.target.value)}
+                  className="w-full px-3.5 py-2.5 border border-slate-300 rounded-xl text-xs bg-white focus:outline-none focus:ring-2 focus:ring-primary-500"
+                />
+                <p className="text-[10px] text-slate-400 mt-1">
+                  The discovery engine automatically matches related decision makers (e.g. CTO, VP Engineering).
                 </p>
               </div>
 
-              <div
-                onClick={() => setLeadProvider('outscraper')}
-                className={`p-4 rounded-2xl border-2 cursor-pointer transition-all ${
-                  leadProvider === 'outscraper'
-                    ? 'border-indigo-600 bg-indigo-50/50 shadow-xs ring-1 ring-indigo-500/20'
-                    : 'border-slate-200/90 bg-white hover:border-slate-300 hover:bg-slate-50/60'
-                }`}
-              >
-                <div className="flex items-center justify-between mb-1.5">
-                  <div className="flex items-center gap-2">
-                    <span className="text-lg">🏢</span>
-                    <h3 className="text-xs font-bold text-slate-900">Business & Local Directory</h3>
-                  </div>
-                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-indigo-100 text-indigo-800">
-                    Direct Contact & Phone
-                  </span>
-                </div>
-                <p className="text-[11px] text-slate-600 leading-relaxed">
-                  Discover commercial businesses, agencies, clinics, and offices in specific cities with direct emails, phones, and addresses.
-                </p>
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">
+                  Target Country / Region / City <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  required
+                  placeholder="e.g., United States, Indonesia, Jakarta, Singapore, United Kingdom"
+                  value={targetLocation}
+                  onChange={(e) => setTargetLocation(e.target.value)}
+                  className="w-full px-3.5 py-2.5 border border-slate-300 rounded-xl text-xs bg-white focus:outline-none focus:ring-2 focus:ring-primary-500"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">
+                  Target Industry / Sector
+                </label>
+                <select
+                  value={targetIndustry}
+                  onChange={(e) => setTargetIndustry(e.target.value)}
+                  className="w-full px-3.5 py-2.5 border border-slate-300 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-primary-500 bg-white"
+                >
+                  {INDUSTRY_OPTIONS.map((ind) => (
+                    <option key={ind} value={ind}>
+                      {ind}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">
+                  Target Prospect Batch Size
+                </label>
+                <select
+                  value={leadCount}
+                  onChange={(e) => setLeadCount(Number(e.target.value))}
+                  className="w-full px-3.5 py-2.5 border border-slate-300 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-primary-500 bg-white font-medium"
+                >
+                  <option value={5}>5 Leads (Quick Test)</option>
+                  <option value={10}>10 Leads (Recommended Interactive)</option>
+                  <option value={25}>25 Leads (Standard Sourcing)</option>
+                  <option value={50}>50 Leads (Large Batch)</option>
+                  <option value={100}>100 Leads (Bulk Worker Queue)</option>
+                  <option value={500}>500 Leads (Massive Scale Queue)</option>
+                  <option value={1000}>1,000 Leads (High Volume Enterprise)</option>
+                </select>
+              </div>
+
+              <div className="sm:col-span-2">
+                <label className="block text-xs font-semibold text-slate-700 mb-1">
+                  Additional Search Qualifier / Niche Keyword (Optional)
+                </label>
+                <input
+                  type="text"
+                  placeholder="e.g., B2B SaaS, Series A, Ecommerce, Healthcare tech"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="w-full px-3.5 py-2.5 border border-slate-300 rounded-xl text-xs bg-white focus:outline-none focus:ring-2 focus:ring-primary-500"
+                />
               </div>
             </div>
 
-            {/* Dynamic Adaptive Form Fields based on Mode */}
-            <div className="p-4 bg-slate-50/80 rounded-2xl border border-slate-200/80 space-y-4">
-              {leadProvider === 'apify' ? (
-                /* EXECUTIVE MODE INPUTS */
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 animate-in fade-in">
-                  <div>
-                    <label className="block text-xs font-semibold text-slate-700 mb-1">
-                      Target Executive Job Title / Role <span className="text-red-500">*</span>
-                    </label>
-                    <input
-                      type="text"
-                      required
-                      placeholder="e.g., Chief Technology Officer, VP Sales, Founder, Head of IT"
-                      value={targetRole}
-                      onChange={(e) => setTargetRole(e.target.value)}
-                      className="w-full px-3.5 py-2.5 border border-slate-300 rounded-xl text-xs bg-white focus:outline-none focus:ring-2 focus:ring-primary-500"
-                    />
-                    <p className="text-[10px] text-slate-400 mt-1">
-                      The discovery engine will automatically expand synonyms (e.g. CTO, VP of Tech).
-                    </p>
+            {/* Provider Selection Toggle */}
+            <div className="pt-2 border-t border-slate-100">
+              <label className="block text-xs font-semibold text-slate-700 mb-2">
+                Discovery Scraper Engine
+              </label>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div
+                  onClick={() => setLeadProvider('apify')}
+                  className={`p-3.5 rounded-xl border-2 cursor-pointer transition-all ${
+                    leadProvider === 'apify'
+                      ? 'border-primary-600 bg-primary-50/50 shadow-xs ring-1 ring-primary-500/20'
+                      : 'border-slate-200/90 bg-white hover:border-slate-300 hover:bg-slate-50/60'
+                  }`}
+                >
+                  <div className="flex items-center justify-between mb-1">
+                    <div className="flex items-center gap-2">
+                      <span className="text-base">🎯</span>
+                      <h4 className="text-xs font-bold text-slate-900">Apify Scraper</h4>
+                    </div>
+                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-primary-100 text-primary-800">
+                      LinkedIn Index
+                    </span>
                   </div>
-
-                  <div>
-                    <label className="block text-xs font-semibold text-slate-700 mb-1">
-                      Target Country / Region <span className="text-red-500">*</span>
-                    </label>
-                    <input
-                      type="text"
-                      required
-                      placeholder="e.g., United States, Indonesia, Singapore, United Kingdom"
-                      value={targetLocation}
-                      onChange={(e) => setTargetLocation(e.target.value)}
-                      className="w-full px-3.5 py-2.5 border border-slate-300 rounded-xl text-xs bg-white focus:outline-none focus:ring-2 focus:ring-primary-500"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-xs font-semibold text-slate-700 mb-1">
-                      Target Industry Niche
-                    </label>
-                    <select
-                      value={targetIndustry}
-                      onChange={(e) => setTargetIndustry(e.target.value)}
-                      className="w-full px-3.5 py-2.5 border border-slate-300 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-primary-500 bg-white"
-                    >
-                      {INDUSTRY_OPTIONS.map((ind) => (
-                        <option key={ind} value={ind}>
-                          {ind}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-
-                  <div>
-                    <label className="block text-xs font-semibold text-slate-700 mb-1">
-                      Target Prospect Batch Size
-                    </label>
-                    <select
-                      value={leadCount}
-                      onChange={(e) => setLeadCount(Number(e.target.value))}
-                      className="w-full px-3.5 py-2.5 border border-slate-300 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-primary-500 bg-white font-medium"
-                    >
-                      <option value={5}>5 Leads (Quick Test)</option>
-                      <option value={10}>10 Leads (Recommended Interactive)</option>
-                      <option value={25}>25 Leads (Standard Sourcing)</option>
-                      <option value={50}>50 Leads (Large Batch)</option>
-                      <option value={100}>100 Leads (Bulk Worker Queue)</option>
-                      <option value={500}>500 Leads (Massive Scale Queue)</option>
-                      <option value={1000}>1,000 Leads (High Volume Enterprise)</option>
-                    </select>
-                  </div>
-
-                  <div className="sm:col-span-2">
-                    <label className="block text-xs font-semibold text-slate-700 mb-1">
-                      Additional Search Qualifier (Optional)
-                    </label>
-                    <input
-                      type="text"
-                      placeholder="e.g., B2B SaaS Series A funding scale"
-                      value={searchQuery}
-                      onChange={(e) => setSearchQuery(e.target.value)}
-                      className="w-full px-3.5 py-2.5 border border-slate-300 rounded-xl text-xs bg-white focus:outline-none focus:ring-2 focus:ring-primary-500"
-                    />
-                  </div>
+                  <p className="text-[11px] text-slate-600">
+                    Discovers executive contacts and decision makers directly via LinkedIn search indices.
+                  </p>
                 </div>
-              ) : (
-                /* BUSINESS DIRECTORY MODE INPUTS */
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 animate-in fade-in">
-                  <div>
-                    <label className="block text-xs font-semibold text-slate-700 mb-1">
-                      Business Niche / Category <span className="text-red-500">*</span>
-                    </label>
-                    <select
-                      value={businessCategory}
-                      onChange={(e) => setBusinessCategory(e.target.value)}
-                      className="w-full px-3.5 py-2.5 border border-slate-300 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white font-medium"
-                    >
-                      {BUSINESS_CATEGORY_PRESETS.map((cat) => (
-                        <option key={cat} value={cat}>
-                          {cat}
-                        </option>
-                      ))}
-                    </select>
-                    <p className="text-[10px] text-slate-400 mt-1">
-                      Targeting commercial organizations and businesses under this industry.
-                    </p>
-                  </div>
 
-                  <div>
-                    <label className="block text-xs font-semibold text-slate-700 mb-1">
-                      Target City / Area <span className="text-red-500">*</span>
-                    </label>
-                    <input
-                      type="text"
-                      required
-                      placeholder="e.g., Jakarta, Surabaya, California, London, Singapore"
-                      value={targetLocation}
-                      onChange={(e) => setTargetLocation(e.target.value)}
-                      className="w-full px-3.5 py-2.5 border border-slate-300 rounded-xl text-xs bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                    />
+                <div
+                  onClick={() => setLeadProvider('outscraper')}
+                  className={`p-3.5 rounded-xl border-2 cursor-pointer transition-all ${
+                    leadProvider === 'outscraper'
+                      ? 'border-indigo-600 bg-indigo-50/50 shadow-xs ring-1 ring-indigo-500/20'
+                      : 'border-slate-200/90 bg-white hover:border-slate-300 hover:bg-slate-50/60'
+                  }`}
+                >
+                  <div className="flex items-center justify-between mb-1">
+                    <div className="flex items-center gap-2">
+                      <span className="text-base">⚡</span>
+                      <h4 className="text-xs font-bold text-slate-900">Outscraper Engine</h4>
+                    </div>
+                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-indigo-100 text-indigo-800">
+                      Corporate Web
+                    </span>
                   </div>
-
-                  <div>
-                    <label className="block text-xs font-semibold text-slate-700 mb-1">
-                      Target Prospect Batch Size
-                    </label>
-                    <select
-                      value={leadCount}
-                      onChange={(e) => setLeadCount(Number(e.target.value))}
-                      className="w-full px-3.5 py-2.5 border border-slate-300 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white font-medium"
-                    >
-                      <option value={5}>5 Leads (Quick Test)</option>
-                      <option value={10}>10 Leads (Recommended Interactive)</option>
-                      <option value={25}>25 Leads (Standard Sourcing)</option>
-                      <option value={50}>50 Leads (Large Batch)</option>
-                      <option value={100}>100 Leads (Bulk Worker Queue)</option>
-                      <option value={500}>500 Leads (Massive Scale Queue)</option>
-                      <option value={1000}>1,000 Leads (High Volume Enterprise)</option>
-                    </select>
-                  </div>
-
-                  <div>
-                    <label className="block text-xs font-semibold text-slate-700 mb-1">
-                      Custom Business Keyword (Optional)
-                    </label>
-                    <input
-                      type="text"
-                      placeholder="e.g., ERP software, Cloud Migration"
-                      value={searchQuery}
-                      onChange={(e) => setSearchQuery(e.target.value)}
-                      className="w-full px-3.5 py-2.5 border border-slate-300 rounded-xl text-xs bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                    />
-                  </div>
+                  <p className="text-[11px] text-slate-600">
+                    Scrapes company websites and enriches decision makers, work emails, and social profiles.
+                  </p>
                 </div>
-              )}
+              </div>
             </div>
           </div>
         )}

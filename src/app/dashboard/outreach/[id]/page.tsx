@@ -27,16 +27,34 @@ interface Lead {
   createdAt: string;
 }
 
+const INDUSTRY_OPTIONS = [
+  'Information Technology & Services',
+  'Computer Software / SaaS',
+  'Financial Services & Fintech',
+  'Healthcare & Medical',
+  'E-Commerce & Retail',
+  'Marketing & Advertising',
+  'Real Estate & Construction',
+  'Manufacturing & Logistics',
+  'Education Management',
+  'Hospitality & Tourism',
+  'Legal & Consulting',
+  'All Industries (Broad)',
+];
+
 interface CampaignDetail {
   id: string;
   name: string;
   targetRole?: string;
   targetLocation?: string;
   targetIndustry?: string;
+  searchQuery?: string;
   promptInstructions?: string;
   status: string;
+  accountId?: string;
   createdAt: string;
   account?: {
+    id?: string;
     senderEmail: string;
     senderName: string;
     smtpUser?: string;
@@ -108,6 +126,19 @@ export default function CampaignWorkspacePage({
   const [testContent, setTestContent] = useState('');
   const [sendingTestDirect, setSendingTestDirect] = useState(false);
 
+  // Campaign Settings Modal State
+  const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false);
+  const [settingsName, setSettingsName] = useState('');
+  const [settingsStatus, setSettingsStatus] = useState('DRAFT');
+  const [settingsAccountId, setSettingsAccountId] = useState('');
+  const [settingsTargetRole, setSettingsTargetRole] = useState('');
+  const [settingsTargetLocation, setSettingsTargetLocation] = useState('');
+  const [settingsTargetIndustry, setSettingsTargetIndustry] = useState('');
+  const [settingsSearchQuery, setSettingsSearchQuery] = useState('');
+  const [settingsPromptInstructions, setSettingsPromptInstructions] = useState('');
+  const [savingSettings, setSavingSettings] = useState(false);
+  const [outreachAccounts, setOutreachAccounts] = useState<any[]>([]);
+
   // SweetAlert2-styled Confirm Dialog State
   const [confirmDialog, setConfirmDialog] = useState<{
     isOpen: boolean;
@@ -124,6 +155,16 @@ export default function CampaignWorkspacePage({
     message: '',
     onConfirm: () => {},
   });
+
+  useEffect(() => {
+    fetch('/api/outreach/accounts')
+      .then((r) => r.json())
+      .then((data) => {
+        const list = Array.isArray(data) ? data : data.accounts || [];
+        setOutreachAccounts(list);
+      })
+      .catch((e) => console.error('Failed to load accounts:', e));
+  }, []);
 
   useEffect(() => {
     fetchCampaign().then((loadedCampaign) => {
@@ -269,7 +310,17 @@ export default function CampaignWorkspacePage({
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Failed to verify emails');
-      toast.success(`Verification complete: ${data.safeCount} safe inboxes confirmed.`);
+      if (data.queued) {
+        toast.success(data.message || `Verifikasi ${data.totalProcessed || 'leads'} dijadwalkan di background worker.`);
+      } else {
+        const parts: string[] = [];
+        if (data.safeCount) parts.push(`${data.safeCount} Safe 🟢`);
+        if (data.riskyCount) parts.push(`${data.riskyCount} Catch-All 🟡`);
+        if (data.invalidCount) parts.push(`${data.invalidCount} Invalid 🔴`);
+        if (data.unverifiedCount) parts.push(`${data.unverifiedCount} Unverified ⚪`);
+        const summary = parts.length > 0 ? parts.join(', ') : `${data.totalProcessed || 0} checked`;
+        toast.success(`Verification complete: ${summary}`);
+      }
       await fetchCampaign();
     } catch (err: any) {
       toast.error(`Verification error: ${err.message}`);
@@ -629,6 +680,56 @@ export default function CampaignWorkspacePage({
     }
   }
 
+  function openSettingsModal() {
+    if (!campaign) return;
+    setSettingsName(campaign.name || '');
+    setSettingsStatus(campaign.status || 'DRAFT');
+    setSettingsAccountId(campaign.accountId || (campaign.account as any)?.id || '');
+    setSettingsTargetRole(campaign.targetRole || '');
+    setSettingsTargetLocation(campaign.targetLocation || '');
+    setSettingsTargetIndustry(campaign.targetIndustry || '');
+    setSettingsSearchQuery(campaign.searchQuery || '');
+    setSettingsPromptInstructions(campaign.promptInstructions || '');
+    setIsSettingsModalOpen(true);
+  }
+
+  async function handleSaveSettings(e: React.FormEvent) {
+    e.preventDefault();
+    if (!settingsName.trim()) {
+      toast.error('Campaign title cannot be empty');
+      return;
+    }
+    setSavingSettings(true);
+    try {
+      const res = await fetch(`/api/outreach/campaigns/${campaignId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: settingsName.trim(),
+          status: settingsStatus,
+          accountId: settingsAccountId || null,
+          targetRole: settingsTargetRole.trim() || undefined,
+          targetLocation: settingsTargetLocation.trim() || undefined,
+          targetIndustry: settingsTargetIndustry.trim() || undefined,
+          searchQuery: settingsSearchQuery.trim() || undefined,
+          promptInstructions: settingsPromptInstructions.trim() || undefined,
+        }),
+      });
+
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to update campaign settings');
+
+      setCampaign((prev) => (prev ? { ...prev, ...data } : data));
+      setIsSettingsModalOpen(false);
+      toast.success('Campaign settings updated successfully!');
+      await fetchCampaign();
+    } catch (err: any) {
+      toast.error(`Save Settings Error: ${err.message}`);
+    } finally {
+      setSavingSettings(false);
+    }
+  }
+
   if (loading && !campaign) {
     return (
       <div className="p-12 text-center text-xs text-slate-500 max-w-7xl mx-auto space-y-3">
@@ -808,6 +909,14 @@ export default function CampaignWorkspacePage({
 
           {/* Quick Utility Tools */}
           <div className="flex flex-wrap items-center gap-2">
+            <button
+              onClick={openSettingsModal}
+              className="px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200/90 text-xs font-bold rounded-xl transition-colors flex items-center gap-1.5 shadow-2xs"
+              title="Edit Campaign identity, targeting parameters, and AI copywriting prompt"
+            >
+              <span>⚙️</span>
+              <span>Campaign Settings</span>
+            </button>
             <button
               onClick={() => setIsTestSendOpen(true)}
               disabled={Boolean(actionLoading) || loading}
@@ -1289,7 +1398,7 @@ export default function CampaignWorkspacePage({
                         )}
                         {isRisky && (
                           <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-800">
-                            🟡 Risky
+                            🟡 Risky ({lead.verifyScore || 60}%)
                           </span>
                         )}
                         {(isInvalid || lead.verifyStatus === 'DISPOSABLE') && (
@@ -1298,13 +1407,20 @@ export default function CampaignWorkspacePage({
                           </span>
                         )}
                         {!isSafe && !isRisky && !isInvalid && lead.verifyStatus !== 'DISPOSABLE' && (
-                          <button
-                            onClick={() => handleVerifyEmails([lead.id])}
-                            disabled={isVerifying || !lead.email}
-                            className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-100 hover:bg-slate-200 text-slate-600 transition-colors"
-                          >
-                            {isVerifying ? 'Checking...' : '⚪ Verify'}
-                          </button>
+                          lead.email ? (
+                            <button
+                              onClick={() => handleVerifyEmails([lead.id])}
+                              disabled={isVerifying}
+                              className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-100 hover:bg-slate-200 text-slate-600 transition-colors border border-slate-200 shadow-2xs"
+                              title="Click to check deliverability via Reoon Verifier"
+                            >
+                              {isVerifying ? 'Checking...' : '⚪ Verify'}
+                            </button>
+                          ) : (
+                            <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium text-slate-400 bg-slate-50 border border-slate-200">
+                              ⚪ No Email
+                            </span>
+                          )
                         )}
                       </td>
 
@@ -1861,6 +1977,173 @@ export default function CampaignWorkspacePage({
                   className="px-4 py-1.5 bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold rounded-lg shadow-xs disabled:opacity-50"
                 >
                   {sendingTestDirect ? 'Sending...' : '🚀 Send Test Email Now'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Campaign Settings Modal */}
+      {isSettingsModalOpen && (
+        <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4 z-50 overflow-y-auto">
+          <div className="bg-white rounded-2xl max-w-2xl w-full p-6 shadow-xl border border-slate-200 space-y-5 my-8 max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <div className="flex items-center gap-2.5">
+                <span className="text-xl">⚙️</span>
+                <div>
+                  <h3 className="text-sm font-bold text-slate-900">Campaign Configuration & AI Settings</h3>
+                  <p className="text-xs text-slate-500">Update campaign parameters, targeting criteria, and AI copywriting prompt.</p>
+                </div>
+              </div>
+              <button onClick={() => setIsSettingsModalOpen(false)} className="text-slate-400 hover:text-slate-600 p-1">
+                ✕
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveSettings} className="space-y-5">
+              {/* 1. General Info & Mailbox */}
+              <div className="space-y-3 p-4 bg-slate-50/70 rounded-xl border border-slate-200/80">
+                <h4 className="text-xs font-bold text-slate-900 flex items-center gap-1.5">
+                  <span>📌</span>
+                  <span>General Identity & Sender Mailbox</span>
+                </h4>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  <div className="sm:col-span-2">
+                    <label className="block text-[11px] font-semibold text-slate-700 mb-1">Campaign Title *</label>
+                    <input
+                      type="text"
+                      required
+                      value={settingsName}
+                      onChange={(e) => setSettingsName(e.target.value)}
+                      placeholder="e.g. US Enterprise CTOs"
+                      className="w-full px-3 py-2 border border-slate-300 rounded-xl text-xs bg-white focus:ring-2 focus:ring-primary-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[11px] font-semibold text-slate-700 mb-1">Status</label>
+                    <select
+                      value={settingsStatus}
+                      onChange={(e) => setSettingsStatus(e.target.value)}
+                      className="w-full px-3 py-2 border border-slate-300 rounded-xl text-xs bg-white focus:ring-2 focus:ring-primary-500 font-medium"
+                    >
+                      <option value="DRAFT">DRAFT</option>
+                      <option value="ACTIVE">ACTIVE</option>
+                      <option value="PAUSED">PAUSED</option>
+                      <option value="COMPLETED">COMPLETED</option>
+                    </select>
+                  </div>
+                  <div className="sm:col-span-3">
+                    <label className="block text-[11px] font-semibold text-slate-700 mb-1">Outbound Sender Mailbox</label>
+                    <select
+                      value={settingsAccountId}
+                      onChange={(e) => setSettingsAccountId(e.target.value)}
+                      className="w-full px-3 py-2 border border-slate-300 rounded-xl text-xs bg-white focus:ring-2 focus:ring-primary-500"
+                    >
+                      <option value="">No sender configured (Staging only)</option>
+                      {outreachAccounts.map((acc) => (
+                        <option key={acc.id} value={acc.id}>
+                          {acc.name} ({acc.senderEmail})
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+              </div>
+
+              {/* 2. Target Prospect Criteria */}
+              <div className="space-y-3 p-4 bg-slate-50/70 rounded-xl border border-slate-200/80">
+                <h4 className="text-xs font-bold text-slate-900 flex items-center gap-1.5">
+                  <span>🎯</span>
+                  <span>Prospect Targeting Criteria</span>
+                </h4>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-[11px] font-semibold text-slate-700 mb-1">Target Job Title / Role</label>
+                    <input
+                      type="text"
+                      value={settingsTargetRole}
+                      onChange={(e) => setSettingsTargetRole(e.target.value)}
+                      placeholder="e.g. Chief Technology Officer"
+                      className="w-full px-3 py-2 border border-slate-300 rounded-xl text-xs bg-white focus:ring-2 focus:ring-primary-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[11px] font-semibold text-slate-700 mb-1">Target Location / Geography</label>
+                    <input
+                      type="text"
+                      value={settingsTargetLocation}
+                      onChange={(e) => setSettingsTargetLocation(e.target.value)}
+                      placeholder="e.g. United States, Indonesia"
+                      className="w-full px-3 py-2 border border-slate-300 rounded-xl text-xs bg-white focus:ring-2 focus:ring-primary-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[11px] font-semibold text-slate-700 mb-1">Industry / Sector</label>
+                    <select
+                      value={settingsTargetIndustry}
+                      onChange={(e) => setSettingsTargetIndustry(e.target.value)}
+                      className="w-full px-3 py-2 border border-slate-300 rounded-xl text-xs bg-white focus:ring-2 focus:ring-primary-500"
+                    >
+                      {INDUSTRY_OPTIONS.map((ind) => (
+                        <option key={ind} value={ind}>
+                          {ind}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-[11px] font-semibold text-slate-700 mb-1">Search Keyword Qualifier</label>
+                    <input
+                      type="text"
+                      value={settingsSearchQuery}
+                      onChange={(e) => setSettingsSearchQuery(e.target.value)}
+                      placeholder="e.g. B2B SaaS, Series A"
+                      className="w-full px-3 py-2 border border-slate-300 rounded-xl text-xs bg-white focus:ring-2 focus:ring-primary-500"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* 3. AI Value Proposition & Pitch Instructions */}
+              <div className="space-y-3 p-4 bg-slate-50/70 rounded-xl border border-slate-200/80">
+                <div className="flex items-center justify-between">
+                  <h4 className="text-xs font-bold text-slate-900 flex items-center gap-1.5">
+                    <span>🤖</span>
+                    <span>AI Copywriting & Value Proposition Strategy</span>
+                  </h4>
+                  <span className="text-[10px] text-slate-400">Used for AI draft generation</span>
+                </div>
+                <textarea
+                  rows={4}
+                  value={settingsPromptInstructions}
+                  onChange={(e) => setSettingsPromptInstructions(e.target.value)}
+                  placeholder="Describe your offer, USP, key client benefits, and call to action..."
+                  className="w-full px-3 py-2 border border-slate-300 rounded-xl text-xs leading-relaxed bg-white focus:ring-2 focus:ring-primary-500 text-slate-800"
+                />
+              </div>
+
+              <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => setIsSettingsModalOpen(false)}
+                  className="px-4 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-100 rounded-xl transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={savingSettings}
+                  className="px-5 py-2 bg-primary-600 hover:bg-primary-700 text-white text-xs font-bold rounded-xl shadow-xs transition-colors disabled:opacity-50 flex items-center gap-1.5"
+                >
+                  {savingSettings ? (
+                    <>
+                      <span className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                      <span>Saving Changes...</span>
+                    </>
+                  ) : (
+                    <span>Save Campaign Settings</span>
+                  )}
                 </button>
               </div>
             </form>

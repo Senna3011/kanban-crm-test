@@ -40,8 +40,8 @@ export async function POST(
       },
     });
 
-    // For large batches (> 30 leads) or explicit async, process via BullMQ worker
-    if (leadsCount > 30 || body.async === true) {
+    // For massive scale (> 50 leads or explicit async), enqueue to BullMQ worker
+    if (leadsCount > 50 || body.async === true) {
       const job = await outreachVerifyQueue.add(
         'outreach_verify_batch',
         {
@@ -62,6 +62,7 @@ export async function POST(
         success: true,
         queued: true,
         jobId: job.id,
+        totalProcessed: leadsCount,
         message: `Verifikasi ${leadsCount} leads dijadwalkan di background worker.`,
       });
     }
@@ -74,89 +75,103 @@ export async function POST(
     });
 
     const apiKey = campaign.account?.reoonApiKey || process.env.REOON_API_KEY;
+
+    // Process leads in concurrent batches of 5 for instant real-time response
+    const concurrencyChunk = 5;
     const updatedLeads = [];
 
-    for (const lead of leads) {
-      let email = lead.email;
-      let verifyStatus = lead.verifyStatus || 'UNVERIFIED';
-      let verifyScore = lead.verifyScore || 0;
-      let companyDomain = lead.companyDomain;
+    for (let i = 0; i < leads.length; i += concurrencyChunk) {
+      const chunk = leads.slice(i, i + concurrencyChunk);
+      const chunkResults = await Promise.all(
+        chunk.map(async (lead) => {
+          let email = lead.email;
+          let verifyStatus = lead.verifyStatus || 'UNVERIFIED';
+          let verifyScore = lead.verifyScore || 0;
+          let companyDomain = lead.companyDomain;
 
-      // 1. Ensure valid domain resolution
-      if (!companyDomain || !companyDomain.includes('.')) {
-        const domRes = await resolveCompanyDomain(lead.companyName, companyDomain);
-        if (domRes.domain) companyDomain = domRes.domain;
-      }
+          // 1. Ensure valid domain resolution if missing
+          if (!companyDomain || !companyDomain.includes('.')) {
+            const domRes = await resolveCompanyDomain(lead.companyName, companyDomain);
+            if (domRes.domain) companyDomain = domRes.domain;
+          }
 
-      if (!email && (lead.fullName || lead.firstName)) {
-        const found = await findAndVerifyProspectEmail({
-          fullName: lead.fullName,
-          firstName: lead.firstName || undefined,
-          lastName: lead.lastName || undefined,
-          companyName: lead.companyName || undefined,
-          companyDomain: companyDomain || undefined,
-          reoonApiKey: apiKey,
-        });
+          if (!email && (lead.fullName || lead.firstName)) {
+            const found = await findAndVerifyProspectEmail({
+              fullName: lead.fullName,
+              firstName: lead.firstName || undefined,
+              lastName: lead.lastName || undefined,
+              companyName: lead.companyName || undefined,
+              companyDomain: companyDomain || undefined,
+              reoonApiKey: apiKey,
+            });
 
-        email = found.email || null;
-        verifyStatus = found.status;
-        verifyScore = found.score;
-        if (found.resolvedDomain) companyDomain = found.resolvedDomain;
-      } else if (email) {
-        // Verify current email
-        const verified = await verifyEmailAddress(email, apiKey);
-        verifyStatus = verified.status;
-        verifyScore = verified.score;
+            email = found.email || null;
+            verifyStatus = found.status;
+            verifyScore = found.score;
+            if (found.resolvedDomain) companyDomain = found.resolvedDomain;
+          } else if (email) {
+            // Direct verification without heavy multi-loop overhead
+            const verified = await verifyEmailAddress(email, apiKey);
+            verifyStatus = verified.status;
+            verifyScore = verified.score;
 
-        // If primary candidate was INVALID and we have domain, try other permutations to find valid email
-        if (verified.status === 'INVALID' && companyDomain) {
-          const permutations = generateEmailPermutations(lead.fullName, companyDomain);
-          for (const candidate of permutations) {
-            if (candidate.toLowerCase() === email.toLowerCase()) continue;
+            // If primary candidate was INVALID and domain available, test max 1 top permutation
+            if (verified.status === 'INVALID' && companyDomain) {
+              const permutations = generateEmailPermutations(lead.fullName, companyDomain);
+              for (const candidate of permutations.slice(0, 1)) {
+                if (candidate.toLowerCase() === email.toLowerCase()) continue;
 
-            const candidateRes = await verifyEmailAddress(candidate, apiKey);
-            if (candidateRes.status === 'SAFE') {
-              email = candidate;
-              verifyStatus = candidateRes.status;
-              verifyScore = candidateRes.score;
-              break;
-            }
-            if (candidateRes.status === 'RISKY' && verifyStatus === 'INVALID') {
-              email = candidate;
-              verifyStatus = candidateRes.status;
-              verifyScore = candidateRes.score;
+                const candidateRes = await verifyEmailAddress(candidate, apiKey);
+                if (candidateRes.status === 'SAFE') {
+                  email = candidate;
+                  verifyStatus = candidateRes.status;
+                  verifyScore = candidateRes.score;
+                  break;
+                }
+              }
             }
           }
-        }
-      }
 
-      const newStatus =
-        verifyStatus === 'SAFE'
-          ? 'VERIFIED_SAFE'
-          : verifyStatus === 'RISKY'
-          ? 'VERIFIED_RISKY'
-          : verifyStatus === 'INVALID' || verifyStatus === 'DISPOSABLE'
-          ? 'INVALID'
-          : 'VERIFYING';
+          const newStatus =
+            verifyStatus === 'SAFE'
+              ? 'VERIFIED_SAFE'
+              : verifyStatus === 'RISKY'
+              ? 'VERIFIED_RISKY'
+              : verifyStatus === 'INVALID' || verifyStatus === 'DISPOSABLE'
+              ? 'INVALID'
+              : lead.aiDraftSubject
+              ? 'DRAFT_READY'
+              : 'SCRAPED';
 
-      const updated = await prisma.outreachLead.update({
-        where: { id: lead.id },
-        data: {
-          email,
-          companyDomain: companyDomain || lead.companyDomain,
-          verifyStatus,
-          verifyScore,
-          status: newStatus,
-        },
-      });
+          const updated = await prisma.outreachLead.update({
+            where: { id: lead.id },
+            data: {
+              email,
+              companyDomain: companyDomain || lead.companyDomain,
+              verifyStatus,
+              verifyScore,
+              status: newStatus,
+            },
+          });
 
-      updatedLeads.push(updated);
+          return updated;
+        })
+      );
+      updatedLeads.push(...chunkResults);
     }
+
+    const safeCount = updatedLeads.filter((l) => l.verifyStatus === 'SAFE').length;
+    const riskyCount = updatedLeads.filter((l) => l.verifyStatus === 'RISKY').length;
+    const invalidCount = updatedLeads.filter((l) => l.verifyStatus === 'INVALID' || l.verifyStatus === 'DISPOSABLE').length;
+    const unverifiedCount = updatedLeads.filter((l) => !l.verifyStatus || l.verifyStatus === 'UNVERIFIED').length;
 
     return NextResponse.json({
       success: true,
-      totalVerified: updatedLeads.length,
-      safeCount: updatedLeads.filter((l) => l.verifyStatus === 'SAFE').length,
+      totalProcessed: updatedLeads.length,
+      safeCount,
+      riskyCount,
+      invalidCount,
+      unverifiedCount,
       leads: updatedLeads,
     });
   } catch (error: any) {
