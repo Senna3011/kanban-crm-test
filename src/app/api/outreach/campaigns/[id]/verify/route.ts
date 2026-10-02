@@ -88,11 +88,15 @@ export async function POST(
           let verifyStatus = lead.verifyStatus || 'UNVERIFIED';
           let verifyScore = lead.verifyScore || 0;
           let companyDomain = lead.companyDomain;
+          let isDomainVerified = Boolean(lead.companyDomain);
 
           // 1. Ensure valid domain resolution if missing
           if (!companyDomain || !companyDomain.includes('.')) {
             const domRes = await resolveCompanyDomain(lead.companyName, companyDomain);
-            if (domRes.domain) companyDomain = domRes.domain;
+            if (domRes.domain) {
+              companyDomain = domRes.domain;
+              isDomainVerified = domRes.isVerifiedDomain;
+            }
           }
 
           if (!email && (lead.fullName || lead.firstName)) {
@@ -108,7 +112,10 @@ export async function POST(
             email = found.email || null;
             verifyStatus = found.status;
             verifyScore = found.score;
-            if (found.resolvedDomain) companyDomain = found.resolvedDomain;
+            if (found.resolvedDomain) {
+              companyDomain = found.resolvedDomain;
+              isDomainVerified = true;
+            }
           } else if (email) {
             // Direct verification without heavy multi-loop overhead
             const verified = await verifyEmailAddress(email, apiKey);
@@ -147,7 +154,7 @@ export async function POST(
             where: { id: lead.id },
             data: {
               email,
-              companyDomain: companyDomain || lead.companyDomain,
+              companyDomain: isDomainVerified ? companyDomain : (lead.companyDomain || null),
               verifyStatus,
               verifyScore,
               status: newStatus,

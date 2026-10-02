@@ -46,13 +46,12 @@ export async function POST(
 
       // 1. Resolve authentic domain using Domain Resolver (Clearbit & Sanitizer)
       const domainResult = await resolveCompanyDomain(lead.companyName, companyDomain);
-      if (domainResult.domain) {
-        companyDomain = domainResult.domain;
-      }
+      const candidateDomain = domainResult.domain;
+      const verifiedCompanyDomain = domainResult.isVerifiedDomain ? domainResult.domain : (lead.companyDomain || null);
 
       // 2. Generate candidate email permutations if email not present
-      if (!email && companyDomain) {
-        const permutations = generateEmailPermutations(lead.fullName, companyDomain);
+      if (!email && candidateDomain) {
+        const permutations = generateEmailPermutations(lead.fullName, candidateDomain);
         if (permutations.length > 0) {
           email = permutations[0]; // Primary pattern: first.last@domain
         }
@@ -62,7 +61,7 @@ export async function POST(
         where: { id: lead.id },
         data: {
           email,
-          companyDomain: companyDomain || lead.companyDomain,
+          companyDomain: verifiedCompanyDomain,
           status: email ? 'DRAFT_READY' : lead.status,
           metadata: {
             ...(typeof lead.metadata === 'object' && lead.metadata !== null ? lead.metadata : {}),

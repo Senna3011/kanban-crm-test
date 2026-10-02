@@ -17,9 +17,12 @@ The platform embodies the **Full Funnel Outreach Marketing Architecture**:
    - Prevents quota exhaustion on Redis Free Tier limits (500k monthly commands & 256 MB RAM ceiling).
 2. **Fail-Fast Security Hardening (`src/server/auth.ts` & `src/lib/encryption.ts`)**:
    - Enforced immediate runtime exception in production when `NEXTAUTH_SECRET` or `ENCRYPTION_KEY` is missing or insufficient in length ($< 32$ chars).
-3. **User-Centric Outreach & CRM Workflow (`src/app/dashboard/outreach/[id]/page.tsx`)**:
+3. **Live Corporate Website Verifier & Gatekeeper (`src/lib/domain-resolver.ts` & `src/lib/outscraper.ts`)**:
+   - Outscraper engine executes fast concurrent DNS & HTTP accessibility checks on extracted business websites.
+   - Inaccessible, NXDOMAIN, 404, or parked websites are stripped (`companyDomain: undefined`), and the UI "🌐 Website" button only renders for genuinely verified, live domains.
+4. **User-Centric Outreach & CRM Workflow (`src/app/dashboard/outreach/[id]/page.tsx`)**:
    - Preserved clear, user-controlled lead management: users selectively run *Find Emails*, verify deliverability via Reoon, and push qualified leads into specific Kanban CRM boards & columns.
-4. **Comprehensive Technical Audit Report**:
+5. **Comprehensive Technical Audit Report**:
    - Detailed 10-aspect scorecard and remediation roadmap documented in [`docs/laporan-audit-qa-360.md`](docs/laporan-audit-qa-360.md).
 
 ---
@@ -30,6 +33,7 @@ The platform embodies the **Full Funnel Outreach Marketing Architecture**:
 | :--- | :---: | :--- |
 | **Discovery Engine Toggle** | Completed | Clean UI toggle between **LinkedIn Decision Makers** (individual executive contacts) and **Company & Business Directory** (Outscraper / organizational entities). |
 | **Reoon Verifier Safe Filter** | Completed | Categorizes prospects into `SAFE`, `RISKY`, and `INVALID`; isolates risky emails to safeguard sender SMTP reputation. |
+| **Live Website Verifier** | Completed | DNS & HTTP accessibility probe ensures company website links are verified live before rendering action buttons. |
 | **User-Controlled Lead Selection** | Completed | Selective checkbox actions for lead email discovery, Reoon verification, sequential draft review, and Kanban CRM push. |
 | **Ultra-Lean BullMQ Queues** | Completed | Scalable background queues for scraping, verification, dispatching, and email polling with strict Redis quota safety. |
 | **Interactive CRM Push Selector** | Completed | Dynamic Board & Column selection with idempotency checks and direct card links (`/dashboard?cardId=...`). |

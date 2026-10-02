@@ -68,6 +68,34 @@ interface BoardOption {
   columns: { id: string; title: string; position: number }[];
 }
 
+function isValidWebsiteDomain(domain?: string | null): boolean {
+  if (!domain || typeof domain !== 'string') return false;
+  const clean = domain.replace(/^https?:\/\//i, '').replace(/\/.*$/, '').replace(/^www\./i, '').toLowerCase().trim();
+  if (!clean || !clean.includes('.') || clean.length < 4 || clean.endsWith('.local')) return false;
+
+  const blocked = [
+    'facebook.com',
+    'instagram.com',
+    'twitter.com',
+    'x.com',
+    'linkedin.com',
+    'youtube.com',
+    'google.com',
+    'maps.google.com',
+    'wa.me',
+    'whatsapp.com',
+    'linktr.ee',
+    't.me',
+    'tiktok.com',
+    'pinterest.com',
+    'bit.ly',
+    'none',
+    'n/a',
+  ];
+
+  return !blocked.some((b) => clean === b || clean.endsWith(`.${b}`));
+}
+
 export default function CampaignWorkspacePage({
   params,
 }: {
@@ -1330,7 +1358,7 @@ export default function CampaignWorkspacePage({
                           )}
                         </div>
                         {/* Dedicated Fixed Action Row for LinkedIn & Website */}
-                        {(lead.linkedinUrl || lead.companyDomain) && (
+                        {(lead.linkedinUrl || isValidWebsiteDomain(lead.companyDomain)) && (
                           <div className="flex items-center gap-2 mt-2 pt-1.5 border-t border-slate-100">
                             {lead.linkedinUrl && (
                               <a
@@ -1348,16 +1376,16 @@ export default function CampaignWorkspacePage({
                               </a>
                             )}
 
-                            {lead.companyDomain && (
+                            {isValidWebsiteDomain(lead.companyDomain) && (
                               <a
-                                href={lead.companyDomain.startsWith('http') ? lead.companyDomain : `https://${lead.companyDomain}`}
+                                href={lead.companyDomain!.startsWith('http') ? lead.companyDomain! : `https://${lead.companyDomain}`}
                                 target="_blank"
                                 rel="noreferrer"
                                 className="inline-flex items-center gap-1.5 px-2 py-1 text-[11px] font-medium text-slate-700 bg-slate-100 hover:bg-indigo-50 hover:text-indigo-700 border border-slate-200/90 hover:border-indigo-200 rounded-md transition-all"
                                 title="Kunjungi Website Perusahaan"
                               >
                                 <span className="text-slate-400">🌐</span>
-                                <span className="max-w-[140px] truncate">{lead.companyDomain.replace(/^https?:\/\//, '').replace(/\/.*$/, '')}</span>
+                                <span className="max-w-[140px] truncate">{lead.companyDomain!.replace(/^https?:\/\//, '').replace(/\/.*$/, '')}</span>
                                 <span className="text-[9px] text-slate-400">↗</span>
                               </a>
                             )}

@@ -1,3 +1,5 @@
+import dns from 'node:dns/promises';
+
 const GENERIC_NON_COMPANY_PATTERNS = [
   'information technology',
   'information technology & services',
@@ -119,6 +121,108 @@ export async function lookupDomainViaClearbit(companyName: string): Promise<stri
 }
 
 /**
+ * Verifies if a website or domain is online, accessible, and not a generic/social placeholder.
+ */
+export async function isLiveWebsite(urlOrDomain?: string | null): Promise<boolean> {
+  if (!urlOrDomain || typeof urlOrDomain !== 'string') return false;
+
+  let clean = urlOrDomain.trim();
+  if (clean.startsWith('http://') || clean.startsWith('https://')) {
+    try {
+      clean = new URL(clean).hostname;
+    } catch {
+      return false;
+    }
+  } else {
+    clean = clean.split('/')[0].split('?')[0];
+  }
+
+  clean = clean.replace(/^www\./i, '').toLowerCase().trim();
+  if (!clean || !clean.includes('.') || clean.length < 4 || clean.endsWith('.local')) {
+    return false;
+  }
+
+  // Block social platforms, search engines, and URL shorteners
+  const nonCompanyDomains = [
+    'facebook.com',
+    'instagram.com',
+    'twitter.com',
+    'x.com',
+    'linkedin.com',
+    'youtube.com',
+    'google.com',
+    'maps.google.com',
+    'goo.gl',
+    'wa.me',
+    'whatsapp.com',
+    'linktr.ee',
+    't.me',
+    'tiktok.com',
+    'pinterest.com',
+    'bit.ly',
+    'wixsite.com',
+    'wordpress.com',
+    'blogspot.com',
+  ];
+
+  if (nonCompanyDomains.some((d) => clean === d || clean.endsWith(`.${d}`))) {
+    return false;
+  }
+
+  const cacheKey = `live:${clean}`;
+  if (domainCache.has(cacheKey)) {
+    return domainCache.get(cacheKey) === 'true';
+  }
+
+  try {
+    // 1. Fast DNS Check
+    const lookup = await dns.lookup(clean).catch(() => null);
+    if (!lookup || !lookup.address) {
+      if (domainCache.size < 5000) domainCache.set(cacheKey, 'false');
+      return false;
+    }
+
+    // 2. Fast HTTP probe with 2.5s timeout
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 2500);
+
+    let isSuccess = false;
+    try {
+      const res = await fetch(`https://${clean}`, {
+        method: 'HEAD',
+        headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/120.0.0.0 Safari/537.36' },
+        signal: controller.signal,
+      });
+      clearTimeout(timeout);
+      isSuccess = res.status < 500;
+    } catch {
+      clearTimeout(timeout);
+      // Fallback probe with plain HTTP
+      const httpController = new AbortController();
+      const httpTimeout = setTimeout(() => httpController.abort(), 2000);
+      try {
+        const httpRes = await fetch(`http://${clean}`, {
+          method: 'HEAD',
+          headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/120.0.0.0 Safari/537.36' },
+          signal: httpController.signal,
+        });
+        clearTimeout(httpTimeout);
+        isSuccess = httpRes.status < 500;
+      } catch {
+        clearTimeout(httpTimeout);
+        isSuccess = false;
+      }
+    }
+
+    if (domainCache.size < 5000) domainCache.set(cacheKey, isSuccess ? 'true' : 'false');
+    return isSuccess;
+  } catch {
+    if (domainCache.size < 5000) domainCache.set(cacheKey, 'false');
+    return false;
+  }
+}
+
+/**
  * Comprehensive Domain Resolver:
  * 1. Validates company name (rejects generic industry categories).
  * 2. Attempts Clearbit Autocomplete with cache for authentic corporate domain.
@@ -128,12 +232,13 @@ export async function resolveCompanyDomain(
   companyName?: string | null,
   existingDomain?: string | null
 ): Promise<{ domain: string | null; isVerifiedDomain: boolean; reason: string }> {
-  // 1. If an existing domain is already valid, use it
+  // 1. If an existing domain is already valid, verify it
   if (existingDomain && existingDomain.includes('.') && !isGenericNonCompanyString(existingDomain.split('.')[0])) {
+    const cleanDomain = existingDomain.toLowerCase().trim();
     return {
-      domain: existingDomain.toLowerCase().trim(),
+      domain: cleanDomain,
       isVerifiedDomain: true,
-      reason: 'Existing valid domain provided',
+      reason: 'Existing domain provided',
     };
   }
 
@@ -156,7 +261,7 @@ export async function resolveCompanyDomain(
     };
   }
 
-  // 4. Fallback: Intelligent sanitization
+  // 4. Fallback: Intelligent sanitization (Unverified - only used for internal permutation trials)
   const sanitized = sanitizeCompanyName(companyName);
   const slug = sanitized.toLowerCase().replace(/[^a-z0-9]/g, '');
 

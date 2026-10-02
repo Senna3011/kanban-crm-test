@@ -1,4 +1,5 @@
 import { ApifyScrapedLead } from './apify';
+import { isLiveWebsite } from './domain-resolver';
 
 export interface OutscraperSearchParams {
   query?: string;
@@ -97,9 +98,9 @@ export async function scrapeOutscraperLeads(
     return [];
   }
 
-  // 3. Extract and sanitize corporate websites
+  // 3. Extract, sanitize, and verify corporate websites live
   const domainToPlaceMap = new Map<string, any>();
-  const validWebsites: string[] = [];
+  const rawCandidateDomains: string[] = [];
 
   for (const place of validPlaces) {
     const rawUrl = place.website || place.site;
@@ -117,14 +118,29 @@ export async function scrapeOutscraperLeads(
           !hostname.includes('google.com') &&
           !hostname.includes('youtube.com')
         ) {
+          rawCandidateDomains.push(hostname);
           domainToPlaceMap.set(hostname, place);
-          validWebsites.push(parsed.origin);
         }
       } catch {
         // Skip malformed
       }
     }
   }
+
+  // Live website verification gate (filters out dead links, NXDOMAIN, and inoperable sites)
+  const uniqueCandidateDomains = Array.from(new Set(rawCandidateDomains));
+  const liveDomainSet = new Set<string>();
+
+  await Promise.allSettled(
+    uniqueCandidateDomains.map(async (d) => {
+      const isLive = await isLiveWebsite(d);
+      if (isLive) {
+        liveDomainSet.add(d);
+      }
+    })
+  );
+
+  const validWebsites = Array.from(liveDomainSet).map((d) => `https://${d}`);
 
   // 4. Perform Email & Contact Enrichment on discovered websites
   const domainEnrichmentMap = new Map<string, any>();
@@ -173,15 +189,21 @@ export async function scrapeOutscraperLeads(
     if (!place?.name) continue;
 
     const companyName = place.name.replace(/\s*[-–—|]\s*(PT\.?|CV\.?|Inc|LLC|Ltd).*$/i, '').trim() || place.name;
-    const website = place.website || place.site || '';
+    const rawWebsite = place.website || place.site || '';
     let domain: string | undefined;
+    let verifiedWebsite: string | undefined;
 
-    if (website) {
+    if (rawWebsite) {
       try {
-        const parsed = new URL(website.startsWith('http') ? website : `https://${website}`);
-        domain = parsed.hostname.replace(/^www\./, '').toLowerCase();
+        const parsed = new URL(rawWebsite.startsWith('http') ? rawWebsite : `https://${rawWebsite}`);
+        const hostname = parsed.hostname.replace(/^www\./, '').toLowerCase();
+        if (liveDomainSet.has(hostname)) {
+          domain = hostname;
+          verifiedWebsite = rawWebsite;
+        }
       } catch {
         domain = undefined;
+        verifiedWebsite = undefined;
       }
     }
 
@@ -302,7 +324,7 @@ export async function scrapeOutscraperLeads(
         rating: place.rating || undefined,
         reviewsCount: place.reviews || undefined,
         address: place.full_address || place.address || undefined,
-        website: website || undefined,
+        website: verifiedWebsite || undefined,
         allEmails: [...cleanCorporate, ...cleanPersonal],
       },
     };

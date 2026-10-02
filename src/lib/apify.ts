@@ -449,7 +449,7 @@ function mapHarvestItemToLead(item: any): ApifyScrapedLead {
     lastName: item.lastName || undefined,
     jobTitle: item.headline || item.title || item.occupation || 'Executive',
     companyName: company || 'Enterprise Organization',
-    companyDomain: company ? `${company.toLowerCase().replace(/[^a-z0-9]/g, '')}.com` : undefined,
+    companyDomain: undefined,
     linkedinUrl: item.linkedinUrl || item.profileUrl || undefined,
     location: typeof item.location === 'object' ? item.location.linkedinText || 'Global' : item.location || 'Global',
     email: item.email || (Array.isArray(item.emails) ? item.emails[0] : undefined),
@@ -501,8 +501,7 @@ function parseGoogleOrganicToLead(item: any, params: ApifySearchParams, forcedLo
   }
 
   companyName = companyName || params.industry || 'Enterprise Group';
-  const cleanCompany = companyName.toLowerCase().replace(/[^a-z0-9]/g, '');
-  const companyDomain = cleanCompany ? `${cleanCompany}.com` : undefined;
+  const companyDomain = undefined;
 
   const cleanUrl = (item.url || '').split('?')[0];
 
