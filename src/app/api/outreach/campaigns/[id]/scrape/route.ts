@@ -40,6 +40,20 @@ export async function POST(
 
     // For massive scale (> 30 leads or async requested), enqueue to BullMQ background worker
     if (limit > 30 || body.async === true) {
+      if (campaign.status === 'RUNNING') {
+        return NextResponse.json({
+          success: true,
+          queued: true,
+          alreadyRunning: true,
+          message: 'Pencarian leads sedang berjalan di background worker. Data akan ter-update otomatis.',
+        });
+      }
+
+      await prisma.outreachCampaign.update({
+        where: { id: campaign.id },
+        data: { status: 'RUNNING' },
+      });
+
       const job = await outreachScrapeQueue.add(
         'outreach_scrape',
         {

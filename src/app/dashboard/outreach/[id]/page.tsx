@@ -167,6 +167,9 @@ export default function CampaignWorkspacePage({
   const [savingSettings, setSavingSettings] = useState(false);
   const [outreachAccounts, setOutreachAccounts] = useState<any[]>([]);
 
+  // Background worker polling state
+  const [isPollingWorker, setIsPollingWorker] = useState(false);
+
   // SweetAlert2-styled Confirm Dialog State
   const [confirmDialog, setConfirmDialog] = useState<{
     isOpen: boolean;
@@ -199,12 +202,40 @@ export default function CampaignWorkspacePage({
       const autoSource = searchParams?.get('autoSource');
       const limit = Number(searchParams?.get('limit')) || 10;
       const provider = searchParams?.get('provider') || undefined;
-      if (autoSource === 'true' && !autoSourceTriggered.current && loadedCampaign?.leads?.length === 0) {
-        autoSourceTriggered.current = true;
-        handleSourceLeads(limit, provider);
+
+      // Clean the query string from browser history immediately to prevent F5 duplicate job triggers
+      if (autoSource === 'true') {
+        if (typeof window !== 'undefined') {
+          window.history.replaceState({}, '', window.location.pathname);
+        }
+        if (!autoSourceTriggered.current && (!loadedCampaign?.leads || loadedCampaign.leads.length === 0)) {
+          autoSourceTriggered.current = true;
+          handleSourceLeads(limit, provider);
+        }
       }
     });
   }, [campaignId]);
+
+  // Live Auto-Polling when Background Scraper is active
+  useEffect(() => {
+    let interval: NodeJS.Timeout | null = null;
+    if (isPollingWorker || campaign?.status === 'RUNNING') {
+      interval = setInterval(async () => {
+        const res = await fetch(`/api/outreach/campaigns/${campaignId}`, { cache: 'no-store' });
+        if (res.ok) {
+          const loaded: CampaignDetail = await res.json();
+          setCampaign(loaded);
+          if (loaded.status !== 'RUNNING') {
+            setIsPollingWorker(false);
+            toast.success(`🎉 Pencarian background selesai! Total ${loaded.leads?.length || 0} leads terkumpul.`);
+          }
+        }
+      }, 2500);
+    }
+    return () => {
+      if (interval) clearInterval(interval);
+    };
+  }, [isPollingWorker, campaign?.status, campaignId]);
 
   // Keyboard shortcut listener for Draft Review Modal
   useEffect(() => {
@@ -281,6 +312,7 @@ export default function CampaignWorkspacePage({
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Failed to source leads');
       if (data.queued) {
+        setIsPollingWorker(true);
         toast.success(data.message || `Pencarian ${customLimit || 10} leads dijadwalkan di background worker.`);
       } else {
         toast.success(`Successfully sourced ${data.count} targeted prospects.`);
@@ -966,10 +998,10 @@ export default function CampaignWorkspacePage({
             <div className="inline-flex rounded-xl shadow-2xs border border-slate-200 bg-slate-100 overflow-hidden">
               <button
                 onClick={() => handleSourceLeads(sourceBatchSize)}
-                disabled={Boolean(actionLoading) || loading}
+                disabled={Boolean(actionLoading) || loading || isPollingWorker || campaign.status === 'RUNNING'}
                 className="px-3 py-2 hover:bg-slate-200 text-slate-800 text-xs font-semibold transition-colors disabled:opacity-50 flex items-center gap-1.5"
               >
-                {actionLoading === 'scrape' ? (
+                {actionLoading === 'scrape' || isPollingWorker || campaign.status === 'RUNNING' ? (
                   <>
                     <span className="w-3.5 h-3.5 border-2 border-slate-800 border-t-transparent rounded-full animate-spin" />
                     <span>Searching ({sourceBatchSize})...</span>
@@ -984,8 +1016,8 @@ export default function CampaignWorkspacePage({
               <select
                 value={sourceBatchSize}
                 onChange={(e) => setSourceBatchSize(Number(e.target.value))}
-                disabled={Boolean(actionLoading) || loading}
-                className="bg-slate-200/80 hover:bg-slate-200 border-l border-slate-300 px-2 py-2 text-xs font-bold text-slate-800 focus:outline-none cursor-pointer"
+                disabled={Boolean(actionLoading) || loading || isPollingWorker || campaign.status === 'RUNNING'}
+                className="bg-slate-200/80 hover:bg-slate-200 border-l border-slate-300 px-2 py-2 text-xs font-bold text-slate-800 focus:outline-none cursor-pointer disabled:opacity-50"
                 title="Select number of leads to discover"
               >
                 <option value={10}>+10</option>
@@ -1008,6 +1040,32 @@ export default function CampaignWorkspacePage({
           </div>
         </div>
       </div>
+
+      {/* Background Scraping Active Live Indicator */}
+      {(isPollingWorker || campaign.status === 'RUNNING') && (
+        <div className="bg-indigo-50 border border-indigo-200 p-4 rounded-2xl flex items-center justify-between shadow-xs animate-pulse">
+          <div className="flex items-center gap-3">
+            <span className="relative flex h-3 w-3">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-indigo-400 opacity-75"></span>
+              <span className="relative inline-flex rounded-full h-3 w-3 bg-indigo-600"></span>
+            </span>
+            <div>
+              <p className="text-xs font-bold text-indigo-900">
+                Pencarian Leads di Background Sedang Berjalan...
+              </p>
+              <p className="text-[11px] text-indigo-700">
+                Data sedang ditarik dan dimuat ke tabel secara otomatis (Saat ini: {allLeads.length} leads).
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="text-[10px] font-bold px-2.5 py-1 rounded-full bg-indigo-100 text-indigo-800 flex items-center gap-1.5">
+              <span className="w-1.5 h-1.5 rounded-full bg-indigo-600 animate-spin" />
+              Live Sync Active
+            </span>
+          </div>
+        </div>
+      )}
 
       {/* Guided 5-Step Outreach Funnel Wizard */}
       <div className="bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 p-5 sm:p-6 rounded-2xl text-white shadow-lg space-y-5 border border-slate-800">
