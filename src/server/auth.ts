@@ -7,9 +7,9 @@ import prisma from '@/lib/prisma';
 
 function getNextAuthSecret(): string {
   const secret = process.env.NEXTAUTH_SECRET;
-  if (!secret) {
+  if (!secret || secret.length < 16) {
     if (process.env.NODE_ENV === 'production') {
-      console.warn('[Security Warning] NEXTAUTH_SECRET is not set in production. Please configure NEXTAUTH_SECRET with a strong 32+ character key.');
+      throw new Error('[Security Hardening] FATAL: NEXTAUTH_SECRET must be configured with at least 32 characters in production.');
     }
     return 'kanban-crm-default-secret-key-32chars';
   }

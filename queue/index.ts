@@ -32,8 +32,9 @@ export const connection = createRedisConnection();
 const defaultQueueOptions: QueueOptions = {
   connection,
   defaultJobOptions: {
-    removeOnComplete: { count: 500 },
-    removeOnFail: { count: 1000 },
+    // Ultra-lean retention to preserve Redis Free Tier limits (< 500k commands & 256MB storage)
+    removeOnComplete: { count: 20, age: 3600 },
+    removeOnFail: { count: 50, age: 86400 },
     attempts: 3,
     backoff: {
       type: 'exponential',
