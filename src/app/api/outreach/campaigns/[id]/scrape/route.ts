@@ -103,7 +103,7 @@ export async function POST(
     const campaignEmails = new Set(campaignLeads.map((l) => l.email).filter(Boolean));
     const campaignCompanies = new Set(campaignLeads.map((l) => l.companyName?.toLowerCase().trim()).filter(Boolean));
 
-    const createdLeads = [];
+    const leadsToInsert = [];
     let skippedDuplicates = 0;
 
     for (const lead of scrapedLeads) {
@@ -116,44 +116,46 @@ export async function POST(
         continue;
       }
 
-      const created = await prisma.outreachLead.create({
-        data: {
-          fullName: String(lead.fullName || 'Executive Prospect'),
-          firstName: lead.firstName ? String(lead.firstName) : null,
-          lastName: lead.lastName ? String(lead.lastName) : null,
-          jobTitle: lead.jobTitle ? String(lead.jobTitle) : null,
-          companyName: lead.companyName ? String(lead.companyName) : null,
-          companyDomain: lead.companyDomain ? String(lead.companyDomain) : null,
-          linkedinUrl: lead.linkedinUrl ? String(lead.linkedinUrl) : null,
-          location: lead.location ? String(lead.location) : null,
-          email: lead.email ? String(lead.email) : null,
-          status: 'SCRAPED',
-          metadata: {
-            summary: lead.summary ? String(lead.summary) : undefined,
-            source: lead.metadata?.source || 'discovery-live',
-            ...(lead.metadata || {}),
-            scrapedAt: new Date().toISOString(),
-          },
-          campaignId: campaign.id,
+      leadsToInsert.push({
+        fullName: String(lead.fullName || 'Executive Prospect'),
+        firstName: lead.firstName ? String(lead.firstName) : null,
+        lastName: lead.lastName ? String(lead.lastName) : null,
+        jobTitle: lead.jobTitle ? String(lead.jobTitle) : null,
+        companyName: lead.companyName ? String(lead.companyName) : null,
+        companyDomain: lead.companyDomain ? String(lead.companyDomain) : null,
+        linkedinUrl: lead.linkedinUrl ? String(lead.linkedinUrl) : null,
+        location: lead.location ? String(lead.location) : null,
+        email: lead.email ? String(lead.email) : null,
+        status: 'SCRAPED' as const,
+        metadata: {
+          summary: lead.summary ? String(lead.summary) : undefined,
+          source: lead.metadata?.source || 'discovery-live',
+          ...(lead.metadata || {}),
+          scrapedAt: new Date().toISOString(),
         },
+        campaignId: campaign.id,
       });
 
       if (lead.linkedinUrl) campaignUrls.add(lead.linkedinUrl);
       if (lead.email) campaignEmails.add(lead.email);
       if (lead.companyName) campaignCompanies.add(lead.companyName.toLowerCase().trim());
-      createdLeads.push(created);
 
-      // Stop once we have reached the exact requested limit of newly inserted leads
-      if (createdLeads.length >= limit) {
+      if (leadsToInsert.length >= limit) {
         break;
       }
     }
 
+    if (leadsToInsert.length > 0) {
+      await prisma.outreachLead.createMany({
+        data: leadsToInsert,
+        skipDuplicates: true,
+      });
+    }
+
     return NextResponse.json({
       success: true,
-      count: createdLeads.length,
+      count: leadsToInsert.length,
       skippedDuplicates,
-      leads: createdLeads,
     });
   } catch (error: any) {
     console.error('[API OUTREACH SCRAPE] Error:', error);
