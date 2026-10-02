@@ -138,6 +138,17 @@ function parseGoogleOrganicItem(item: any, params: OutscraperSearchParams): Apif
     location = 'India';
   }
 
+  // Extract direct public email from snippet/description if present (e.g. personal @gmail or corporate email in bio)
+  let directEmail: string | undefined;
+  const fullText = `${item.title || ''} ${item.snippet || ''} ${item.description || ''}`;
+  const emailMatch = fullText.match(/[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/);
+  if (emailMatch) {
+    const candidate = emailMatch[0].toLowerCase().trim();
+    if (!candidate.endsWith('.png') && !candidate.endsWith('.jpg') && !candidate.includes('wixpress') && !candidate.includes('example.com')) {
+      directEmail = candidate;
+    }
+  }
+
   return {
     fullName,
     firstName,
@@ -147,6 +158,7 @@ function parseGoogleOrganicItem(item: any, params: OutscraperSearchParams): Apif
     companyDomain,
     linkedinUrl: cleanUrl,
     location,
+    email: directEmail,
     summary: item.snippet || item.description || `Experienced ${jobTitle} at ${cleanCompany}.`,
     metadata: {
       source: 'outscraper-linkedin-live',

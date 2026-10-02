@@ -44,6 +44,18 @@ export async function POST(
       let email = lead.email;
       let companyDomain = lead.companyDomain;
 
+      // 0. Check if lead's public snippet/summary contains direct personal email (e.g. @gmail, @outlook, @yahoo)
+      if (!email && lead.metadata && typeof lead.metadata === 'object') {
+        const summaryText = `${(lead.metadata as any).summary || ''} ${(lead.metadata as any).description || ''}`;
+        const emailMatch = summaryText.match(/[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/);
+        if (emailMatch) {
+          const candidate = emailMatch[0].toLowerCase().trim();
+          if (!candidate.endsWith('.png') && !candidate.endsWith('.jpg') && !candidate.includes('wixpress') && !candidate.includes('example.com')) {
+            email = candidate;
+          }
+        }
+      }
+
       // 1. Resolve authentic domain using Domain Resolver (Clearbit & Sanitizer)
       const domainResult = await resolveCompanyDomain(lead.companyName, companyDomain);
       const candidateDomain = domainResult.domain;
