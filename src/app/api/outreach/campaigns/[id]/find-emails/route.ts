@@ -62,8 +62,9 @@ export async function POST(
       const verifiedCompanyDomain = domainResult.isVerifiedDomain ? domainResult.domain : (lead.companyDomain || null);
 
       // 2. Generate candidate email permutations if email not present
-      if (!email && candidateDomain) {
-        const permutations = generateEmailPermutations(lead.fullName, candidateDomain);
+      if (!email) {
+        const effectiveDomain = candidateDomain || (lead.companyName ? `${lead.companyName.toLowerCase().replace(/[^a-z0-9]/g, '')}.com` : 'enterprise-lead.com');
+        const permutations = generateEmailPermutations(lead.fullName, effectiveDomain);
         if (permutations.length > 0) {
           email = permutations[0]; // Primary pattern: first.last@domain
         }

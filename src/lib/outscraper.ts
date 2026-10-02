@@ -111,9 +111,28 @@ function parseGoogleOrganicItem(item: any, params: OutscraperSearchParams): Apif
 
   if (!companyName && (item.snippet || item.description)) {
     const text = item.snippet || item.description || '';
-    const match = text.match(/(?:at|company:?)\s+([A-Za-z0-9\s&,.-]+?)(?:\.|\s*·|\s*,|Read more)/i);
-    if (match && match[1]) {
-      companyName = match[1].trim();
+    // Pattern 1: "Officer of [Company]" or "at [Company]" or "@ [Company]"
+    const match1 = text.match(/(?:at|@|of|company:?)\s+([A-Za-z0-9\s&,.-]+?)(?:\.|\s*·|\s*,|Read more|-|Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec|\d{4})/i);
+    if (match1 && match1[1] && match1[1].trim().length > 2) {
+      companyName = match1[1].trim();
+    } else {
+      // Pattern 2: Period-separated segment containing corporate terms
+      const segments = text.split(/\s*[.·•|]\s*/);
+      for (const seg of segments) {
+        const cleanSeg = seg.trim();
+        if (
+          cleanSeg.length > 2 &&
+          cleanSeg.length < 50 &&
+          !cleanSeg.includes('http') &&
+          !cleanSeg.toLowerCase().includes('information technology') &&
+          !cleanSeg.toLowerCase().includes('years') &&
+          !cleanSeg.toLowerCase().includes('experience') &&
+          !cleanSeg.toLowerCase().includes('connections')
+        ) {
+          companyName = cleanSeg;
+          break;
+        }
+      }
     }
   }
 
