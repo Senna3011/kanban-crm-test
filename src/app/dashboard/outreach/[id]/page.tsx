@@ -1086,10 +1086,10 @@ export default function CampaignWorkspacePage({
           <div className="flex items-center gap-2">
             <button
               onClick={nextActionHandler}
-              disabled={Boolean(actionLoading) || loading}
+              disabled={Boolean(actionLoading) || loading || isPollingWorker || campaign.status === 'RUNNING'}
               className={`px-4 py-2 text-xs font-bold rounded-xl transition-all shadow-md flex items-center gap-2 disabled:opacity-50 ${nextActionColor}`}
             >
-              {actionLoading ? (
+              {actionLoading || isPollingWorker || campaign.status === 'RUNNING' ? (
                 <>
                   <span className="w-3.5 h-3.5 border-2 border-current border-t-transparent rounded-full animate-spin" />
                   <span>Processing...</span>
@@ -1329,7 +1329,7 @@ export default function CampaignWorkspacePage({
 
         {allLeads.length === 0 ? (
           <div className="p-12 text-center text-xs text-slate-400 space-y-3">
-            {actionLoading === 'scrape' ? (
+            {actionLoading === 'scrape' || isPollingWorker || campaign.status === 'RUNNING' ? (
               <div className="space-y-3 max-w-sm mx-auto animate-in fade-in">
                 <div className="w-8 h-8 border-3 border-primary-600 border-t-transparent rounded-full animate-spin mx-auto" />
                 <p className="text-sm font-bold text-slate-800">Searching Initial Prospects from LinkedIn...</p>
@@ -1342,7 +1342,7 @@ export default function CampaignWorkspacePage({
                 <p>No leads sourced yet for this campaign.</p>
                 <button
                   onClick={() => handleSourceLeads()}
-                  disabled={Boolean(actionLoading) || loading}
+                  disabled={Boolean(actionLoading) || loading || isPollingWorker || campaign.status === 'RUNNING'}
                   className="px-4 py-2 bg-primary-600 hover:bg-primary-700 text-white font-bold rounded-xl text-xs transition-colors shadow-xs disabled:opacity-50"
                 >
                   Source Target Leads Now →

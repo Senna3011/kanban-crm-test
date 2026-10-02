@@ -47,34 +47,91 @@ function isValidPersonnelLead(lead: ApifyScrapedLead): boolean {
   return true;
 }
 
-function buildOptimizedBooleanDork(params: OutscraperSearchParams): string {
-  if (params.query) {
-    return `site:linkedin.com/in/ ${params.query}`.trim();
-  }
-
+function buildDiversifiedDorkQueries(params: OutscraperSearchParams, limit: number): string[] {
   const role = (params.role || 'Executive').trim();
   const roleLower = role.toLowerCase();
   const location = (params.location || 'Indonesia').trim();
   const isIndonesia = location.toLowerCase().includes('indonesia') || location.toLowerCase().includes('jakarta');
-  const industry = (params.industry && !params.industry.toLowerCase().includes('all')) ? params.industry.trim() : '';
+  const locFilter = isIndonesia ? '"Indonesia"' : `"${location}"`;
+  const indFilter = (params.industry && !params.industry.toLowerCase().includes('all')) ? ` "${params.industry.trim()}"` : '';
 
-  let roleFilter = `"${role}"`;
-  if (roleLower.includes('cto') || roleLower.includes('technology') || roleLower.includes('tech')) {
-    roleFilter = '(CTO OR "Chief Technology Officer" OR "VP Engineering" OR "Head of Technology")';
-  } else if (roleLower.includes('ceo') || roleLower.includes('founder') || roleLower.includes('owner')) {
-    roleFilter = '(CEO OR Founder OR "Co-Founder" OR "Managing Director")';
-  } else if (roleLower.includes('cfo') || roleLower.includes('finance')) {
-    roleFilter = '(CFO OR "Chief Financial Officer" OR "Finance Director")';
-  } else if (roleLower.includes('cmo') || roleLower.includes('marketing')) {
-    roleFilter = '(CMO OR "Chief Marketing Officer" OR "VP Marketing" OR "Head of Marketing")';
-  } else if (roleLower.includes('sales') || roleLower.includes('revenue') || roleLower.includes('business dev')) {
-    roleFilter = '("VP Sales" OR "Head of Sales" OR "Sales Director" OR "Business Development")';
+  if (params.query) {
+    return [
+      `site:linkedin.com/in/ ${params.query}`.trim(),
+      `site:linkedin.com/in/ "${params.query}"`.trim(),
+    ];
   }
 
-  const locFilter = isIndonesia ? '"Indonesia"' : `"${location}"`;
-  const indFilter = industry ? ` "${industry}"` : '';
+  // Generate an expanded list of executive role synonyms for high-volume batches (100 - 1000 leads)
+  const roleSynonyms: string[] = [];
 
-  return `site:linkedin.com/in/ ${roleFilter} ${locFilter}${indFilter}`.trim();
+  if (roleLower.includes('cto') || roleLower.includes('technology') || roleLower.includes('tech') || roleLower.includes('software')) {
+    roleSynonyms.push(
+      'CTO',
+      'Chief Technology Officer',
+      'VP Engineering',
+      'Vice President of Engineering',
+      'Head of Technology',
+      'Head of Engineering',
+      'Director of Engineering',
+      'Technical Director',
+      'Chief Architect',
+      'Software Engineering Director',
+      'Engineering Manager'
+    );
+  } else if (roleLower.includes('ceo') || roleLower.includes('founder') || roleLower.includes('owner')) {
+    roleSynonyms.push(
+      'CEO',
+      'Chief Executive Officer',
+      'Founder',
+      'Co-Founder',
+      'Managing Director',
+      'President Director',
+      'Business Owner',
+      'Executive Director'
+    );
+  } else if (roleLower.includes('cfo') || roleLower.includes('finance')) {
+    roleSynonyms.push(
+      'CFO',
+      'Chief Financial Officer',
+      'VP Finance',
+      'Finance Director',
+      'Head of Finance',
+      'Financial Controller'
+    );
+  } else if (roleLower.includes('cmo') || roleLower.includes('marketing')) {
+    roleSynonyms.push(
+      'CMO',
+      'Chief Marketing Officer',
+      'VP Marketing',
+      'Head of Marketing',
+      'Marketing Director',
+      'Growth Marketing Director'
+    );
+  } else if (roleLower.includes('sales') || roleLower.includes('revenue') || roleLower.includes('commercial')) {
+    roleSynonyms.push(
+      'VP Sales',
+      'Head of Sales',
+      'Sales Director',
+      'Chief Commercial Officer',
+      'Director of Business Development',
+      'Head of Commercial'
+    );
+  } else {
+    roleSynonyms.push(role, `Head of ${role}`, `Director of ${role}`, `VP ${role}`, `Lead ${role}`);
+  }
+
+  // Small batch (<= 15 leads): single boolean query
+  if (limit <= 15) {
+    const compactRole = roleSynonyms.slice(0, 3).map((r) => `"${r}"`).join(' OR ');
+    return [`site:linkedin.com/in/ (${compactRole}) ${locFilter}${indFilter}`.trim()];
+  }
+
+  // Medium to large batch (25 - 1000 leads): multi-angle queries
+  const queriesNeeded = Math.min(Math.max(Math.ceil(limit / 15), 2), roleSynonyms.length);
+  const selected = roleSynonyms.slice(0, queriesNeeded);
+
+  return selected.map((syn) => `site:linkedin.com/in/ "${syn}" ${locFilter}${indFilter}`.trim());
 }
 
 function parseGoogleOrganicItem(item: any, params: OutscraperSearchParams): ApifyScrapedLead {
@@ -111,12 +168,10 @@ function parseGoogleOrganicItem(item: any, params: OutscraperSearchParams): Apif
 
   if (!companyName && (item.snippet || item.description)) {
     const text = item.snippet || item.description || '';
-    // Pattern 1: "Officer of [Company]" or "at [Company]" or "@ [Company]"
     const match1 = text.match(/(?:at|@|of|company:?)\s+([A-Za-z0-9\s&,.-]+?)(?:\.|\s*·|\s*,|Read more|-|Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec|\d{4})/i);
     if (match1 && match1[1] && match1[1].trim().length > 2) {
       companyName = match1[1].trim();
     } else {
-      // Pattern 2: Period-separated segment containing corporate terms
       const segments = text.split(/\s*[.·•|]\s*/);
       for (const seg of segments) {
         const cleanSeg = seg.trim();
@@ -157,7 +212,6 @@ function parseGoogleOrganicItem(item: any, params: OutscraperSearchParams): Apif
     location = 'India';
   }
 
-  // Extract direct public email from snippet/description if present (e.g. personal @gmail or corporate email in bio)
   let directEmail: string | undefined;
   const fullText = `${item.title || ''} ${item.snippet || ''} ${item.description || ''}`;
   const emailMatch = fullText.match(/[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/);
@@ -188,8 +242,8 @@ function parseGoogleOrganicItem(item: any, params: OutscraperSearchParams): Apif
 }
 
 /**
- * High-Speed & High-Accuracy Personnel Leads Discovery via Outscraper
- * Uses single high-yield Boolean SERP query to eliminate multi-roundtrip delay.
+ * High-Speed & High-Volume Personnel Leads Discovery via Outscraper
+ * Scales seamlessly from small batches (10 leads) to massive volume (100 - 1000 leads).
  */
 export async function scrapeOutscraperLeads(
   params: OutscraperSearchParams
@@ -200,74 +254,78 @@ export async function scrapeOutscraperLeads(
     process.env.APIFY_API_TOKEN ||
     process.env.APIFY_API_KEY;
 
-  const limit = Math.min(params.limit || 10, 50);
+  const targetLimit = Math.max(params.limit || 10, 1);
 
   if (!apiKey) {
     throw new Error('Outscraper API Key is not configured. Please set it in Outreach Settings or .env');
   }
 
-  // 1. Generate Single High-Density Boolean Query
-  const dorkQuery = buildOptimizedBooleanDork(params);
-  // Optimal fetch limit: small buffer (+5) to stay within fast single-page render
-  const fetchLimit = Math.min(Math.max(limit + 5, 15), 50);
-
+  const queries = buildDiversifiedDorkQueries(params, targetLimit);
   const collectedLeads: ApifyScrapedLead[] = [];
   const seenUrls = new Set<string>();
 
-  try {
-    const searchUrl = `https://api.app.outscraper.com/google-search?query=${encodeURIComponent(
-      dorkQuery
-    )}&limit=${fetchLimit}&async=false`;
+  // Fetch per query allocation: 25-50 results per query
+  const resultsPerQuery = Math.min(Math.max(Math.ceil(targetLimit / queries.length) + 5, 20), 100);
 
-    const res = await fetch(searchUrl, {
-      method: 'GET',
-      headers: {
-        'X-API-KEY': apiKey,
-        Accept: 'application/json',
-      },
-    });
+  for (const query of queries) {
+    if (collectedLeads.length >= targetLimit) break;
 
-    if (res.ok) {
-      const data = await res.json();
-      const rawResults: any[] = Array.isArray(data?.data) ? data.data.flat() : [];
+    try {
+      const searchUrl = `https://api.app.outscraper.com/google-search?query=${encodeURIComponent(
+        query
+      )}&limit=${resultsPerQuery}&async=false`;
 
-      const items: any[] = [];
-      for (const entry of rawResults) {
-        if (entry?.organic_results && Array.isArray(entry.organic_results)) {
-          items.push(...entry.organic_results);
-        } else if (entry?.link || entry?.url || entry?.title) {
-          items.push(entry);
+      const res = await fetch(searchUrl, {
+        method: 'GET',
+        headers: {
+          'X-API-KEY': apiKey,
+          Accept: 'application/json',
+        },
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        const rawResults: any[] = Array.isArray(data?.data) ? data.data.flat() : [];
+
+        const items: any[] = [];
+        for (const entry of rawResults) {
+          if (entry?.organic_results && Array.isArray(entry.organic_results)) {
+            items.push(...entry.organic_results);
+          } else if (entry?.link || entry?.url || entry?.title) {
+            items.push(entry);
+          }
         }
-      }
 
-      for (const item of items) {
-        const itemUrl = item.link || item.url || '';
-        if (itemUrl.includes('linkedin.com/in/')) {
-          const cleanUrl = itemUrl.split('?')[0];
-          if (!seenUrls.has(cleanUrl)) {
-            seenUrls.add(cleanUrl);
-            const lead = parseGoogleOrganicItem(item, params);
-            if (isValidPersonnelLead(lead)) {
-              collectedLeads.push(lead);
-              if (collectedLeads.length >= limit) break;
+        for (const item of items) {
+          const itemUrl = item.link || item.url || '';
+          if (itemUrl.includes('linkedin.com/in/')) {
+            const cleanUrl = itemUrl.split('?')[0];
+            if (!seenUrls.has(cleanUrl)) {
+              seenUrls.add(cleanUrl);
+              const lead = parseGoogleOrganicItem(item, params);
+              if (isValidPersonnelLead(lead)) {
+                collectedLeads.push(lead);
+                if (collectedLeads.length >= targetLimit) break;
+              }
             }
           }
         }
       }
+    } catch (err) {
+      console.warn('[OUTSCRAPER HIGH-VOLUME SEARCH ERROR]', err);
     }
-  } catch (err) {
-    console.warn('[OUTSCRAPER FAST SEARCH ERROR]', err);
   }
 
-  // 2. High-Speed Fallback: Only invoke Apify if Outscraper gave fewer than requested limit
-  if (collectedLeads.length < limit) {
+  // High-Yield Fallback: If Outscraper queries gave fewer than requested target, backfill via Apify
+  if (collectedLeads.length < targetLimit) {
     try {
+      const remainingNeeded = targetLimit - collectedLeads.length;
       const apifyLeads = await scrapeApifyLeads({
         query: params.query,
         role: params.role,
         location: params.location,
         industry: params.industry,
-        limit: limit - collectedLeads.length,
+        limit: remainingNeeded,
       });
 
       for (const lead of apifyLeads) {
@@ -275,15 +333,15 @@ export async function scrapeOutscraperLeads(
         if (!seenUrls.has(url)) {
           seenUrls.add(url);
           collectedLeads.push(lead);
-          if (collectedLeads.length >= limit) break;
+          if (collectedLeads.length >= targetLimit) break;
         }
       }
     } catch (apifyErr) {
-      console.warn('[APIFY FALLBACK ERROR]', apifyErr);
+      console.warn('[APIFY HIGH-VOLUME FALLBACK ERROR]', apifyErr);
     }
   }
 
-  return collectedLeads.slice(0, limit);
+  return collectedLeads.slice(0, targetLimit);
 }
 
 export const scrapeOutscraperBusinessLeads = scrapeOutscraperLeads;
