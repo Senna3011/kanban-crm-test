@@ -92,7 +92,7 @@ export async function getReoonBulkTaskResult(
     throw new Error('Reoon API Key is required');
   }
 
-  const url = `https://emailverifier.reoon.com/api/v1/get-result/?key=${encodeURIComponent(
+  const url = `https://emailverifier.reoon.com/api/v1/get-result-bulk-verification-task/?key=${encodeURIComponent(
     key
   )}&task_id=${encodeURIComponent(taskId)}`;
 
