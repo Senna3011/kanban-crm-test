@@ -22,6 +22,7 @@ export async function GET(
       where: { id: campaignId, tenantId },
       include: {
         account: true,
+        accounts: true,
         leads: {
           orderBy: { createdAt: 'desc' },
         },
@@ -91,6 +92,18 @@ export async function PATCH(
       }
     }
 
+    // Validate and prepare multi-sender accounts pool if provided
+    let accountConnectData: any = undefined;
+    if (Array.isArray(body.accountIds)) {
+      const validAccounts = await prisma.outreachAccountConfig.findMany({
+        where: { id: { in: body.accountIds }, tenantId },
+        select: { id: true },
+      });
+      accountConnectData = {
+        set: validAccounts.map((a) => ({ id: a.id })),
+      };
+    }
+
     const updated = await prisma.outreachCampaign.update({
       where: { id: campaignId },
       data: {
@@ -101,9 +114,11 @@ export async function PATCH(
         ...(body.targetIndustry !== undefined && { targetIndustry: body.targetIndustry }),
         ...(body.promptInstructions !== undefined && { promptInstructions: body.promptInstructions }),
         ...(body.accountId !== undefined && { accountId: body.accountId }),
+        ...(accountConnectData !== undefined && { accounts: accountConnectData }),
       },
       include: {
         account: true,
+        accounts: true,
         leads: true,
       },
     });

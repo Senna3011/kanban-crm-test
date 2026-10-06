@@ -28,6 +28,11 @@ export interface CardData {
   lastActivityAt: string;
   nextFollowUpAt: string | null;
   metadata: any;
+  dealValue?: number | string | null;
+  currency?: string | null;
+  contactRole?: string | null;
+  probability?: number | null;
+  lostReason?: string | null;
   createdAt: string;
   /** Number of distinct email cards in this conversation thread */
   threadCount?: number;

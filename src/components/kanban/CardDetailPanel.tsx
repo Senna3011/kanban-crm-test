@@ -382,6 +382,10 @@ export default function CardDetailPanel({ card, onClose }: Props) {
   const [editFromName, setEditFromName] = useState(card.fromName || '');
   const [editFromEmail, setEditFromEmail] = useState(card.fromEmail || '');
   const [editBodyText, setEditBodyText] = useState(card.bodyText || '');
+  const [editDealValue, setEditDealValue] = useState(card.dealValue?.toString() || '');
+  const [editCurrency, setEditCurrency] = useState(card.currency || 'USD');
+  const [editContactRole, setEditContactRole] = useState(card.contactRole || '');
+  const [editProbability, setEditProbability] = useState(card.probability?.toString() || '');
   const [savingCardEdit, setSavingCardEdit] = useState(false);
 
   async function handleSaveCardEdit() {
@@ -395,6 +399,10 @@ export default function CardDetailPanel({ card, onClose }: Props) {
           fromName: editFromName.trim(),
           fromEmail: editFromEmail.trim(),
           bodyText: editBodyText.trim(),
+          dealValue: editDealValue ? parseFloat(editDealValue) : null,
+          currency: editCurrency,
+          contactRole: editContactRole.trim() || null,
+          probability: editProbability ? parseInt(editProbability, 10) : null,
         }),
       });
       if (!res.ok) throw new Error('Failed to update card details');
@@ -738,6 +746,23 @@ export default function CardDetailPanel({ card, onClose }: Props) {
                   </span>
                 )}
 
+                {cardData?.dealValue && (
+                  <span className="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-800 bg-emerald-50 border border-emerald-200/80 px-2.5 py-0.5 rounded-full">
+                    <span>💰</span>
+                    <span>
+                      {cardData.currency === 'IDR' ? `Rp ${Number(cardData.dealValue).toLocaleString('id-ID')}` : `${cardData.currency || '$'} ${Number(cardData.dealValue).toLocaleString()}`}
+                    </span>
+                    {cardData.probability && <span className="text-[10px] text-emerald-600 font-normal">({cardData.probability}%)</span>}
+                  </span>
+                )}
+
+                {cardData?.contactRole && (
+                  <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-purple-700 bg-purple-50 border border-purple-200 px-2 py-0.5 rounded-full">
+                    <span>🎯</span>
+                    <span>{cardData.contactRole}</span>
+                  </span>
+                )}
+
                 {followUpDate && (
                   <span
                     className={`inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-0.5 rounded-full border ${
@@ -789,6 +814,10 @@ export default function CardDetailPanel({ card, onClose }: Props) {
                 setEditFromName(cardData?.fromName || card.fromName || '');
                 setEditFromEmail(cardData?.fromEmail || card.fromEmail || '');
                 setEditBodyText(cardData?.bodyText || card.bodyText || '');
+                setEditDealValue(cardData?.dealValue?.toString() || card.dealValue?.toString() || '');
+                setEditCurrency(cardData?.currency || card.currency || 'USD');
+                setEditContactRole(cardData?.contactRole || card.contactRole || '');
+                setEditProbability(cardData?.probability?.toString() || card.probability?.toString() || '');
                 setIsEditingCard(!isEditingCard);
               }}
               className="p-1.5 rounded-lg hover:bg-slate-200/70 text-slate-500 hover:text-indigo-600 transition-colors"
@@ -857,7 +886,7 @@ export default function CardDetailPanel({ card, onClose }: Props) {
             <div className="flex items-center justify-between">
               <h4 className="text-xs font-bold text-indigo-950 flex items-center gap-1.5">
                 <span>✏️</span>
-                <span>Edit Prospect & Card Information</span>
+                <span>Edit Prospect, Deal & Card Information</span>
               </h4>
               <button
                 type="button"
@@ -887,6 +916,61 @@ export default function CardDetailPanel({ card, onClose }: Props) {
                 />
               </div>
             </div>
+
+            {/* Deal Value, Currency, Role, Probability */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+              <div>
+                <label className="block text-[10px] font-semibold text-slate-600 mb-0.5">Deal Value</label>
+                <input
+                  type="number"
+                  placeholder="e.g. 5000"
+                  value={editDealValue}
+                  onChange={(e) => setEditDealValue(e.target.value)}
+                  className="w-full px-2.5 py-1.5 border border-slate-300 rounded-lg text-xs bg-white text-slate-800 font-semibold focus:ring-2 focus:ring-primary-500"
+                />
+              </div>
+              <div>
+                <label className="block text-[10px] font-semibold text-slate-600 mb-0.5">Currency</label>
+                <select
+                  value={editCurrency}
+                  onChange={(e) => setEditCurrency(e.target.value)}
+                  className="w-full px-2.5 py-1.5 border border-slate-300 rounded-lg text-xs bg-white text-slate-800 focus:ring-2 focus:ring-primary-500"
+                >
+                  <option value="USD">USD ($)</option>
+                  <option value="IDR">IDR (Rp)</option>
+                  <option value="EUR">EUR (€)</option>
+                  <option value="SGD">SGD (S$)</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-[10px] font-semibold text-slate-600 mb-0.5">Contact Role</label>
+                <select
+                  value={editContactRole}
+                  onChange={(e) => setEditContactRole(e.target.value)}
+                  className="w-full px-2.5 py-1.5 border border-slate-300 rounded-lg text-xs bg-white text-slate-800 focus:ring-2 focus:ring-primary-500"
+                >
+                  <option value="">(Select Role)</option>
+                  <option value="Decision Maker">Decision Maker</option>
+                  <option value="Champion">Champion</option>
+                  <option value="Influencer">Influencer</option>
+                  <option value="Gatekeeper">Gatekeeper</option>
+                  <option value="Buyer">Buyer</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-[10px] font-semibold text-slate-600 mb-0.5">Win Probability (%)</label>
+                <input
+                  type="number"
+                  min="0"
+                  max="100"
+                  placeholder="0 - 100"
+                  value={editProbability}
+                  onChange={(e) => setEditProbability(e.target.value)}
+                  className="w-full px-2.5 py-1.5 border border-slate-300 rounded-lg text-xs bg-white text-slate-800 focus:ring-2 focus:ring-primary-500"
+                />
+              </div>
+            </div>
+
             <div>
               <label className="block text-[10px] font-semibold text-slate-600 mb-0.5">Subject / Card Title</label>
               <input

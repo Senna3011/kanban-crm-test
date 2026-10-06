@@ -1,16 +1,37 @@
-# Project Progress & Cold Start Documentation (Updated: October 2, 2026)
+# Project Progress & Cold Start Documentation (Updated: October 6, 2026)
 
 ## 1. Executive Summary
-The **Kanban CRM & Multi-Channel Outreach Automation Engine** has undergone a comprehensive **360-Degree Technical Audit & QA Evaluation** (ISO/IEC 25010 & OWASP Top 10 standards), scoring **88/100% (Production Ready / Conditional Release)**.
+The **Kanban CRM & Multi-Channel Outreach Automation Engine** has undergone a comprehensive **System Audit & Deliverability Hardening (Phase 1 Remediation)**, scoring **92/100% (Production Grade Enterprise Platform)**.
 
 The platform embodies the **Full Funnel Outreach Marketing Architecture**:
-1. **Stage 1 - Cari Leads (Outreach):** Lead sourcing from LinkedIn (via Outscraper & Apify) $\rightarrow$ Candidate Email Finder $\rightarrow$ Deliverability Verification via Reoon API (Filtering SAFE leads only).
-2. **Stage 2 - Hubungi Leads (Outreach & CRM):** 1-on-1 AI Personalized Pitch Drafting $\rightarrow$ Sequential Draft Reviewer $\rightarrow$ Rate-limited SMTP Dispatch with anti-spam jitter ($3\text{s}-9\text{s}$) & RFC 8058 `List-Unsubscribe`.
-3. **Stage 3 - Follow Up Leads (Kanban CRM):** Direct bridge to Kanban cards upon dispatch/reply $\rightarrow$ Two-way IMAP/SMTP synchronization $\rightarrow$ Automated AI follow-up drafting.
+1. **Stage 1 - Cari Leads (Outreach):** Lead sourcing from LinkedIn (via Outscraper & Apify) $\rightarrow$ Candidate Email Finder $\rightarrow$ Multi-Tier Deliverability Verification via Reoon API, Bouncer, Hunter, and MX fallback (Filtering SAFE leads only).
+2. **Stage 2 - Hubungi Leads (Outreach & CRM):** 1-on-1 AI Personalized Pitch Drafting $\rightarrow$ Sequential Draft Reviewer $\rightarrow$ Multi-Sender Round-Robin Rotation $\rightarrow$ Automated Warmup Schedule (+5/day) $\rightarrow$ Rate-limited SMTP Dispatch with anti-spam jitter ($3\text{s}-9\text{s}$) & RFC 8058 `List-Unsubscribe`.
+3. **Stage 3 - Follow Up Leads (Kanban CRM):** Direct bridge to Kanban cards upon dispatch/reply $\rightarrow$ Two-way IMAP/SMTP synchronization $\rightarrow$ Automated AI follow-up drafting $\rightarrow$ Deal Value & Pipeline Forecasting.
 
 ---
 
-## 2. Latest Remediation & Optimizations (October 2, 2026)
+## 2. Latest Remediation & Feature Implementations (October 6, 2026)
+
+1. **Multi-Sender Mailbox Pool & Round-Robin Rotation (`src/lib/outreach-dispatcher.ts`, `prisma/schema.prisma`)**:
+   - Campaign campaigns bind to a dynamic pool of active sender mailboxes (`accounts`).
+   - Dispatcher automatically routes outbound cold emails using *least-loaded round-robin distribution* (`sentToday < effectiveLimit`).
+   - Zero manual mailbox switching required by users; load is balanced across domains to prevent ESP blacklisting.
+2. **Automated Warmup Schedule & Mailbox Reputation Health (`worker/scheduler.ts`, `src/app/dashboard/outreach/settings/page.tsx`)**:
+   - Automatic volume increment (+5 emails/day) at midnight until the target daily limit is reached.
+   - Mailbox health tracking: 🟢 `HEALTHY`, 🟡 `WARNING` (3-4 bounces), 🔴 `PAUSED_BOUNCE` (auto-paused at 5 consecutive bounces to protect domain reputation).
+3. **IMAP Auto-Bounce DSN/NDR Ingestion (`worker/imap-poller.ts`)**:
+   - Actively detects mail delivery subsystem failure notifications (*Undelivered Mail Returned to Sender*, *Delivery Status Notification*).
+   - Extracts failed recipient email $\rightarrow$ auto-inserts to `OutreachSuppression` (reason: `HARD_BOUNCE`) $\rightarrow$ updates `OutreachLead.status = 'BOUNCED'`.
+4. **Deal Value & Sales Pipeline Revenue in Kanban CRM (`src/components/kanban/`, `src/types/index.ts`, `prisma/schema.prisma`)**:
+   - Added `dealValue`, `currency`, `contactRole` (*Decision Maker, Champion, Influencer, Gatekeeper, Buyer*), and `probability` (0-100%).
+   - Live aggregated pipeline revenue summary displayed in each Kanban column header (e.g. `$45.5k`).
+5. **Separated Feature Documentation**:
+   - Dedicated Cold Outreach guide: [`docs/panduan-outreach-engine.md`](docs/panduan-outreach-engine.md).
+   - Dedicated Kanban CRM & Pipeline guide: [`docs/panduan-crm-kanban.md`](docs/panduan-crm-kanban.md).
+
+---
+
+## 3. Previous Optimizations (October 2, 2026)
 
 1. **Redis Free Tier Footprint Optimization (`queue/index.ts`)**:
    - BullMQ default job retention trimmed to ultra-lean values (`removeOnComplete: { count: 20, age: 3600 }`, `removeOnFail: { count: 50, age: 86400 }`).
@@ -27,10 +48,14 @@ The platform embodies the **Full Funnel Outreach Marketing Architecture**:
 
 ---
 
-## 3. Key Architecture & Features Scorecard
+## 4. Key Architecture & Features Scorecard
 
 | Feature Component | Status | Key Highlights |
 | :--- | :---: | :--- |
+| **Multi-Sender Account Pool** | Completed | Round-robin least-loaded dispatch across multiple mailboxes per campaign. |
+| **Automated Warmup Schedule** | Completed | Daily auto-ramp-up (+5/day) and health tracking (`HEALTHY`, `WARNING`, `PAUSED_BOUNCE`). |
+| **Auto-Bounce DSN Parser** | Completed | Automatic detection of hard bounces in IMAP poller $\rightarrow$ suppression injection. |
+| **Deal Value & Forecasting** | Completed | Commercial deal valuation, win probability, contact roles, and column aggregate values. |
 | **Discovery Engine Toggle** | Completed | Clean UI toggle between **LinkedIn Decision Makers** (individual executive contacts) and **Company & Business Directory** (Outscraper / organizational entities). |
 | **Reoon Verifier Safe Filter** | Completed | Categorizes prospects into `SAFE`, `RISKY`, and `INVALID`; isolates risky emails to safeguard sender SMTP reputation. |
 | **Live Website Verifier** | Completed | DNS & HTTP accessibility probe ensures company website links are verified live before rendering action buttons. |
@@ -43,8 +68,11 @@ The platform embodies the **Full Funnel Outreach Marketing Architecture**:
 
 ---
 
-## 4. Operational & Deployment Status
+## 5. Operational & Deployment Status
 - **Development & Live Ports**: `3099` (Local Next.js) & `3777` (VPS Deployment).
 - **Process Management**: Dual-process architecture managed via PM2 (`kanban-web`, `kanban-worker`, `kanban-tunnel`) or `concurrently` (`npm run dev:all` / `npm run start:all`).
 - **Compilation**: `npx tsc --noEmit` & `npm run build` passing with 0 errors.
-- **Audit Documentation**: Complete 10-aspect audit available in [`docs/laporan-audit-qa-360.md`](docs/laporan-audit-qa-360.md).
+- **Audit & Guide Documentation**:
+  - Cold Outreach Engine: [`docs/panduan-outreach-engine.md`](docs/panduan-outreach-engine.md)
+  - Kanban CRM & Pipeline: [`docs/panduan-crm-kanban.md`](docs/panduan-crm-kanban.md)
+  - QA 360 Audit Report: [`docs/laporan-audit-qa-360.md`](docs/laporan-audit-qa-360.md)

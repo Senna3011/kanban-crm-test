@@ -58,6 +58,13 @@ export default function KanbanColumn({
   }, [colCardIds, selectedIds]);
   const isAllColSelected = colCardIds.length > 0 && selectedInColCount === colCardIds.length;
 
+  const totalColumnValue = useMemo(() => {
+    return column.cards.reduce((sum, c) => {
+      const val = c.dealValue ? Number(c.dealValue) : 0;
+      return sum + (isNaN(val) ? 0 : val);
+    }, 0);
+  }, [column.cards]);
+
   function toggleSort() {
     if (localSortMode === 'default') setLocalSortMode('unreads');
     else if (localSortMode === 'unreads') setLocalSortMode('date');
@@ -108,6 +115,16 @@ export default function KanbanColumn({
 
         {/* Action / Sort button */}
         <div className="flex items-center gap-1">
+          {totalColumnValue > 0 && (
+            <span
+              className="text-[10px] font-bold text-emerald-800 bg-emerald-100/90 px-2 py-0.5 rounded-md flex items-center gap-0.5 shadow-2xs"
+              title={`Total stage pipeline value: $${totalColumnValue.toLocaleString()}`}
+            >
+              <span>$</span>
+              <span>{totalColumnValue >= 1000 ? `${(totalColumnValue / 1000).toFixed(1)}k` : totalColumnValue.toLocaleString()}</span>
+            </span>
+          )}
+
           {unreadCount > 0 && (
             <span className="text-[10px] font-bold text-primary-700 bg-primary-100/80 px-2 py-0.5 rounded-full flex items-center gap-1">
               <span className="w-1.5 h-1.5 rounded-full bg-primary-600 animate-pulse" />

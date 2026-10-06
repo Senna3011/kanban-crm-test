@@ -159,6 +159,7 @@ export default function CampaignWorkspacePage({
   const [settingsName, setSettingsName] = useState('');
   const [settingsStatus, setSettingsStatus] = useState('DRAFT');
   const [settingsAccountId, setSettingsAccountId] = useState('');
+  const [settingsAccountIds, setSettingsAccountIds] = useState<string[]>([]);
   const [settingsTargetRole, setSettingsTargetRole] = useState('');
   const [settingsTargetLocation, setSettingsTargetLocation] = useState('');
   const [settingsTargetIndustry, setSettingsTargetIndustry] = useState('');
@@ -745,6 +746,8 @@ export default function CampaignWorkspacePage({
     setSettingsName(campaign.name || '');
     setSettingsStatus(campaign.status || 'DRAFT');
     setSettingsAccountId(campaign.accountId || (campaign.account as any)?.id || '');
+    const poolList = Array.isArray((campaign as any).accounts) ? (campaign as any).accounts.map((a: any) => a.id) : [];
+    setSettingsAccountIds(poolList.length > 0 ? poolList : (campaign.accountId ? [campaign.accountId] : []));
     setSettingsTargetRole(campaign.targetRole || '');
     setSettingsTargetLocation(campaign.targetLocation || '');
     setSettingsTargetIndustry(campaign.targetIndustry || '');
@@ -767,7 +770,8 @@ export default function CampaignWorkspacePage({
         body: JSON.stringify({
           name: settingsName.trim(),
           status: settingsStatus,
-          accountId: settingsAccountId || null,
+          accountId: settingsAccountIds[0] || settingsAccountId || null,
+          accountIds: settingsAccountIds,
           targetRole: settingsTargetRole.trim() || undefined,
           targetLocation: settingsTargetLocation.trim() || undefined,
           targetIndustry: settingsTargetIndustry.trim() || undefined,
@@ -781,7 +785,7 @@ export default function CampaignWorkspacePage({
 
       setCampaign((prev) => (prev ? { ...prev, ...data } : data));
       setIsSettingsModalOpen(false);
-      toast.success('Campaign settings updated successfully!');
+      toast.success('Campaign settings & sender pool updated successfully!');
       await fetchCampaign();
     } catch (err: any) {
       toast.error(`Save Settings Error: ${err.message}`);
@@ -2119,20 +2123,65 @@ export default function CampaignWorkspacePage({
                       <option value="COMPLETED">COMPLETED</option>
                     </select>
                   </div>
-                  <div className="sm:col-span-3">
-                    <label className="block text-[11px] font-semibold text-slate-700 mb-1">Outbound Sender Mailbox</label>
-                    <select
-                      value={settingsAccountId}
-                      onChange={(e) => setSettingsAccountId(e.target.value)}
-                      className="w-full px-3 py-2 border border-slate-300 rounded-xl text-xs bg-white focus:ring-2 focus:ring-primary-500"
-                    >
-                      <option value="">No sender configured (Staging only)</option>
-                      {outreachAccounts.map((acc) => (
-                        <option key={acc.id} value={acc.id}>
-                          {acc.name} ({acc.senderEmail})
-                        </option>
-                      ))}
-                    </select>
+                  <div className="sm:col-span-3 space-y-2 pt-1">
+                    <div className="flex items-center justify-between">
+                      <label className="block text-[11px] font-bold text-slate-800">
+                        📬 Rotated Sender Mailboxes ({settingsAccountIds.length}/{outreachAccounts.length} in Pool)
+                      </label>
+                      {outreachAccounts.length > 0 && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (settingsAccountIds.length === outreachAccounts.length) {
+                              setSettingsAccountIds([]);
+                            } else {
+                              setSettingsAccountIds(outreachAccounts.map((a) => a.id));
+                            }
+                          }}
+                          className="text-[10px] text-primary-600 hover:text-primary-800 font-semibold"
+                        >
+                          {settingsAccountIds.length === outreachAccounts.length ? 'Deselect All' : 'Select All Active'}
+                        </button>
+                      )}
+                    </div>
+                    {outreachAccounts.length === 0 ? (
+                      <p className="text-[11px] text-slate-400">No sender accounts configured.</p>
+                    ) : (
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-40 overflow-y-auto p-1">
+                        {outreachAccounts.map((acc: any) => {
+                          const isChecked = settingsAccountIds.includes(acc.id);
+                          return (
+                            <div
+                              key={acc.id}
+                              onClick={() => {
+                                if (isChecked) {
+                                  setSettingsAccountIds(settingsAccountIds.filter((id) => id !== acc.id));
+                                } else {
+                                  setSettingsAccountIds([...settingsAccountIds, acc.id]);
+                                }
+                              }}
+                              className={`p-2 rounded-lg border text-xs cursor-pointer transition-all flex items-center justify-between ${
+                                isChecked
+                                  ? 'bg-primary-50 border-primary-300 ring-1 ring-primary-300'
+                                  : 'bg-white border-slate-200 hover:bg-slate-50'
+                              }`}
+                            >
+                              <div className="min-w-0 flex-1 pr-2">
+                                <p className="font-bold text-slate-900 truncate text-[11px]">{acc.name}</p>
+                                <p className="text-[10px] font-mono text-slate-500 truncate">{acc.senderEmail}</p>
+                                <p className="text-[9px] text-slate-400">Limit: {acc.sentToday}/{acc.warmupEnabled ? acc.currentWarmupLimit : acc.dailyLimit}/d</p>
+                              </div>
+                              <input
+                                type="checkbox"
+                                checked={isChecked}
+                                onChange={() => {}}
+                                className="w-3.5 h-3.5 text-primary-600 rounded border-slate-300 pointer-events-none"
+                              />
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
                   </div>
                 </div>
               </div>

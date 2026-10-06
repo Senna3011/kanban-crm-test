@@ -143,6 +143,16 @@ export default function KanbanCard({
 
         {/* Badges */}
         <div className="flex items-center gap-1.5 flex-shrink-0">
+          {card.dealValue && (
+            <span className="inline-flex items-center text-[10px] font-bold px-1.5 py-0.5 rounded-md bg-emerald-50 text-emerald-700 border border-emerald-200 shadow-2xs">
+              {card.currency === 'IDR' ? `Rp ${Number(card.dealValue).toLocaleString('id-ID')}` : `${card.currency || '$'}${Number(card.dealValue).toLocaleString()}`}
+            </span>
+          )}
+          {card.contactRole && (
+            <span className="inline-flex items-center text-[9px] font-semibold px-1 py-0.5 rounded bg-purple-50 text-purple-700 border border-purple-200/80">
+              {card.contactRole}
+            </span>
+          )}
           {isUnread && (
             <span className="inline-flex items-center gap-1 text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-primary-50 text-primary-700 border border-primary-200/80 shadow-2xs">
               <span className="w-1.5 h-1.5 rounded-full bg-primary-600 animate-pulse" />

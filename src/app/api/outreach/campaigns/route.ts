@@ -18,7 +18,10 @@ export async function GET(req: NextRequest) {
         orderBy: { createdAt: 'desc' },
         include: {
           account: {
-            select: { id: true, name: true, senderEmail: true },
+            select: { id: true, name: true, senderEmail: true, warmupEnabled: true, currentWarmupLimit: true, dailyLimit: true, healthStatus: true },
+          },
+          accounts: {
+            select: { id: true, name: true, senderEmail: true, warmupEnabled: true, currentWarmupLimit: true, dailyLimit: true, healthStatus: true },
           },
           _count: {
             select: { leads: true },
@@ -73,6 +76,7 @@ export async function GET(req: NextRequest) {
         status: c.status,
         createdAt: c.createdAt,
         account: c.account,
+        accounts: c.accounts || [],
         metrics: {
           totalLeads,
           verifiedSafe,
@@ -99,13 +103,13 @@ export async function POST(req: NextRequest) {
 
   try {
     const body = await req.json();
-    const { name, targetRole, targetLocation, targetIndustry, searchQuery, promptInstructions, accountId } = body;
+    const { name, targetRole, targetLocation, targetIndustry, searchQuery, promptInstructions, accountId, accountIds } = body;
 
     if (!name || typeof name !== 'string') {
       return NextResponse.json({ error: 'Campaign name is required' }, { status: 400 });
     }
 
-    // Optional accountId: link to OutreachAccountConfig if provided, otherwise allow null (zero blocker)
+    // Optional accountId: link to single OutreachAccountConfig if provided
     let validAccountId: string | null = null;
     if (accountId && typeof accountId === 'string') {
       const existingAccount = await prisma.outreachAccountConfig.findFirst({
@@ -114,6 +118,18 @@ export async function POST(req: NextRequest) {
       if (existingAccount) {
         validAccountId = existingAccount.id;
       }
+    }
+
+    // Multi-sender account pool IDs
+    let connectAccounts: { id: string }[] = [];
+    if (Array.isArray(accountIds) && accountIds.length > 0) {
+      const validAccounts = await prisma.outreachAccountConfig.findMany({
+        where: { id: { in: accountIds }, tenantId },
+        select: { id: true },
+      });
+      connectAccounts = validAccounts.map(a => ({ id: a.id }));
+    } else if (validAccountId) {
+      connectAccounts = [{ id: validAccountId }];
     }
 
     const campaign = await prisma.outreachCampaign.create({
@@ -126,9 +142,15 @@ export async function POST(req: NextRequest) {
         promptInstructions: promptInstructions?.trim() || null,
         tenantId,
         accountId: validAccountId,
+        ...(connectAccounts.length > 0 && {
+          accounts: {
+            connect: connectAccounts,
+          },
+        }),
       },
       include: {
         account: true,
+        accounts: true,
       },
     });
 

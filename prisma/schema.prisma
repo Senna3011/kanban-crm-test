@@ -126,6 +126,11 @@ model Card {
   channel        String   @default("email")
   highlighted    Boolean  @default(false)
   metadata       Json?
+  dealValue      Decimal? @db.Decimal(12, 2)
+  currency       String   @default("USD")
+  contactRole    String?
+  probability    Int?
+  lostReason     String?
   lastActivityAt DateTime @default(now())
   nextFollowUpAt DateTime?
   createdAt      DateTime @default(now())
@@ -276,30 +281,38 @@ enum OutreachLeadStatus {
   REPLIED
   CONVERTED
   FAILED
+  BOUNCED
 }
 
 model OutreachAccountConfig {
-  id              String   @id @default(cuid())
-  name            String   @default("Outreach Sender")
-  senderName      String   @default("Outreach Team")
-  senderEmail     String
-  smtpHost        String   @default("smtp.zoho.com")
-  smtpPort        Int      @default(465)
-  smtpUser        String
-  smtpPass        String?
-  apifyApiToken   String?
-  reoonApiKey     String?
-  dailyLimit      Int      @default(50)
-  sentToday       Int      @default(0)
-  lastResetDate   DateTime @default(now())
-  isActive        Boolean  @default(true)
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  id                 String             @id @default(cuid())
+  name               String             @default("Outreach Sender")
+  senderName         String             @default("Outreach Team")
+  senderEmail        String
+  smtpHost           String             @default("smtp.zoho.com")
+  smtpPort           Int                @default(465)
+  smtpUser           String
+  smtpPass           String?
+  apifyApiToken      String?
+  reoonApiKey        String?
+  dailyLimit         Int                @default(50)
+  sentToday          Int                @default(0)
+  lastResetDate      DateTime           @default(now())
+  warmupEnabled      Boolean            @default(false)
+  currentWarmupLimit Int                @default(10)
+  targetDailyLimit   Int                @default(50)
+  rampUpPerDay       Int                @default(5)
+  consecutiveBounces Int                @default(0)
+  healthStatus       String             @default("HEALTHY") // HEALTHY, WARNING, PAUSED_BOUNCE
+  isActive           Boolean            @default(true)
+  createdAt          DateTime           @default(now())
+  updatedAt          DateTime           @updatedAt
 
   tenantId String
   tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
-  campaigns OutreachCampaign[]
+  campaigns       OutreachCampaign[]
+  pooledCampaigns OutreachCampaign[] @relation("CampaignAccountsPool")
 
   @@unique([tenantId, senderEmail])
 }
@@ -321,6 +334,7 @@ model OutreachCampaign {
 
   accountId        String?
   account          OutreachAccountConfig? @relation(fields: [accountId], references: [id], onDelete: SetNull)
+  accounts         OutreachAccountConfig[] @relation("CampaignAccountsPool")
 
   leads            OutreachLead[]
 

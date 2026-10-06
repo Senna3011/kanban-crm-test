@@ -14,6 +14,12 @@ interface OutreachAccount {
   smtpUser: string;
   dailyLimit: number;
   sentToday: number;
+  warmupEnabled?: boolean;
+  currentWarmupLimit?: number;
+  targetDailyLimit?: number;
+  rampUpPerDay?: number;
+  consecutiveBounces?: number;
+  healthStatus?: string;
   isActive: boolean;
   createdAt: string;
 }
@@ -35,6 +41,12 @@ export default function OutreachSettingsPage() {
   const [smtpUser, setSmtpUser] = useState('');
   const [smtpPass, setSmtpPass] = useState('');
   const [dailyLimit, setDailyLimit] = useState(50);
+  const [warmupEnabled, setWarmupEnabled] = useState(false);
+  const [currentWarmupLimit, setCurrentWarmupLimit] = useState(10);
+  const [targetDailyLimit, setTargetDailyLimit] = useState(50);
+  const [rampUpPerDay, setRampUpPerDay] = useState(5);
+  const [healthStatus, setHealthStatus] = useState('HEALTHY');
+  const [consecutiveBounces, setConsecutiveBounces] = useState(0);
   const [isActive, setIsActive] = useState(true);
 
   const [saving, setSaving] = useState(false);
@@ -98,6 +110,12 @@ export default function OutreachSettingsPage() {
     setSmtpUser(acc.smtpUser);
     setSmtpPass('');
     setDailyLimit(acc.dailyLimit);
+    setWarmupEnabled(acc.warmupEnabled || false);
+    setCurrentWarmupLimit(acc.currentWarmupLimit || 10);
+    setTargetDailyLimit(acc.targetDailyLimit || acc.dailyLimit || 50);
+    setRampUpPerDay(acc.rampUpPerDay || 5);
+    setHealthStatus(acc.healthStatus || 'HEALTHY');
+    setConsecutiveBounces(acc.consecutiveBounces || 0);
     setIsActive(acc.isActive);
   }
 
@@ -111,6 +129,12 @@ export default function OutreachSettingsPage() {
     setSmtpUser('');
     setSmtpPass('');
     setDailyLimit(50);
+    setWarmupEnabled(false);
+    setCurrentWarmupLimit(10);
+    setTargetDailyLimit(50);
+    setRampUpPerDay(5);
+    setHealthStatus('HEALTHY');
+    setConsecutiveBounces(0);
     setIsActive(true);
   }
 
@@ -163,6 +187,12 @@ export default function OutreachSettingsPage() {
         smtpPort: Number(smtpPort),
         smtpUser: smtpUser || senderEmail.trim().toLowerCase(),
         dailyLimit: Number(dailyLimit),
+        warmupEnabled,
+        currentWarmupLimit: Number(currentWarmupLimit),
+        targetDailyLimit: Number(targetDailyLimit),
+        rampUpPerDay: Number(rampUpPerDay),
+        healthStatus,
+        consecutiveBounces: Number(consecutiveBounces),
         isActive,
       };
       if (smtpPass) {
@@ -493,6 +523,91 @@ export default function OutreachSettingsPage() {
                     <span>{testingConnection ? '⏳' : '⚡'}</span>
                     <span>Test SMTP Handshake</span>
                   </button>
+                </div>
+              </div>
+
+              {/* Automated Warmup & Reputation Health */}
+              <div className="space-y-3 border-t border-slate-100 pt-4">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider">3. Warmup & Deliverability Protection</h3>
+                    <p className="text-[11px] text-slate-500 mt-0.5">Protect domain reputation with automatic volume ramp-up and bounce threshold detection.</p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                      healthStatus === 'HEALTHY' ? 'bg-emerald-100 text-emerald-800' :
+                      healthStatus === 'WARNING' ? 'bg-amber-100 text-amber-800' : 'bg-rose-100 text-rose-800'
+                    }`}>
+                      ● {healthStatus}
+                    </span>
+                  </div>
+                </div>
+
+                <div className="p-3.5 bg-slate-50 rounded-xl border border-slate-200/80 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="checkbox"
+                        id="warmupToggle"
+                        checked={warmupEnabled}
+                        onChange={(e) => setWarmupEnabled(e.target.checked)}
+                        className="rounded border-slate-300 text-primary-600 focus:ring-primary-500 w-4 h-4"
+                      />
+                      <label htmlFor="warmupToggle" className="text-xs font-bold text-slate-800 cursor-pointer">
+                        Enable Automated Mailbox Warmup (+{rampUpPerDay}/day)
+                      </label>
+                    </div>
+                    {consecutiveBounces > 0 && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setConsecutiveBounces(0);
+                          setHealthStatus('HEALTHY');
+                        }}
+                        className="text-[10px] font-bold text-rose-600 hover:text-rose-800 underline"
+                      >
+                        Reset Bounces ({consecutiveBounces})
+                      </button>
+                    )}
+                  </div>
+
+                  {warmupEnabled && (
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-2 border-t border-slate-200/60">
+                      <div>
+                        <label className="block text-[10px] font-semibold text-slate-600 mb-1">Current Warmup Limit</label>
+                        <input
+                          type="number"
+                          min={1}
+                          max={500}
+                          value={currentWarmupLimit}
+                          onChange={(e) => setCurrentWarmupLimit(Number(e.target.value))}
+                          className="w-full px-2.5 py-1.5 border border-slate-300 rounded-lg text-xs bg-white text-slate-800 font-semibold focus:ring-2 focus:ring-primary-500"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[10px] font-semibold text-slate-600 mb-1">Target Daily Limit</label>
+                        <input
+                          type="number"
+                          min={10}
+                          max={2000}
+                          value={targetDailyLimit}
+                          onChange={(e) => setTargetDailyLimit(Number(e.target.value))}
+                          className="w-full px-2.5 py-1.5 border border-slate-300 rounded-lg text-xs bg-white text-slate-800 font-semibold focus:ring-2 focus:ring-primary-500"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[10px] font-semibold text-slate-600 mb-1">Ramp-Up per Day (+)</label>
+                        <input
+                          type="number"
+                          min={1}
+                          max={50}
+                          value={rampUpPerDay}
+                          onChange={(e) => setRampUpPerDay(Number(e.target.value))}
+                          className="w-full px-2.5 py-1.5 border border-slate-300 rounded-lg text-xs bg-white text-slate-800 font-semibold focus:ring-2 focus:ring-primary-500"
+                        />
+                      </div>
+                    </div>
+                  )}
                 </div>
               </div>
 

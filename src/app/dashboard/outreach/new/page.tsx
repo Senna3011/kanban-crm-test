@@ -35,6 +35,7 @@ export default function NewOutreachCampaignPage() {
   const [name, setName] = useState('');
   const [outreachAccounts, setOutreachAccounts] = useState<OutreachAccount[]>([]);
   const [selectedAccountId, setSelectedAccountId] = useState('');
+  const [selectedAccountIds, setSelectedAccountIds] = useState<string[]>([]);
 
   // Step 2: Target Lead Parameters
   const [leadProvider, setLeadProvider] = useState<'outscraper' | 'apify'>('outscraper');
@@ -63,9 +64,10 @@ export default function NewOutreachCampaignPage() {
       .then((data) => {
         const list = Array.isArray(data) ? data : data.accounts || [];
         setOutreachAccounts(list);
-        const activeAcc = list.find((a: any) => a.isActive);
-        if (activeAcc) {
-          setSelectedAccountId(activeAcc.id);
+        const activeAccs = list.filter((a: any) => a.isActive);
+        if (activeAccs.length > 0) {
+          setSelectedAccountId(activeAccs[0].id);
+          setSelectedAccountIds(activeAccs.map((a: any) => a.id));
         }
       })
       .catch((e) => console.error('Failed to load accounts:', e));
@@ -175,7 +177,8 @@ export default function NewOutreachCampaignPage() {
           targetIndustry: targetIndustry.trim(),
           searchQuery: searchQuery.trim() || undefined,
           promptInstructions: fullPromptInstructions,
-          accountId: selectedAccountId || undefined,
+          accountId: selectedAccountId || (selectedAccountIds.length > 0 ? selectedAccountIds[0] : undefined),
+          accountIds: selectedAccountIds,
         }),
       });
 
@@ -278,10 +281,10 @@ export default function NewOutreachCampaignPage() {
         {step === 1 && (
           <div className="space-y-4 animate-in fade-in">
             <div>
-              <h2 className="text-sm font-bold text-slate-900">Step 1: Campaign Identity & Sender Setup</h2>
-              <p className="text-xs text-slate-500 mt-0.5">Name your campaign and select which sender account to associate.</p>
+              <h2 className="text-sm font-bold text-slate-900">Step 1: Campaign Identity & Multi-Sender Setup</h2>
+              <p className="text-xs text-slate-500 mt-0.5">Name your campaign and select sender mailbox accounts for automated round-robin rotation.</p>
             </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2">
+            <div className="space-y-4 pt-1">
               <div>
                 <label className="block text-xs font-semibold text-slate-700 mb-1">
                   Campaign Name <span className="text-red-500">*</span>
@@ -295,25 +298,84 @@ export default function NewOutreachCampaignPage() {
                   className="w-full px-3.5 py-2.5 border border-slate-300 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-primary-500"
                 />
               </div>
-              <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">
-                  Sender Mailbox <span className="text-slate-400 font-normal">(Optional for staging)</span>
-                </label>
-                <select
-                  value={selectedAccountId}
-                  onChange={(e) => setSelectedAccountId(e.target.value)}
-                  className="w-full px-3.5 py-2.5 border border-slate-300 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-primary-500 bg-white"
-                >
-                  <option value="">Direct Sourcing & Staging (No Sender Required)</option>
-                  {outreachAccounts.map((acc) => (
-                    <option key={acc.id} value={acc.id}>
-                      {acc.name} ({acc.senderEmail})
-                    </option>
-                  ))}
-                </select>
-                <p className="text-[10px] text-slate-400 mt-1">
-                  You can source leads and push them to Kanban CRM even without an outbound sender configured.
-                </p>
+
+              {/* Multi-Sender Pool Selection */}
+              <div className="bg-slate-50 p-4 rounded-xl border border-slate-200/80 space-y-3">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <label className="block text-xs font-bold text-slate-800">
+                      📬 Multi-Sender Rotation Pool ({selectedAccountIds.length}/{outreachAccounts.length} selected)
+                    </label>
+                    <p className="text-[11px] text-slate-500">
+                      Cold emails will automatically rotate between selected mailboxes to protect sender domain reputation.
+                    </p>
+                  </div>
+                  {outreachAccounts.length > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (selectedAccountIds.length === outreachAccounts.length) {
+                          setSelectedAccountIds([]);
+                        } else {
+                          setSelectedAccountIds(outreachAccounts.map((a) => a.id));
+                        }
+                      }}
+                      className="text-xs text-primary-600 hover:text-primary-800 font-semibold"
+                    >
+                      {selectedAccountIds.length === outreachAccounts.length ? 'Deselect All' : 'Select All'}
+                    </button>
+                  )}
+                </div>
+
+                {outreachAccounts.length === 0 ? (
+                  <p className="text-xs text-slate-400 py-2">
+                    No dedicated outreach sender mailboxes connected yet. (You can still source leads and push them to Kanban CRM).
+                  </p>
+                ) : (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
+                    {outreachAccounts.map((acc: any) => {
+                      const isSelected = selectedAccountIds.includes(acc.id);
+                      return (
+                        <div
+                          key={acc.id}
+                          onClick={() => {
+                            if (isSelected) {
+                              setSelectedAccountIds(selectedAccountIds.filter((id) => id !== acc.id));
+                            } else {
+                              setSelectedAccountIds([...selectedAccountIds, acc.id]);
+                            }
+                          }}
+                          className={`p-3 rounded-xl border cursor-pointer transition-all flex items-center justify-between ${
+                            isSelected
+                              ? 'bg-primary-50/60 border-primary-300 ring-1 ring-primary-300'
+                              : 'bg-white border-slate-200 hover:bg-slate-50 opacity-70'
+                          }`}
+                        >
+                          <div className="min-w-0 flex-1 pr-2">
+                            <div className="flex items-center gap-1.5">
+                              <span className="text-xs font-bold text-slate-900 truncate">{acc.name}</span>
+                              {acc.warmupEnabled && (
+                                <span className="text-[9px] font-bold px-1.5 py-0.2 rounded bg-amber-100 text-amber-800">
+                                  Warmup (+{acc.rampUpPerDay}/d)
+                                </span>
+                              )}
+                            </div>
+                            <p className="text-[11px] font-mono text-slate-500 truncate">{acc.senderEmail}</p>
+                            <p className="text-[10px] text-slate-400 mt-0.5">
+                              Limit: {acc.sentToday}/{acc.warmupEnabled ? acc.currentWarmupLimit : acc.dailyLimit}/day
+                            </p>
+                          </div>
+                          <input
+                            type="checkbox"
+                            checked={isSelected}
+                            onChange={() => {}}
+                            className="w-4 h-4 text-primary-600 rounded border-slate-300 pointer-events-none"
+                          />
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
               </div>
             </div>
           </div>

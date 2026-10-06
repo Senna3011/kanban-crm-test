@@ -7,6 +7,59 @@ import { convertOutreachLeadToKanbanCard } from '../src/lib/outreach-dispatcher'
 
 const emailAdapter = new EmailAdapter();
 
+function isDeliveryFailureEmail(fromEmail: string, subject: string): boolean {
+  const cleanFrom = fromEmail.toLowerCase();
+  const cleanSubj = subject.toLowerCase();
+
+  const isBounceSender = (
+    cleanFrom.includes('mailer-daemon') ||
+    cleanFrom.includes('postmaster') ||
+    cleanFrom.includes('mail-delivery') ||
+    (cleanFrom.includes('noreply') && cleanSubj.includes('undelivered')) ||
+    cleanFrom.includes('bounce')
+  );
+
+  const isBounceSubject = (
+    cleanSubj.includes('delivery status notification') ||
+    cleanSubj.includes('undelivered mail') ||
+    cleanSubj.includes('mail delivery failed') ||
+    cleanSubj.includes('failure notice') ||
+    cleanSubj.includes('returned mail') ||
+    cleanSubj.includes('delivery failure') ||
+    cleanSubj.includes('address not found') ||
+    cleanSubj.includes('message not delivered')
+  );
+
+  return isBounceSender || isBounceSubject;
+}
+
+function extractBouncedEmail(bodyText: string): string | null {
+  if (!bodyText) return null;
+  const patterns = [
+    /(?:to|recipient|final-recipient|for <|was not delivered to|failed recipient:?)\s*:?\s*(?:rfc822;)?\s*<?([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})>?/i,
+    /<([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})>\s*:\s*(?:550|551|552|553|554|Host or domain name not found|User unknown|Recipient address rejected|No such user)/i,
+    /Your message to ([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}) couldn't be delivered/i,
+  ];
+
+  for (const regex of patterns) {
+    const match = bodyText.match(regex);
+    if (match && match[1]) {
+      return match[1].toLowerCase().trim();
+    }
+  }
+
+  const emails = bodyText.match(/[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g);
+  if (emails && emails.length > 0) {
+    const filtered = emails.filter(e => {
+      const lower = e.toLowerCase();
+      return !lower.includes('mailer-daemon') && !lower.includes('postmaster') && !lower.includes('google.com') && !lower.includes('zoho.com');
+    });
+    if (filtered.length > 0) return filtered[0].toLowerCase().trim();
+  }
+
+  return null;
+}
+
 // Dynamic folder to board resolution with optional fallback mapping
 const DEFAULT_FOLDER_MAPPING: Record<string, string> = {
   'INBOX': 'JetDigitaPro',
@@ -124,6 +177,56 @@ async function pollFolder(imapConfig: Record<string, string>, folder: string, te
       if (configUser && senderEmail === configUser) {
         console.log(`[IMAP Poller] Skipping outbound email: ${msg.subject} (from ${msg.fromEmail})`);
         continue;
+      }
+
+      // 1. Check for Bounce / Delivery Status Notification (DSN / NDR)
+      if (isDeliveryFailureEmail(senderEmail, msg.subject)) {
+        const bouncedEmail = extractBouncedEmail(msg.bodyText || '');
+        console.log(`[IMAP Poller] Bounce / DSN detected in ${folder}: "${msg.subject}". Extracted recipient: ${bouncedEmail || 'none'}`);
+
+        if (bouncedEmail) {
+          // Add to tenant suppression list
+          await prisma.outreachSuppression.upsert({
+            where: { tenantId_email: { tenantId, email: bouncedEmail } },
+            update: { reason: 'HARD_BOUNCE' },
+            create: { tenantId, email: bouncedEmail, reason: 'HARD_BOUNCE' },
+          });
+
+          // Mark matching OutreachLead as BOUNCED
+          const updatedLeads = await prisma.outreachLead.updateMany({
+            where: {
+              campaign: { tenantId },
+              email: { equals: bouncedEmail, mode: 'insensitive' },
+              status: { in: ['DISPATCHED', 'APPROVED'] },
+            },
+            data: {
+              status: 'BOUNCED',
+              errorMessage: `Undelivered bounce: ${msg.subject.slice(0, 100)}`,
+            },
+          });
+
+          console.log(`[IMAP Poller] Processed bounce for ${bouncedEmail}: ${updatedLeads.count} lead(s) marked BOUNCED & added to suppression.`);
+
+          // Increase consecutive bounces on active outreach accounts
+          const affectedAccounts = await prisma.outreachAccountConfig.findMany({
+            where: { tenantId, isActive: true },
+          });
+          for (const acc of affectedAccounts) {
+            const nextBounces = acc.consecutiveBounces + 1;
+            const healthStatus = nextBounces >= 5 ? 'PAUSED_BOUNCE' : (nextBounces >= 3 ? 'WARNING' : acc.healthStatus);
+            await prisma.outreachAccountConfig.update({
+              where: { id: acc.id },
+              data: {
+                consecutiveBounces: nextBounces,
+                healthStatus,
+              },
+            });
+            if (healthStatus === 'PAUSED_BOUNCE') {
+              console.warn(`[IMAP Poller] Mailbox ${acc.senderEmail} PAUSED due to high bounce threshold (5)!`);
+            }
+          }
+        }
+        continue; // Do not create a card in general column for system bounce emails
       }
 
       // Outreach Auto Reply Detection: Check if sender is an outreach lead waiting for response

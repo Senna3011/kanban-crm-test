@@ -81,6 +81,11 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
     if (body.fromEmail !== undefined) updateData.fromEmail = body.fromEmail;
     if (body.subject !== undefined) updateData.subject = body.subject;
     if (body.bodyText !== undefined) updateData.bodyText = body.bodyText;
+    if (body.dealValue !== undefined) updateData.dealValue = body.dealValue === '' || body.dealValue === null ? null : Number(body.dealValue);
+    if (body.currency !== undefined) updateData.currency = body.currency;
+    if (body.contactRole !== undefined) updateData.contactRole = body.contactRole;
+    if (body.probability !== undefined) updateData.probability = body.probability === '' || body.probability === null ? null : Number(body.probability);
+    if (body.lostReason !== undefined) updateData.lostReason = body.lostReason;
 
     const updated = await prisma.card.update({
       where: { id: id },

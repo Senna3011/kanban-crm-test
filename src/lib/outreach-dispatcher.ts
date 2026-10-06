@@ -56,6 +56,7 @@ export async function dispatchColdEmail(params: DispatchLeadEmailParams): Promis
       campaign: {
         include: {
           account: true,
+          accounts: true,
         },
       },
     },
@@ -94,43 +95,80 @@ export async function dispatchColdEmail(params: DispatchLeadEmailParams): Promis
     return { success: false, error: 'Email address is on the suppression list' };
   }
 
-  const account = lead.campaign.account;
+  // Multi-Sender Pool & Least-Loaded Selection
+  let candidatePool = (lead.campaign.accounts && lead.campaign.accounts.length > 0)
+    ? lead.campaign.accounts.filter(a => a.isActive && a.healthStatus !== 'PAUSED_BOUNCE')
+    : (lead.campaign.account && lead.campaign.account.isActive && lead.campaign.account.healthStatus !== 'PAUSED_BOUNCE' ? [lead.campaign.account] : []);
 
-  // Daily rate limit enforcement with atomic conditional update
-  if (account) {
-    const isSameDay = new Date(account.lastResetDate).toDateString() === new Date().toDateString();
-
-    if (!isSameDay) {
-      await prisma.outreachAccountConfig.updateMany({
-        where: {
-          id: account.id,
-          lastResetDate: { lt: new Date(new Date().setHours(0, 0, 0, 0)) },
-        },
-        data: { sentToday: 0, lastResetDate: new Date() },
-      });
-    }
-
-    const atomicUpdate = await prisma.outreachAccountConfig.updateMany({
+  // If campaign has no accounts attached, fallback to all active tenant outreach accounts
+  if (candidatePool.length === 0) {
+    candidatePool = await prisma.outreachAccountConfig.findMany({
       where: {
-        id: account.id,
-        sentToday: { lt: account.dailyLimit },
-      },
-      data: {
-        sentToday: { increment: 1 },
+        tenantId: params.tenantId,
+        isActive: true,
+        healthStatus: { not: 'PAUSED_BOUNCE' },
       },
     });
+  }
 
-    if (atomicUpdate.count === 0) {
-      await prisma.outreachLead.update({
-        where: { id: lead.id },
+  let selectedAccount: typeof candidatePool[0] | null = null;
+
+  if (candidatePool.length > 0) {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    // Refresh reset dates if needed
+    for (const acc of candidatePool) {
+      const isSameDay = new Date(acc.lastResetDate).toDateString() === new Date().toDateString();
+      if (!isSameDay) {
+        await prisma.outreachAccountConfig.updateMany({
+          where: {
+            id: acc.id,
+            lastResetDate: { lt: today },
+          },
+          data: { sentToday: 0, lastResetDate: new Date() },
+        });
+        acc.sentToday = 0;
+      }
+    }
+
+    // Sort candidate accounts by least-loaded (lowest sentToday) that still have quota
+    const availableAccounts = candidatePool.filter(acc => {
+      const effectiveLimit = acc.warmupEnabled ? acc.currentWarmupLimit : acc.dailyLimit;
+      return acc.sentToday < effectiveLimit;
+    }).sort((a, b) => a.sentToday - b.sentToday);
+
+    for (const acc of availableAccounts) {
+      const effectiveLimit = acc.warmupEnabled ? acc.currentWarmupLimit : acc.dailyLimit;
+      const atomicUpdate = await prisma.outreachAccountConfig.updateMany({
+        where: {
+          id: acc.id,
+          sentToday: { lt: effectiveLimit },
+        },
         data: {
-          status: 'FAILED',
-          errorMessage: `Daily mailbox sending limit reached (${account.dailyLimit}/day)`,
+          sentToday: { increment: 1 },
         },
       });
-      return { success: false, error: `Daily limit of ${account.dailyLimit} emails reached for this sender` };
+
+      if (atomicUpdate.count > 0) {
+        selectedAccount = acc;
+        break;
+      }
     }
   }
+
+  if (candidatePool.length > 0 && !selectedAccount) {
+    await prisma.outreachLead.update({
+      where: { id: lead.id },
+      data: {
+        status: 'FAILED',
+        errorMessage: 'Semua sender mailbox telah mencapai limit harian/warmup limit.',
+      },
+    });
+    return { success: false, error: 'Daily sending limit reached across all active sender accounts' };
+  }
+
+  const account = selectedAccount;
 
   // Resolve and decrypt account SMTP credentials if configured
   let rawAccountPass = account?.smtpPass;
