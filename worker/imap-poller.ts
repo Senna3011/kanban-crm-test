@@ -338,123 +338,138 @@ async function pollFolder(imapConfig: Record<string, string>, folder: string, te
   return created;
 }
 
+const activePollLocks = new Set<string>();
+
 export async function processEmailPoll(data: { tenantId: string; emailConfigId: string }) {
   const { tenantId, emailConfigId } = data;
 
-  const config = await prisma.emailConfig.findUnique({ where: { id: emailConfigId } });
-  if (!config || !config.isActive || config.tenantId !== tenantId) return;
-
-  let accessToken: string | undefined;
-  let password = '';
-  if (config.authType === 'oauth2') {
-    try {
-      accessToken = await getValidZohoAccessToken(config.id);
-    } catch (err: any) {
-      console.error(`[IMAP Poller] Failed to get valid OAuth token for ${config.imapUser}: ${err.message}`);
-      return;
-    }
-  } else if (config.imapPass) {
-    password = decrypt(config.imapPass);
+  if (activePollLocks.has(emailConfigId)) {
+    console.log(`[IMAP Poller] Polling already in progress for config ${emailConfigId}, skipping concurrent duplicate poll.`);
+    return 0;
   }
+  activePollLocks.add(emailConfigId);
 
-  const imapConfig: Record<string, string> = {
-    host: config.imapHost,
-    port: String(config.imapPort),
-    user: config.imapUser,
-  };
-  if (accessToken) imapConfig.accessToken = accessToken;
-  if (password) imapConfig.password = password;
-
-  console.log(`[IMAP Poller] Polling ${config.imapUser}...`);
-
-  let totalCreated = 0;
-  // Determine candidate folders (INBOX + tenant folders or default agency folders)
-  let candidateFolders = ['INBOX', 'Elite', 'Gold', 'Premiere', 'Nell'];
   try {
-    const tenantRecord = await prisma.tenant.findUnique({ where: { id: tenantId }, select: { companyInfo: true } });
-    if (tenantRecord?.companyInfo) {
-      const info = JSON.parse(tenantRecord.companyInfo);
-      if (Array.isArray(info.pollFolders) && info.pollFolders.length > 0) {
-        candidateFolders = Array.from(new Set(['INBOX', ...info.pollFolders]));
+    const config = await prisma.emailConfig.findUnique({ where: { id: emailConfigId } });
+    if (!config || !config.isActive || config.tenantId !== tenantId) return 0;
+
+    let accessToken: string | undefined;
+    let password = '';
+    if (config.authType === 'oauth2') {
+      try {
+        accessToken = await getValidZohoAccessToken(config.id);
+      } catch (err: any) {
+        console.error(`[IMAP Poller] Failed to get valid OAuth token for ${config.imapUser}: ${err.message}`);
+        return 0;
       }
+    } else if (config.imapPass) {
+      password = decrypt(config.imapPass);
     }
-  } catch {}
 
-  // Filter to only folders that actually exist on the mail server to prevent Command Failed errors
-  let folders = ['INBOX'];
-  try {
-    const available = await emailAdapter.getAvailableFolders(imapConfig);
-    const availableLower = new Set(available.map((f) => f.toLowerCase()));
-    folders = candidateFolders.filter((f) => f.toUpperCase() === 'INBOX' || availableLower.has(f.toLowerCase()));
-  } catch {
-    folders = ['INBOX'];
-  }
+    const imapConfig: Record<string, string> = {
+      host: config.imapHost,
+      port: String(config.imapPort),
+      user: config.imapUser,
+    };
+    if (accessToken) imapConfig.accessToken = accessToken;
+    if (password) imapConfig.password = password;
 
-  for (const folder of folders) {
-    const created = await pollFolder(imapConfig, folder, tenantId, emailConfigId);
-    totalCreated += created;
-  }
+    console.log(`[IMAP Poller] Polling ${config.imapUser}...`);
 
-  console.log(`[IMAP Poller] Total: ${totalCreated} new cards created`);
-
-  // Sync read/unread status for existing cards (match by Message-ID, stable across compaction)
-  console.log(`[IMAP Poller] Starting status sync for ${folders.length} folders...`);
-  for (const folder of folders) {
+    let totalCreated = 0;
+    // Determine candidate folders: For Zoho defaults to agency folders, for standard Gmail/IMAP defaults to INBOX
+    const isZohoHost = config.imapHost?.toLowerCase().includes('zoho');
+    let candidateFolders = isZohoHost ? ['INBOX', 'Elite', 'Gold', 'Premiere', 'Nell'] : ['INBOX'];
     try {
-      const statusMap = await emailAdapter.syncReadStatus(imapConfig, folder);
-      if (statusMap.size === 0) {
-        console.log(`[IMAP Poller] Status sync ${folder}: empty map, skipping`);
-        continue;
-      }
-
-      const cards = await prisma.card.findMany({
-        where: { imapFolder: folder },
-        select: { id: true, imapUid: true, messageId: true, status: true },
-      });
-      console.log(`[IMAP Poller] Status sync ${folder}: ${statusMap.size} entries, ${cards.length} cards`);
-
-      let updated = 0;
-      let matched = 0;
-      for (const card of cards) {
-        // Primary: match by Message-ID (stable)
-        let status: { isRead: boolean; isReplied: boolean } | undefined;
-        if (card.messageId) {
-          status = statusMap.get(card.messageId);
-        }
-        // Fallback: match by UID (may be stale after compaction)
-        if (!status && card.imapUid) {
-          status = statusMap.get(`uid:${card.imapUid}`);
-        }
-        if (!status) continue;
-        matched++;
-
-        const updateData: any = {};
-
-        // Sync read/unread status
-        const newStatus = status.isRead ? 'read' : 'unread';
-        if (card.status !== newStatus) {
-          updateData.status = newStatus;
-        }
-
-        // Sync reply detection — if email has \Answered flag, mark card as highlighted (replied)
-        if (status.isReplied) {
-          updateData.highlighted = true;
-          console.log(`[IMAP Poller] Detected reply for card ${card.messageId} — marking as highlighted`);
-        }
-
-        if (Object.keys(updateData).length > 0) {
-          await prisma.card.update({ where: { id: card.id }, data: updateData });
-          updated++;
+      const tenantRecord = await prisma.tenant.findUnique({ where: { id: tenantId }, select: { companyInfo: true } });
+      if (tenantRecord?.companyInfo) {
+        const info = JSON.parse(tenantRecord.companyInfo);
+        if (Array.isArray(info.pollFolders) && info.pollFolders.length > 0) {
+          candidateFolders = Array.from(new Set(['INBOX', ...info.pollFolders]));
         }
       }
-      console.log(`[IMAP Poller] Status sync ${folder}: ${matched} matched, ${updated} updated`);
-    } catch (err: any) {
-      console.error(`[IMAP Poller] Status sync error for ${folder}: ${err.message}`);
+    } catch {}
+
+    // Filter to only folders that actually exist on the mail server to prevent Command Failed errors
+    let folders = ['INBOX'];
+    try {
+      const available = await emailAdapter.getAvailableFolders(imapConfig);
+      const availableLower = new Set(available.map((f) => f.toLowerCase()));
+      folders = candidateFolders.filter((f) => f.toUpperCase() === 'INBOX' || availableLower.has(f.toLowerCase()));
+    } catch {
+      folders = ['INBOX'];
     }
-  }
 
-  await prisma.emailConfig.update({
-    where: { id: config.id },
-    data: { lastPolledAt: new Date() },
-  });
+    for (const folder of folders) {
+      const created = await pollFolder(imapConfig, folder, tenantId, emailConfigId);
+      totalCreated += created;
+    }
+
+    console.log(`[IMAP Poller] Total: ${totalCreated} new cards created for ${config.imapUser}`);
+
+    // Sync read/unread status for existing cards (match by Message-ID, stable across compaction)
+    console.log(`[IMAP Poller] Starting status sync for ${folders.length} folders...`);
+    for (const folder of folders) {
+      try {
+        const statusMap = await emailAdapter.syncReadStatus(imapConfig, folder);
+        if (statusMap.size === 0) {
+          console.log(`[IMAP Poller] Status sync ${folder}: empty map, skipping`);
+          continue;
+        }
+
+        const cards = await prisma.card.findMany({
+          where: { imapFolder: folder },
+          select: { id: true, imapUid: true, messageId: true, status: true },
+        });
+        console.log(`[IMAP Poller] Status sync ${folder}: ${statusMap.size} entries, ${cards.length} cards`);
+
+        let updated = 0;
+        let matched = 0;
+        for (const card of cards) {
+          // Primary: match by Message-ID (stable)
+          let status: { isRead: boolean; isReplied: boolean } | undefined;
+          if (card.messageId) {
+            status = statusMap.get(card.messageId);
+          }
+          // Fallback: match by UID (may be stale after compaction)
+          if (!status && card.imapUid) {
+            status = statusMap.get(`uid:${card.imapUid}`);
+          }
+          if (!status) continue;
+          matched++;
+
+          const updateData: any = {};
+
+          // Sync read/unread status
+          const newStatus = status.isRead ? 'read' : 'unread';
+          if (card.status !== newStatus) {
+            updateData.status = newStatus;
+          }
+
+          // Sync reply detection — if email has \Answered flag, mark card as highlighted (replied)
+          if (status.isReplied) {
+            updateData.highlighted = true;
+            console.log(`[IMAP Poller] Detected reply for card ${card.messageId} — marking as highlighted`);
+          }
+
+          if (Object.keys(updateData).length > 0) {
+            await prisma.card.update({ where: { id: card.id }, data: updateData });
+            updated++;
+          }
+        }
+        console.log(`[IMAP Poller] Status sync ${folder}: ${matched} matched, ${updated} updated`);
+      } catch (err: any) {
+        console.error(`[IMAP Poller] Status sync error for ${folder}: ${err.message}`);
+      }
+    }
+
+    await prisma.emailConfig.update({
+      where: { id: config.id },
+      data: { lastPolledAt: new Date() },
+    });
+
+    return totalCreated;
+  } finally {
+    activePollLocks.delete(emailConfigId);
+  }
 }

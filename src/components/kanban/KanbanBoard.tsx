@@ -470,23 +470,23 @@ export default function KanbanBoard() {
     setConfirmDialog({
       isOpen: true,
       title: 'Run AI Reclassification?',
-      message: 'Re-run AI classification on all pending cards? Cards may automatically move between pipeline columns.',
+      message: 'Re-run AI classification on all pending cards? Cards may automatically move between pipeline columns in the background.',
       confirmText: 'Start AI Reclassify',
       variant: 'warning',
       onConfirm: async () => {
+        setConfirmDialog((prev) => ({ ...prev, isOpen: false }));
         setReclassifying(true);
-        setConfirmDialog((prev) => ({ ...prev, isLoading: true }));
+        const toastId = toast.loading('AI Reclassification is running in the background...');
         try {
           const res = await fetch('/api/reclassify', { method: 'POST' });
           if (!res.ok) throw new Error('Reclassify failed');
           const data = await res.json();
-          toast.success(`Reclassified ${data.reclassified || 0} cards`);
+          toast.success(`Successfully reclassified ${data.reclassified || 0} cards`, { id: toastId });
           fetchColumns();
         } catch (err: any) {
-          toast.error(err.message || 'Reclassify failed');
+          toast.error(err.message || 'Reclassify failed', { id: toastId });
         } finally {
           setReclassifying(false);
-          setConfirmDialog((prev) => ({ ...prev, isOpen: false, isLoading: false }));
         }
       },
     });
