@@ -165,6 +165,9 @@ export default function CampaignWorkspacePage({
   const [settingsTargetIndustry, setSettingsTargetIndustry] = useState('');
   const [settingsSearchQuery, setSettingsSearchQuery] = useState('');
   const [settingsPromptInstructions, setSettingsPromptInstructions] = useState('');
+  const [settingsDripEnabled, setSettingsDripEnabled] = useState(false);
+  const [settingsDripDelayDays, setSettingsDripDelayDays] = useState(3);
+  const [settingsDripSubject, setSettingsDripSubject] = useState('');
   const [savingSettings, setSavingSettings] = useState(false);
   const [outreachAccounts, setOutreachAccounts] = useState<any[]>([]);
 
@@ -753,6 +756,9 @@ export default function CampaignWorkspacePage({
     setSettingsTargetIndustry(campaign.targetIndustry || '');
     setSettingsSearchQuery(campaign.searchQuery || '');
     setSettingsPromptInstructions(campaign.promptInstructions || '');
+    setSettingsDripEnabled((campaign as any).dripEnabled || false);
+    setSettingsDripDelayDays((campaign as any).dripDelayDays || 3);
+    setSettingsDripSubject((campaign as any).dripSubject || '');
     setIsSettingsModalOpen(true);
   }
 
@@ -777,6 +783,9 @@ export default function CampaignWorkspacePage({
           targetIndustry: settingsTargetIndustry.trim() || undefined,
           searchQuery: settingsSearchQuery.trim() || undefined,
           promptInstructions: settingsPromptInstructions.trim() || undefined,
+          dripEnabled: settingsDripEnabled,
+          dripDelayDays: settingsDripDelayDays,
+          dripSubject: settingsDripSubject.trim() || null,
         }),
       });
 
@@ -2256,6 +2265,64 @@ export default function CampaignWorkspacePage({
                   placeholder="Describe your offer, USP, key client benefits, and call to action..."
                   className="w-full px-3 py-2 border border-slate-300 rounded-xl text-xs leading-relaxed bg-white focus:ring-2 focus:ring-primary-500 text-slate-800"
                 />
+              </div>
+
+              {/* 4. Automated Drip Follow-Up Sequence */}
+              <div className="space-y-3 p-4 bg-slate-50/70 rounded-xl border border-slate-200/80">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      id="modalDripToggle"
+                      checked={settingsDripEnabled}
+                      onChange={(e) => setSettingsDripEnabled(e.target.checked)}
+                      className="w-4 h-4 rounded border-slate-300 text-primary-600 focus:ring-primary-500"
+                    />
+                    <div>
+                      <label htmlFor="modalDripToggle" className="text-xs font-bold text-slate-900 cursor-pointer flex items-center gap-1.5">
+                        <span>⚡</span>
+                        <span>Automated Step-2 Follow-up Sequence</span>
+                      </label>
+                      <p className="text-[10px] text-slate-500">
+                        Automatically sends a polite follow-up email if the prospect has not replied after several days.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                {settingsDripEnabled && (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2 border-t border-slate-200/60 animate-in fade-in">
+                    <div>
+                      <label className="block text-[11px] font-semibold text-slate-700 mb-1">
+                        Follow-up Delay (Days)
+                      </label>
+                      <select
+                        value={settingsDripDelayDays}
+                        onChange={(e) => setSettingsDripDelayDays(Number(e.target.value))}
+                        className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl text-xs focus:ring-2 focus:ring-primary-500"
+                      >
+                        <option value={1}>After 1 Day</option>
+                        <option value={2}>After 2 Days</option>
+                        <option value={3}>After 3 Days (Recommended)</option>
+                        <option value={5}>After 5 Days</option>
+                        <option value={7}>After 7 Days</option>
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="block text-[11px] font-semibold text-slate-700 mb-1">
+                        Follow-up Subject (Optional)
+                      </label>
+                      <input
+                        type="text"
+                        placeholder="e.g. Re: Quick follow up (defaults to Re: Original Subject)"
+                        value={settingsDripSubject}
+                        onChange={(e) => setSettingsDripSubject(e.target.value)}
+                        className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl text-xs focus:ring-2 focus:ring-primary-500"
+                      />
+                    </div>
+                  </div>
+                )}
               </div>
 
               <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-100">

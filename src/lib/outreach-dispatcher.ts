@@ -262,6 +262,7 @@ export async function dispatchColdEmail(params: DispatchLeadEmailParams): Promis
       data: {
         status: 'DISPATCHED',
         sentAt: new Date(),
+        lastMessageId: info.messageId || null,
         errorMessage: null,
       },
     });
@@ -283,6 +284,161 @@ export async function dispatchColdEmail(params: DispatchLeadEmailParams): Promis
     return {
       success: false,
       error: error.message || 'Transmission failed',
+    };
+  }
+}
+
+export async function dispatchDripFollowUp(params: {
+  leadId: string;
+  tenantId: string;
+}): Promise<{ success: boolean; error?: string; messageId?: string }> {
+  const lead = await prisma.outreachLead.findUnique({
+    where: { id: params.leadId },
+    include: {
+      campaign: {
+        include: {
+          account: true,
+          accounts: true,
+        },
+      },
+    },
+  });
+
+  if (!lead || !lead.email) {
+    return { success: false, error: 'Lead or recipient email not found' };
+  }
+
+  // If already replied, converted, or suppressed, skip drip
+  if (['REPLIED', 'CONVERTED', 'BOUNCED'].includes(lead.status) || lead.dripStatus === 'SENT') {
+    return { success: false, error: 'Lead already replied or drip sent' };
+  }
+
+  const suppression = await prisma.outreachSuppression.findUnique({
+    where: {
+      tenantId_email: {
+        tenantId: params.tenantId,
+        email: lead.email.toLowerCase().trim(),
+      },
+    },
+  });
+
+  if (suppression) {
+    await prisma.outreachLead.update({
+      where: { id: lead.id },
+      data: { dripStatus: 'SKIPPED' },
+    });
+    return { success: false, error: 'Recipient is suppressed' };
+  }
+
+  // Build subject and body for step-2 follow-up
+  const followUpSubject = lead.campaign.dripSubject?.trim() || `Re: ${lead.aiDraftSubject || 'Quick follow up'}`;
+  const firstName = lead.firstName || lead.fullName?.split(' ')[0] || 'there';
+  const followUpBody = lead.dripDraftBody || `Hi ${firstName},\n\nJust following up on my previous note to see if you had a moment to review. Would love to share some relevant insights when convenient for you.\n\nBest regards`;
+
+  // Use the same sender pool mechanism as dispatchOutreachLead
+  let candidatePool = lead.campaign.accounts?.length > 0
+    ? lead.campaign.accounts.filter(a => a.isActive && a.healthStatus !== 'PAUSED_BOUNCE')
+    : (lead.campaign.account && lead.campaign.account.isActive && lead.campaign.account.healthStatus !== 'PAUSED_BOUNCE' ? [lead.campaign.account] : []);
+
+  if (candidatePool.length === 0) {
+    candidatePool = await prisma.outreachAccountConfig.findMany({
+      where: {
+        tenantId: params.tenantId,
+        isActive: true,
+        healthStatus: { not: 'PAUSED_BOUNCE' },
+      },
+    });
+  }
+
+  let selectedAccount: typeof candidatePool[0] | null = null;
+  if (candidatePool.length > 0) {
+    const availableAccounts = candidatePool.filter(acc => {
+      const effectiveLimit = acc.warmupEnabled ? acc.currentWarmupLimit : acc.dailyLimit;
+      return acc.sentToday < effectiveLimit;
+    }).sort((a, b) => a.sentToday - b.sentToday);
+
+    for (const acc of availableAccounts) {
+      const effectiveLimit = acc.warmupEnabled ? acc.currentWarmupLimit : acc.dailyLimit;
+      const atomicUpdate = await prisma.outreachAccountConfig.updateMany({
+        where: { id: acc.id, sentToday: { lt: effectiveLimit } },
+        data: { sentToday: { increment: 1 } },
+      });
+      if (atomicUpdate.count > 0) {
+        selectedAccount = acc;
+        break;
+      }
+    }
+  }
+
+  const account = selectedAccount || (candidatePool.length > 0 ? candidatePool[0] : null);
+
+  let rawAccountPass = account?.smtpPass;
+  if (rawAccountPass) {
+    try {
+      const { decrypt } = await import('./encryption');
+      rawAccountPass = decrypt(rawAccountPass);
+    } catch {}
+  }
+
+  const smtpHost = account?.smtpHost || process.env.SMTP_HOST || 'smtp.zoho.com';
+  const smtpPort = account?.smtpPort || (process.env.SMTP_PORT ? Number(process.env.SMTP_PORT) : 465);
+  const smtpUser = account?.smtpUser || process.env.SMTP_USER || '';
+  const smtpPass = rawAccountPass || process.env.SMTP_PASS || '';
+  const senderEmail = account?.senderEmail || smtpUser;
+  const senderName = account?.senderName || 'Outreach Team';
+
+  if (!smtpUser || !smtpPass) {
+    return { success: false, error: 'No active SMTP credentials configured' };
+  }
+
+  const unsubscribeUrl = `${process.env.NEXTAUTH_URL || 'http://localhost:3099'}/api/outreach/unsubscribe?email=${encodeURIComponent(lead.email)}&t=${params.tenantId}`;
+  const emailBodyText = `${followUpBody}\n\n---\nIf you prefer not to receive future messages, unsubscribe here: ${unsubscribeUrl}`;
+  const emailBodyHtml = `<div style="font-family: Arial, sans-serif; font-size: 14px; line-height: 1.6; color: #1e293b;">
+    ${followUpBody.replace(/\n\n/g, '<br/><br/>').replace(/\n/g, '<br/>')}
+    <br/><br/>
+    <hr style="border: none; border-top: 1px solid #e2e8f0; margin: 20px 0;" />
+    <p style="font-size: 11px; color: #64748b; margin: 0;">
+      You received this follow-up message from ${senderName}. <a href="${unsubscribeUrl}" style="color: #6366f1; text-decoration: underline;">Unsubscribe here</a>.
+    </p>
+  </div>`;
+
+  try {
+    const transporter = getPooledTransporter(smtpHost, Number(smtpPort) || 465, smtpUser, smtpPass);
+
+    const info = await transporter.sendMail({
+      from: `"${senderName}" <${senderEmail}>`,
+      to: lead.email,
+      subject: followUpSubject,
+      text: emailBodyText,
+      html: emailBodyHtml,
+      inReplyTo: lead.lastMessageId || undefined,
+      references: lead.lastMessageId || undefined,
+      headers: {
+        'List-Unsubscribe': `<${unsubscribeUrl}>, <mailto:${senderEmail}?subject=Unsubscribe%20${encodeURIComponent(lead.email)}>`,
+        'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click',
+        'X-Outreach-Campaign-Id': lead.campaignId,
+        'X-Outreach-Lead-Id': lead.id,
+        'X-Outreach-Step': 'drip-followup',
+      },
+    });
+
+    await prisma.outreachLead.update({
+      where: { id: lead.id },
+      data: {
+        dripStatus: 'SENT',
+        dripSentAt: new Date(),
+      },
+    });
+
+    return {
+      success: true,
+      messageId: info.messageId,
+    };
+  } catch (error: any) {
+    console.error(`[OUTREACH DRIP] Failed to send drip follow-up to ${lead.email}:`, error);
+    return {
+      success: false,
+      error: error.message || 'Drip transmission failed',
     };
   }
 }

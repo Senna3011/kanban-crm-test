@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import ConfirmDialog, { type ConfirmDialogVariant } from '@/components/ui/ConfirmDialog';
+import OutreachTrendChart from '@/components/analytics/OutreachTrendChart';
 import toast, { Toaster } from 'react-hot-toast';
 
 interface CampaignItem {
@@ -120,6 +121,9 @@ export default function OutreachDashboardPage() {
           </Link>
         </div>
       </div>
+
+      {/* Live Time-Series Analytics Chart */}
+      <OutreachTrendChart />
 
       {/* Aggregate Stats */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">

@@ -325,6 +325,10 @@ model OutreachCampaign {
   targetIndustry   String?
   searchQuery      String?
   promptInstructions String?              @db.Text
+  dripEnabled      Boolean                @default(false)
+  dripDelayDays    Int                    @default(3)
+  dripSubject      String?
+  dripInstructions String?                @db.Text
   status           OutreachCampaignStatus @default(DRAFT)
   createdAt        DateTime               @default(now())
   updatedAt        DateTime               @updatedAt
@@ -356,6 +360,11 @@ model OutreachLead {
   verifyScore     Int?               @default(0)
   aiDraftSubject  String?
   aiDraftBody     String?            @db.Text
+  dripStatus      String             @default("IDLE") // IDLE, SENT, SKIPPED
+  dripSentAt      DateTime?
+  dripDraftSubject String?
+  dripDraftBody   String?            @db.Text
+  lastMessageId   String?
   status          OutreachLeadStatus @default(SCRAPED)
   errorMessage    String?
   sentAt          DateTime?

@@ -103,7 +103,20 @@ export async function POST(req: NextRequest) {
 
   try {
     const body = await req.json();
-    const { name, targetRole, targetLocation, targetIndustry, searchQuery, promptInstructions, accountId, accountIds } = body;
+    const {
+      name,
+      targetRole,
+      targetLocation,
+      targetIndustry,
+      searchQuery,
+      promptInstructions,
+      accountId,
+      accountIds,
+      dripEnabled,
+      dripDelayDays,
+      dripSubject,
+      dripInstructions,
+    } = body;
 
     if (!name || typeof name !== 'string') {
       return NextResponse.json({ error: 'Campaign name is required' }, { status: 400 });
@@ -140,6 +153,10 @@ export async function POST(req: NextRequest) {
         targetIndustry: targetIndustry?.trim() || null,
         searchQuery: searchQuery?.trim() || null,
         promptInstructions: promptInstructions?.trim() || null,
+        dripEnabled: Boolean(dripEnabled),
+        dripDelayDays: Number(dripDelayDays) || 3,
+        dripSubject: dripSubject?.trim() || null,
+        dripInstructions: dripInstructions?.trim() || null,
         tenantId,
         accountId: validAccountId,
         ...(connectAccounts.length > 0 && {

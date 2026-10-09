@@ -114,6 +114,10 @@ export async function PATCH(
         ...(body.targetIndustry !== undefined && { targetIndustry: body.targetIndustry }),
         ...(body.promptInstructions !== undefined && { promptInstructions: body.promptInstructions }),
         ...(body.accountId !== undefined && { accountId: body.accountId }),
+        ...(body.dripEnabled !== undefined && { dripEnabled: Boolean(body.dripEnabled) }),
+        ...(body.dripDelayDays !== undefined && { dripDelayDays: Number(body.dripDelayDays) }),
+        ...(body.dripSubject !== undefined && { dripSubject: body.dripSubject?.trim() || null }),
+        ...(body.dripInstructions !== undefined && { dripInstructions: body.dripInstructions?.trim() || null }),
         ...(accountConnectData !== undefined && { accounts: accountConnectData }),
       },
       include: {

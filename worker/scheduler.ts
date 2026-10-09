@@ -93,17 +93,74 @@ export function startSchedulers() {
     }
   }
 
+  // Check automated step-2 drip follow-up sequences
+  async function checkDripFollowUpSequence() {
+    try {
+      const activeDripCampaigns = await prisma.outreachCampaign.findMany({
+        where: {
+          status: 'RUNNING',
+          dripEnabled: true,
+        },
+        select: {
+          id: true,
+          tenantId: true,
+          dripDelayDays: true,
+        },
+      });
+
+      if (activeDripCampaigns.length === 0) return;
+
+      const { dispatchDripFollowUp } = await import('../src/lib/outreach-dispatcher');
+
+      for (const camp of activeDripCampaigns) {
+        const cutoffDate = new Date();
+        cutoffDate.setDate(cutoffDate.getDate() - (camp.dripDelayDays || 3));
+
+        const eligibleLeads = await prisma.outreachLead.findMany({
+          where: {
+            campaignId: camp.id,
+            status: 'DISPATCHED',
+            repliedAt: null,
+            dripStatus: 'IDLE',
+            sentAt: { lte: cutoffDate },
+          },
+          select: { id: true, email: true },
+          take: 20, // process in small batches per check
+        });
+
+        for (const lead of eligibleLeads) {
+          try {
+            const res = await dispatchDripFollowUp({
+              leadId: lead.id,
+              tenantId: camp.tenantId,
+            });
+            if (res.success) {
+              console.log(`[Scheduler] Drip follow-up sent to ${lead.email} for campaign ${camp.id}`);
+            }
+          } catch (dripErr: any) {
+            console.error(`[Scheduler] Error sending drip to ${lead.email}:`, dripErr?.message || dripErr);
+          }
+        }
+      }
+    } catch (err) {
+      console.error('[Scheduler] Error in drip follow-up sequence check:', err);
+    }
+  }
+
   // Run immediately on startup
   pollAllTenants();
   checkDailyWarmupAndQuotaReset();
+  checkDripFollowUpSequence();
 
   // Then schedule
   setInterval(pollAllTenants, POLL_INTERVAL_MS);
   setInterval(checkAutoAdvance, ADVANCE_CHECK_INTERVAL_MS);
   setInterval(checkDailyWarmupAndQuotaReset, WARMUP_CHECK_INTERVAL_MS);
+  setInterval(checkDripFollowUpSequence, WARMUP_CHECK_INTERVAL_MS);
 
   console.log('[Scheduler] Cron jobs registered');
   console.log(`[Scheduler] Email poll every ${POLL_INTERVAL_MS / 60000} minutes`);
   console.log(`[Scheduler] Auto-advance check every ${ADVANCE_CHECK_INTERVAL_MS / 60000} minutes`);
   console.log(`[Scheduler] Warmup & Quota check every ${WARMUP_CHECK_INTERVAL_MS / 60000} minutes`);
+  console.log(`[Scheduler] Drip Follow-up check every ${WARMUP_CHECK_INTERVAL_MS / 60000} minutes`);
 }

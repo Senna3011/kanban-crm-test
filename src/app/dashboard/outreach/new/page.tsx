@@ -53,6 +53,9 @@ export default function NewOutreachCampaignPage() {
   const [promptInstructions, setPromptInstructions] = useState(
     'Highlight our enterprise web architecture and AI automation capabilities. Offer a complimentary 10-minute discovery review.'
   );
+  const [dripEnabled, setDripEnabled] = useState(false);
+  const [dripDelayDays, setDripDelayDays] = useState(3);
+  const [dripSubject, setDripSubject] = useState('');
 
   const [loading, setLoading] = useState(false);
   const [loadingStep, setLoadingStep] = useState('');
@@ -179,6 +182,9 @@ export default function NewOutreachCampaignPage() {
           promptInstructions: fullPromptInstructions,
           accountId: selectedAccountId || (selectedAccountIds.length > 0 ? selectedAccountIds[0] : undefined),
           accountIds: selectedAccountIds,
+          dripEnabled,
+          dripDelayDays,
+          dripSubject: dripSubject.trim() || undefined,
         }),
       });
 
@@ -593,6 +599,64 @@ export default function NewOutreachCampaignPage() {
               <p className="text-[11px] text-slate-400 mt-1">
                 The AI copywriter will tailor this pitch for each recipient using their role, company domain, and background.
               </p>
+            </div>
+
+            {/* Step 2 Automated Drip Follow-Up */}
+            <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200/80 space-y-3">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    id="newDripToggle"
+                    checked={dripEnabled}
+                    onChange={(e) => setDripEnabled(e.target.checked)}
+                    className="w-4 h-4 rounded border-slate-300 text-primary-600 focus:ring-primary-500"
+                  />
+                  <div>
+                    <label htmlFor="newDripToggle" className="text-xs font-bold text-slate-900 cursor-pointer flex items-center gap-1.5">
+                      <span>⚡</span>
+                      <span>Enable Automated Step-2 Follow Up (Drip Sequence)</span>
+                    </label>
+                    <p className="text-[11px] text-slate-500">
+                      Automatically sends a polite follow-up email if the prospect has not replied after several days.
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {dripEnabled && (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2 border-t border-slate-200/60 animate-in fade-in">
+                  <div>
+                    <label className="block text-[11px] font-semibold text-slate-700 mb-1">
+                      Follow-up Delay (Days)
+                    </label>
+                    <select
+                      value={dripDelayDays}
+                      onChange={(e) => setDripDelayDays(Number(e.target.value))}
+                      className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl text-xs focus:ring-2 focus:ring-primary-500"
+                    >
+                      <option value={1}>After 1 Day</option>
+                      <option value={2}>After 2 Days</option>
+                      <option value={3}>After 3 Days (Recommended)</option>
+                      <option value={5}>After 5 Days</option>
+                      <option value={7}>After 7 Days</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-[11px] font-semibold text-slate-700 mb-1">
+                      Follow-up Subject (Optional)
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="e.g. Re: Quick follow up (defaults to Re: Original Subject)"
+                      value={dripSubject}
+                      onChange={(e) => setDripSubject(e.target.value)}
+                      className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl text-xs focus:ring-2 focus:ring-primary-500"
+                    />
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         )}

@@ -339,6 +339,8 @@ async function pollFolder(imapConfig: Record<string, string>, folder: string, te
 }
 
 const activePollLocks = new Set<string>();
+const folderListCache = new Map<string, { folders: string[]; expiresAt: number }>();
+const FOLDER_CACHE_TTL_MS = 60 * 60 * 1000; // 1 hour
 
 export async function processEmailPoll(data: { tenantId: string; emailConfigId: string }) {
   const { tenantId, emailConfigId } = data;
@@ -391,9 +393,24 @@ export async function processEmailPoll(data: { tenantId: string; emailConfigId: 
     } catch {}
 
     // Filter to only folders that actually exist on the mail server to prevent Command Failed errors
+    // Cache folder listing for 1 hour to prevent redundant IMAP LIST calls every 2 minutes
     let folders = ['INBOX'];
     try {
-      const available = await emailAdapter.getAvailableFolders(imapConfig);
+      const cacheKey = `${config.imapHost}:${config.imapPort}:${config.imapUser}`;
+      const now = Date.now();
+      let available: string[] = [];
+
+      const cached = folderListCache.get(cacheKey);
+      if (cached && cached.expiresAt > now) {
+        available = cached.folders;
+      } else {
+        available = await emailAdapter.getAvailableFolders(imapConfig);
+        folderListCache.set(cacheKey, {
+          folders: available,
+          expiresAt: now + FOLDER_CACHE_TTL_MS,
+        });
+      }
+
       const availableLower = new Set(available.map((f) => f.toLowerCase()));
       folders = candidateFolders.filter((f) => f.toUpperCase() === 'INBOX' || availableLower.has(f.toLowerCase()));
     } catch {
