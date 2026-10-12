@@ -32,7 +32,6 @@ export function verifyOAuthState(state: string): ZohoOAuthState | null {
     }
 
     const payload: ZohoOAuthState = JSON.parse(Buffer.from(data, 'base64url').toString('utf8'));
-    // State expires in 15 minutes to prevent replay attacks
     if (!payload.timestamp || Date.now() - payload.timestamp > 15 * 60 * 1000) {
       return null;
     }
@@ -102,42 +101,95 @@ export async function exchangeZohoCode(code: string, customRedirectUri?: string)
   };
 }
 
-export async function fetchZohoUserInfo(accessToken: string): Promise<{ email: string; accountId?: string }> {
-  const { mailApiUrl, accountsUrl } = getZohoOAuthConfig();
+export interface ZohoMailAccountInfo {
+  email: string;
+  displayName?: string;
+  accountId?: string;
+  isPrimary?: boolean;
+}
 
-  // 1. Try Zoho Mail Accounts API
+export async function fetchZohoUserInfo(accessToken: string): Promise<{
+  primaryEmail: string;
+  accountId?: string;
+  accounts: ZohoMailAccountInfo[];
+}> {
+  const { mailApiUrl, accountsUrl } = getZohoOAuthConfig();
+  const accounts: ZohoMailAccountInfo[] = [];
+
+  // 1. Fetch Zoho Mail Accounts & SendMailAs (Aliases)
   try {
     const mailRes = await fetch(`${mailApiUrl.replace(/\/$/, '')}/api/accounts`, {
       headers: { Authorization: `Zoho-oauthtoken ${accessToken}` },
     });
     if (mailRes.ok) {
       const json = await mailRes.json();
-      const firstAccount = json.data?.[0];
-      const email = firstAccount?.primaryEmailAddress || firstAccount?.incomingAddress;
-      const accountId = firstAccount?.accountId ? String(firstAccount.accountId) : undefined;
-      if (email) return { email: email.trim().toLowerCase(), accountId };
+      const dataList = json.data || [];
+      for (const acc of dataList) {
+        const primary = acc.primaryEmailAddress || acc.incomingAddress;
+        const accountId = acc.accountId ? String(acc.accountId) : undefined;
+        if (primary) {
+          accounts.push({
+            email: primary.trim().toLowerCase(),
+            displayName: acc.displayName || acc.accountName || 'Zoho Mail',
+            accountId,
+            isPrimary: true,
+          });
+        }
+
+        // Also extract sendMailAs / alias addresses if present in Zoho response
+        const sendAsList = acc.sendMailDetails || acc.fromAddressList || acc.aliases || [];
+        for (const alias of sendAsList) {
+          const aliasEmail = alias.emailAddress || alias.email || alias;
+          const aliasName = alias.displayName || alias.fromName || acc.displayName;
+          if (typeof aliasEmail === 'string' && aliasEmail.includes('@')) {
+            const cleanAlias = aliasEmail.trim().toLowerCase();
+            if (!accounts.some(a => a.email === cleanAlias)) {
+              accounts.push({
+                email: cleanAlias,
+                displayName: aliasName || 'Team Alias',
+                accountId,
+                isPrimary: false,
+              });
+            }
+          }
+        }
+      }
     }
-  } catch {
-    // Expected to fail if Zoho Mail API is not available
+  } catch (err) {
+    console.error('[Zoho OAuth] Failed to fetch /api/accounts:', err);
   }
 
-  // 2. Try Zoho User Info endpoint
+  // 2. Fallback or Additional User Info Endpoint
   try {
     const userRes = await fetch(`${accountsUrl.replace(/\/$/, '')}/oauth/user/info`, {
       headers: { Authorization: `Zoho-oauthtoken ${accessToken}` },
     });
     if (userRes.ok) {
       const json = await userRes.json();
-      const email = json.Email || json.email || json.user_email || json.ZUID;
+      const email = json.Email || json.email || json.user_email;
       if (email && String(email).includes('@')) {
-        return { email: String(email).trim().toLowerCase() };
+        const clean = String(email).trim().toLowerCase();
+        if (!accounts.some(a => a.email === clean)) {
+          accounts.push({
+            email: clean,
+            displayName: json.Display_Name || json.fullName || 'Zoho User',
+            isPrimary: accounts.length === 0,
+          });
+        }
       }
     }
-  } catch {
-    // Fallback
+  } catch {}
+
+  if (accounts.length === 0) {
+    throw new Error('NO_MAILBOX_API');
   }
 
-  throw new Error('NO_MAILBOX_API');
+  const primary = accounts.find(a => a.isPrimary) || accounts[0];
+  return {
+    primaryEmail: primary.email,
+    accountId: primary.accountId,
+    accounts,
+  };
 }
 
 const refreshLocks = new Map<string, Promise<string>>();
@@ -154,7 +206,6 @@ export async function getValidZohoAccessToken(configId: string): Promise<string>
     return decrypt(config.accessToken);
   }
 
-  // Mutex lock / in-flight deduplication per configId
   if (refreshLocks.has(configId)) {
     return refreshLocks.get(configId)!;
   }
@@ -179,9 +230,7 @@ export async function getValidZohoAccessToken(configId: string): Promise<string>
       });
 
       const data = await res.json();
-      if (data.error) {
-        throw new Error(`Failed to refresh Zoho token: ${data.error_description || data.error}`);
-      }
+      if (data.error) throw new Error(data.error_description || data.error);
 
       const newAccessToken = data.access_token;
       const expiresIn = Number(data.expires_in) || 3600;

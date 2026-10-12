@@ -33,86 +33,87 @@ export async function GET(req: NextRequest) {
   try {
     const tokenResult = await exchangeZohoCode(code);
 
-    // Try to get email from API first, fallback to user-provided email
-    let email = '';
-    let zohoAccountId: string | null = null;
+    let userInfo: { primaryEmail: string; accountId?: string; accounts: Array<{ email: string; displayName?: string; accountId?: string; isPrimary?: boolean }> };
     try {
-      const userInfo = await fetchZohoUserInfo(tokenResult.accessToken);
-      email = userInfo.email.trim().toLowerCase();
-      zohoAccountId = userInfo.accountId || null;
+      userInfo = await fetchZohoUserInfo(tokenResult.accessToken);
     } catch {
       if (loginEmail && loginEmail.includes('@')) {
-        email = loginEmail.trim().toLowerCase();
+        const cleanLogin = loginEmail.trim().toLowerCase();
+        userInfo = {
+          primaryEmail: cleanLogin,
+          accounts: [{ email: cleanLogin, displayName: 'Zoho Mail', isPrimary: true }],
+        };
       } else {
         return NextResponse.redirect(`${settingsUrl}?error=could_not_determine_email`);
       }
     }
 
     const expiry = new Date(Date.now() + tokenResult.expiresIn * 1000);
+    const encryptedAccessToken = encrypt(tokenResult.accessToken);
+    const encryptedRefreshToken = tokenResult.refreshToken ? encrypt(tokenResult.refreshToken) : null;
 
-    // If boardId is provided, unlink any other config that is currently occupying this boardId (since boardId is @unique)
-    if (boardId) {
-      const targetBoard = await prisma.board.findFirst({ where: { id: boardId, tenantId } });
-      if (targetBoard) {
-        await prisma.emailConfig.updateMany({
-          where: { tenantId, boardId },
-          data: { boardId: null },
+    // Register all accounts / aliases returned by Zoho API (Primary + SendMailAs Aliases like Diamond, Elite, Gold, Premiere, Nell VH)
+    for (const acc of userInfo.accounts) {
+      const email = acc.email;
+      const displayName = acc.displayName || (acc.isPrimary ? 'Zoho Mail' : 'Team Alias');
+      const configName = acc.isPrimary ? `Zoho (${email})` : `${displayName} (${email})`;
+
+      const existing = await prisma.emailConfig.findFirst({
+        where: {
+          tenantId,
+          OR: [
+            { imapUser: { equals: email, mode: 'insensitive' } },
+            { name: configName },
+          ],
+        },
+      });
+
+      const updateData: any = {
+        name: configName,
+        authType: 'oauth2',
+        imapHost: 'imap.zoho.com',
+        imapPort: 993,
+        imapUser: email,
+        smtpHost: 'smtp.zoho.com',
+        smtpPort: 465,
+        smtpUser: email,
+        accessToken: encryptedAccessToken,
+        tokenExpiry: expiry,
+        zohoAccountId: acc.accountId || userInfo.accountId || null,
+        isActive: true,
+        // Only assign primary account to the requested boardId if provided
+        boardId: (acc.isPrimary && boardId) ? boardId : undefined,
+      };
+
+      if (encryptedRefreshToken) {
+        updateData.refreshToken = encryptedRefreshToken;
+      }
+
+      if (existing) {
+        await prisma.emailConfig.update({
+          where: { id: existing.id },
+          data: {
+            ...updateData,
+            // Preserve existing boardId if already assigned unless explicit primary
+            boardId: (acc.isPrimary && boardId) ? boardId : existing.boardId,
+          },
+        });
+      } else {
+        await prisma.emailConfig.create({
+          data: {
+            tenantId,
+            ...updateData,
+            boardId: (acc.isPrimary && boardId) ? boardId : null,
+          },
         });
       }
     }
 
-    // Find existing config by email or matching name in this tenant
-    const configName = `Zoho (${email})`;
-    const existing = await prisma.emailConfig.findFirst({
-      where: {
-        tenantId,
-        OR: [
-          { imapUser: { equals: email, mode: 'insensitive' } },
-          { name: configName },
-        ],
-      },
-    });
-
-    const updateData: any = {
-      name: configName,
-      authType: 'oauth2',
-      imapHost: 'imap.zoho.com',
-      imapPort: 993,
-      imapUser: email,
-      smtpHost: 'smtp.zoho.com',
-      smtpPort: 465,
-      smtpUser: email,
-      accessToken: encrypt(tokenResult.accessToken),
-      tokenExpiry: expiry,
-      zohoAccountId,
-      isActive: true,
-      boardId: boardId || null,
-    };
-
-    if (tokenResult.refreshToken) {
-      updateData.refreshToken = encrypt(tokenResult.refreshToken);
-    }
-
-    if (existing) {
-      await prisma.emailConfig.update({
-        where: { id: existing.id },
-        data: updateData,
-      });
-    } else {
-      await prisma.emailConfig.create({
-        data: {
-          tenantId,
-          ...updateData,
-        },
-      });
-    }
-
-    // Revalidate settings path
     try {
       revalidatePath('/dashboard/settings');
     } catch {}
 
-    return NextResponse.redirect(`${settingsUrl}?status=zoho_connected&email=${encodeURIComponent(email)}`);
+    return NextResponse.redirect(`${settingsUrl}?status=zoho_connected&email=${encodeURIComponent(userInfo.primaryEmail)}&aliases=${userInfo.accounts.length}`);
   } catch (err: any) {
     console.error('[Zoho OAuth Callback] Error:', err?.message || err);
     return NextResponse.redirect(`${settingsUrl}?error=${encodeURIComponent(err.message || 'oauth_exchange_failed')}`);
