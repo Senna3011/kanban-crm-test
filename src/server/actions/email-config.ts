@@ -103,6 +103,7 @@ export async function saveEmailConfig(data: {
   smtpPort: number;
   smtpUser: string;
   smtpPass: string;
+  teamAliases?: string;
 }) {
   const user = await requireAdmin();
   const tenantId = user.tenantId;
@@ -118,10 +119,10 @@ export async function saveEmailConfig(data: {
     name: configName,
     imapHost: data.imapHost,
     imapPort: data.imapPort,
-    imapUser: data.imapUser,
+    imapUser: data.imapUser.trim().toLowerCase(),
     smtpHost: data.smtpHost,
     smtpPort: data.smtpPort,
-    smtpUser: data.smtpUser,
+    smtpUser: (data.smtpUser || data.imapUser).trim().toLowerCase(),
     boardId: data.boardId || null,
   };
   if (data.imapPass) updateData.imapPass = encrypt(data.imapPass);
@@ -134,6 +135,49 @@ export async function saveEmailConfig(data: {
     await prisma.emailConfig.create({
       data: { tenantId, ...updateData, imapPass: encrypt(data.imapPass), smtpPass: encrypt(data.smtpPass) },
     });
+  }
+
+  // Handle Team Aliases / Shared Mailboxes provisioning if supplied
+  if (data.teamAliases && typeof data.teamAliases === 'string') {
+    const rawAliases = data.teamAliases.split(/[\n,]+/).map(a => a.trim().toLowerCase()).filter(Boolean);
+    const uniqueAliases = Array.from(new Set(rawAliases)).filter(a => a !== updateData.imapUser);
+
+    for (const aliasEmail of uniqueAliases) {
+      if (!aliasEmail.includes('@')) continue;
+      const aliasName = `Team Alias (${aliasEmail.split('@')[0]})`;
+      const existingAlias = await prisma.emailConfig.findFirst({
+        where: { tenantId, imapUser: { equals: aliasEmail, mode: 'insensitive' } },
+      });
+
+      const aliasData: any = {
+        name: aliasName,
+        imapHost: data.imapHost,
+        imapPort: data.imapPort,
+        imapUser: aliasEmail,
+        smtpHost: data.smtpHost,
+        smtpPort: data.smtpPort,
+        smtpUser: aliasEmail,
+        isActive: true,
+      };
+      if (data.imapPass) aliasData.imapPass = encrypt(data.imapPass);
+      if (data.smtpPass) aliasData.smtpPass = encrypt(data.smtpPass);
+
+      if (existingAlias) {
+        await prisma.emailConfig.update({
+          where: { id: existingAlias.id },
+          data: aliasData,
+        });
+      } else {
+        await prisma.emailConfig.create({
+          data: {
+            tenantId,
+            ...aliasData,
+            imapPass: encrypt(data.imapPass || ''),
+            smtpPass: encrypt(data.smtpPass || ''),
+          },
+        });
+      }
+    }
   }
 
   return { success: true };
