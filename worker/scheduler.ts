@@ -93,7 +93,7 @@ export function startSchedulers() {
     }
   }
 
-  // Check automated step-2 drip follow-up sequences
+  // Check automated multi-step drip follow-up sequences (1 to 3 steps)
   async function checkDripFollowUpSequence() {
     try {
       const activeDripCampaigns = await prisma.outreachCampaign.findMany({
@@ -104,7 +104,10 @@ export function startSchedulers() {
         select: {
           id: true,
           tenantId: true,
+          dripStepsCount: true,
           dripDelayDays: true,
+          dripDelayDays2: true,
+          dripDelayDays3: true,
         },
       });
 
@@ -113,32 +116,54 @@ export function startSchedulers() {
       const { dispatchDripFollowUp } = await import('../src/lib/outreach-dispatcher');
 
       for (const camp of activeDripCampaigns) {
-        const cutoffDate = new Date();
-        cutoffDate.setDate(cutoffDate.getDate() - (camp.dripDelayDays || 3));
+        const now = new Date();
+        const maxSteps = camp.dripStepsCount || 1;
 
+        // Query eligible leads for step 1, step 2, or step 3
         const eligibleLeads = await prisma.outreachLead.findMany({
           where: {
             campaignId: camp.id,
             status: 'DISPATCHED',
             repliedAt: null,
             dripStatus: 'IDLE',
-            sentAt: { lte: cutoffDate },
+            OR: [
+              {
+                currentDripStep: 0,
+                sentAt: {
+                  lte: new Date(now.getTime() - (camp.dripDelayDays || 3) * 24 * 60 * 60 * 1000),
+                },
+              },
+              ...(maxSteps >= 2 ? [{
+                currentDripStep: 1,
+                dripSentAt: {
+                  lte: new Date(now.getTime() - (camp.dripDelayDays2 || 5) * 24 * 60 * 60 * 1000),
+                },
+              }] : []),
+              ...(maxSteps >= 3 ? [{
+                currentDripStep: 2,
+                dripSentAt: {
+                  lte: new Date(now.getTime() - (camp.dripDelayDays3 || 7) * 24 * 60 * 60 * 1000),
+                },
+              }] : []),
+            ],
           },
-          select: { id: true, email: true },
-          take: 20, // process in small batches per check
+          select: { id: true, email: true, currentDripStep: true },
+          take: 20,
         });
 
         for (const lead of eligibleLeads) {
+          const nextStep = lead.currentDripStep + 1;
           try {
             const res = await dispatchDripFollowUp({
               leadId: lead.id,
               tenantId: camp.tenantId,
+              stepNumber: nextStep,
             });
             if (res.success) {
-              console.log(`[Scheduler] Drip follow-up sent to ${lead.email} for campaign ${camp.id}`);
+              console.log(`[Scheduler] Drip follow-up step ${nextStep} sent to ${lead.email} for campaign ${camp.id}`);
             }
           } catch (dripErr: any) {
-            console.error(`[Scheduler] Error sending drip to ${lead.email}:`, dripErr?.message || dripErr);
+            console.error(`[Scheduler] Error sending drip step ${nextStep} to ${lead.email}:`, dripErr?.message || dripErr);
           }
         }
       }

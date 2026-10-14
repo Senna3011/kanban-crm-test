@@ -318,14 +318,32 @@ export default function CampaignWorkspacePage({
       if (data.queued) {
         setIsPollingWorker(true);
         toast.success(data.message || `Pencarian ${customLimit || 10} leads dijadwalkan di background worker.`);
+      } else if (data.count === 0 && data.skippedDuplicates > 0) {
+        toast(`ℹ️ Tidak ada leads baru. (${data.skippedDuplicates} leads ditemukan sudah ada di kampanye ini).`, { icon: '🔍' });
       } else {
-        toast.success(`Successfully sourced ${data.count} targeted prospects.`);
+        toast.success(`Successfully sourced ${data.count} targeted prospects (${data.skippedDuplicates || 0} duplicates skipped).`);
       }
       await fetchCampaign();
     } catch (err: any) {
       toast.error(`Discovery error: ${err.message}`);
     } finally {
       setActionLoading('');
+    }
+  }
+
+  async function handleResetStatus() {
+    try {
+      const res = await fetch(`/api/outreach/campaigns/${campaignId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: 'DRAFT' }),
+      });
+      if (!res.ok) throw new Error('Failed to reset status');
+      setIsPollingWorker(false);
+      toast.success('Campaign status reset to DRAFT successfully!');
+      await fetchCampaign();
+    } catch (err: any) {
+      toast.error(`Reset Error: ${err.message}`);
     }
   }
 
@@ -1072,6 +1090,14 @@ export default function CampaignWorkspacePage({
             </div>
           </div>
           <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={handleResetStatus}
+              className="px-2.5 py-1 text-[11px] font-bold bg-rose-600 hover:bg-rose-700 text-white rounded-lg shadow-2xs transition-colors"
+              title="Click if search is stuck or locked"
+            >
+              🔄 Force Unlock Status
+            </button>
             <span className="text-[10px] font-bold px-2.5 py-1 rounded-full bg-indigo-100 text-indigo-800 flex items-center gap-1.5">
               <span className="w-1.5 h-1.5 rounded-full bg-indigo-600 animate-spin" />
               Live Sync Active

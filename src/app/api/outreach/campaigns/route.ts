@@ -103,20 +103,27 @@ export async function POST(req: NextRequest) {
 
   try {
     const body = await req.json();
-    const {
-      name,
-      targetRole,
-      targetLocation,
-      targetIndustry,
-      searchQuery,
-      promptInstructions,
-      accountId,
-      accountIds,
-      dripEnabled,
-      dripDelayDays,
-      dripSubject,
-      dripInstructions,
-    } = body;
+      const {
+        name,
+        targetRole,
+        targetLocation,
+        targetIndustry,
+        searchQuery,
+        promptInstructions,
+        accountId,
+        accountIds,
+        dripEnabled,
+        dripStepsCount,
+        dripDelayDays,
+        dripSubject,
+        dripInstructions,
+        dripDelayDays2,
+        dripSubject2,
+        dripInstructions2,
+        dripDelayDays3,
+        dripSubject3,
+        dripInstructions3,
+      } = body;
 
     if (!name || typeof name !== 'string') {
       return NextResponse.json({ error: 'Campaign name is required' }, { status: 400 });
@@ -154,9 +161,16 @@ export async function POST(req: NextRequest) {
         searchQuery: searchQuery?.trim() || null,
         promptInstructions: promptInstructions?.trim() || null,
         dripEnabled: Boolean(dripEnabled),
+        dripStepsCount: Number(dripStepsCount) || 1,
         dripDelayDays: Number(dripDelayDays) || 3,
         dripSubject: dripSubject?.trim() || null,
         dripInstructions: dripInstructions?.trim() || null,
+        dripDelayDays2: Number(dripDelayDays2) || 5,
+        dripSubject2: dripSubject2?.trim() || null,
+        dripInstructions2: dripInstructions2?.trim() || null,
+        dripDelayDays3: Number(dripDelayDays3) || 7,
+        dripSubject3: dripSubject3?.trim() || null,
+        dripInstructions3: dripInstructions3?.trim() || null,
         tenantId,
         accountId: validAccountId,
         ...(connectAccounts.length > 0 && {

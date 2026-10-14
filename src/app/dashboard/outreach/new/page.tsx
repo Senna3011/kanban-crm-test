@@ -54,8 +54,13 @@ export default function NewOutreachCampaignPage() {
     'Highlight our enterprise web architecture and AI automation capabilities. Offer a complimentary 10-minute discovery review.'
   );
   const [dripEnabled, setDripEnabled] = useState(false);
+  const [dripStepsCount, setDripStepsCount] = useState(1);
   const [dripDelayDays, setDripDelayDays] = useState(3);
   const [dripSubject, setDripSubject] = useState('');
+  const [dripDelayDays2, setDripDelayDays2] = useState(5);
+  const [dripSubject2, setDripSubject2] = useState('');
+  const [dripDelayDays3, setDripDelayDays3] = useState(7);
+  const [dripSubject3, setDripSubject3] = useState('');
 
   const [loading, setLoading] = useState(false);
   const [loadingStep, setLoadingStep] = useState('');
@@ -183,8 +188,13 @@ export default function NewOutreachCampaignPage() {
           accountId: selectedAccountId || (selectedAccountIds.length > 0 ? selectedAccountIds[0] : undefined),
           accountIds: selectedAccountIds,
           dripEnabled,
+          dripStepsCount,
           dripDelayDays,
           dripSubject: dripSubject.trim() || undefined,
+          dripDelayDays2,
+          dripSubject2: dripSubject2.trim() || undefined,
+          dripDelayDays3,
+          dripSubject3: dripSubject3.trim() || undefined,
         }),
       });
 
@@ -601,7 +611,7 @@ export default function NewOutreachCampaignPage() {
               </p>
             </div>
 
-            {/* Step 2 Automated Drip Follow-Up */}
+            {/* Automated Multi-Step Drip Follow-Up */}
             <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200/80 space-y-3">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
@@ -615,46 +625,124 @@ export default function NewOutreachCampaignPage() {
                   <div>
                     <label htmlFor="newDripToggle" className="text-xs font-bold text-slate-900 cursor-pointer flex items-center gap-1.5">
                       <span>⚡</span>
-                      <span>Enable Automated Step-2 Follow Up (Drip Sequence)</span>
+                      <span>Enable Automated Multi-Step Follow Up (2-3x Drip Sequence)</span>
                     </label>
                     <p className="text-[11px] text-slate-500">
-                      Automatically sends a polite follow-up email if the prospect has not replied after several days.
+                      Automatically sends polite sequential follow-up emails if the prospect has not replied.
                     </p>
                   </div>
                 </div>
               </div>
 
               {dripEnabled && (
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2 border-t border-slate-200/60 animate-in fade-in">
+                <div className="space-y-4 pt-3 border-t border-slate-200/60 animate-in fade-in">
                   <div>
-                    <label className="block text-[11px] font-semibold text-slate-700 mb-1">
-                      Follow-up Delay (Days)
-                    </label>
+                    <label className="block text-xs font-bold text-slate-800 mb-1">Number of Follow-Up Steps</label>
                     <select
-                      value={dripDelayDays}
-                      onChange={(e) => setDripDelayDays(Number(e.target.value))}
-                      className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl text-xs focus:ring-2 focus:ring-primary-500"
+                      value={dripStepsCount}
+                      onChange={(e) => setDripStepsCount(Number(e.target.value))}
+                      className="w-full sm:w-64 px-3 py-2 bg-white border border-slate-300 rounded-xl text-xs font-semibold focus:ring-2 focus:ring-primary-500"
                     >
-                      <option value={1}>After 1 Day</option>
-                      <option value={2}>After 2 Days</option>
-                      <option value={3}>After 3 Days (Recommended)</option>
-                      <option value={5}>After 5 Days</option>
-                      <option value={7}>After 7 Days</option>
+                      <option value={1}>1 Follow-up Step (Standard)</option>
+                      <option value={2}>2 Follow-up Steps (Recommended)</option>
+                      <option value={3}>3 Follow-up Steps (Aggressive Nurture)</option>
                     </select>
                   </div>
 
-                  <div>
-                    <label className="block text-[11px] font-semibold text-slate-700 mb-1">
-                      Follow-up Subject (Optional)
-                    </label>
-                    <input
-                      type="text"
-                      placeholder="e.g. Re: Quick follow up (defaults to Re: Original Subject)"
-                      value={dripSubject}
-                      onChange={(e) => setDripSubject(e.target.value)}
-                      className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl text-xs focus:ring-2 focus:ring-primary-500"
-                    />
+                  {/* Step 1 Settings */}
+                  <div className="p-3 bg-white rounded-xl border border-slate-200/80 space-y-2">
+                    <p className="text-xs font-bold text-slate-800">Follow-Up Step 1</p>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <div>
+                        <label className="block text-[11px] font-semibold text-slate-700 mb-1">Delay (Days)</label>
+                        <select
+                          value={dripDelayDays}
+                          onChange={(e) => setDripDelayDays(Number(e.target.value))}
+                          className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl text-xs"
+                        >
+                          <option value={1}>After 1 Day</option>
+                          <option value={2}>After 2 Days</option>
+                          <option value={3}>After 3 Days (Recommended)</option>
+                          <option value={5}>After 5 Days</option>
+                          <option value={7}>After 7 Days</option>
+                        </select>
+                      </div>
+                      <div>
+                        <label className="block text-[11px] font-semibold text-slate-700 mb-1">Subject (Optional)</label>
+                        <input
+                          type="text"
+                          placeholder="Re: Quick follow up"
+                          value={dripSubject}
+                          onChange={(e) => setDripSubject(e.target.value)}
+                          className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl text-xs"
+                        />
+                      </div>
+                    </div>
                   </div>
+
+                  {/* Step 2 Settings */}
+                  {dripStepsCount >= 2 && (
+                    <div className="p-3 bg-white rounded-xl border border-slate-200/80 space-y-2 animate-in fade-in">
+                      <p className="text-xs font-bold text-slate-800">Follow-Up Step 2</p>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <div>
+                          <label className="block text-[11px] font-semibold text-slate-700 mb-1">Delay after Step 1 (Days)</label>
+                          <select
+                            value={dripDelayDays2}
+                            onChange={(e) => setDripDelayDays2(Number(e.target.value))}
+                            className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl text-xs"
+                          >
+                            <option value={2}>After 2 Days</option>
+                            <option value={3}>After 3 Days</option>
+                            <option value={5}>After 5 Days (Recommended)</option>
+                            <option value={7}>After 7 Days</option>
+                          </select>
+                        </div>
+                        <div>
+                          <label className="block text-[11px] font-semibold text-slate-700 mb-1">Subject 2 (Optional)</label>
+                          <input
+                            type="text"
+                            placeholder="Re: Following up again..."
+                            value={dripSubject2}
+                            onChange={(e) => setDripSubject2(e.target.value)}
+                            className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl text-xs"
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Step 3 Settings */}
+                  {dripStepsCount >= 3 && (
+                    <div className="p-3 bg-white rounded-xl border border-slate-200/80 space-y-2 animate-in fade-in">
+                      <p className="text-xs font-bold text-slate-800">Follow-Up Step 3 (Final)</p>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <div>
+                          <label className="block text-[11px] font-semibold text-slate-700 mb-1">Delay after Step 2 (Days)</label>
+                          <select
+                            value={dripDelayDays3}
+                            onChange={(e) => setDripDelayDays3(Number(e.target.value))}
+                            className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl text-xs"
+                          >
+                            <option value={3}>After 3 Days</option>
+                            <option value={5}>After 5 Days</option>
+                            <option value={7}>After 7 Days (Recommended)</option>
+                            <option value={10}>After 10 Days</option>
+                          </select>
+                        </div>
+                        <div>
+                          <label className="block text-[11px] font-semibold text-slate-700 mb-1">Subject 3 (Optional)</label>
+                          <input
+                            type="text"
+                            placeholder="Re: Final check-in / Closing loop"
+                            value={dripSubject3}
+                            onChange={(e) => setDripSubject3(e.target.value)}
+                            className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl text-xs"
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
             </div>

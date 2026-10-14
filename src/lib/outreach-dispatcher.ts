@@ -291,6 +291,7 @@ export async function dispatchColdEmail(params: DispatchLeadEmailParams): Promis
 export async function dispatchDripFollowUp(params: {
   leadId: string;
   tenantId: string;
+  stepNumber?: number;
 }): Promise<{ success: boolean; error?: string; messageId?: string }> {
   const lead = await prisma.outreachLead.findUnique({
     where: { id: params.leadId },
@@ -310,7 +311,7 @@ export async function dispatchDripFollowUp(params: {
 
   // If already replied, converted, or suppressed, skip drip
   if (['REPLIED', 'CONVERTED', 'BOUNCED'].includes(lead.status) || lead.dripStatus === 'SENT') {
-    return { success: false, error: 'Lead already replied or drip sent' };
+    return { success: false, error: 'Lead already replied or drip sequence completed' };
   }
 
   const suppression = await prisma.outreachSuppression.findUnique({
@@ -330,10 +331,21 @@ export async function dispatchDripFollowUp(params: {
     return { success: false, error: 'Recipient is suppressed' };
   }
 
-  // Build subject and body for step-2 follow-up
-  const followUpSubject = lead.campaign.dripSubject?.trim() || `Re: ${lead.aiDraftSubject || 'Quick follow up'}`;
+  const targetStep = params.stepNumber || (lead.currentDripStep + 1);
+
+  let rawSubject = lead.campaign.dripSubject;
+  let rawInstructions = lead.campaign.dripInstructions;
+  if (targetStep === 2) {
+    rawSubject = lead.campaign.dripSubject2 || lead.campaign.dripSubject;
+    rawInstructions = lead.campaign.dripInstructions2 || lead.campaign.dripInstructions;
+  } else if (targetStep >= 3) {
+    rawSubject = lead.campaign.dripSubject3 || lead.campaign.dripSubject2 || lead.campaign.dripSubject;
+    rawInstructions = lead.campaign.dripInstructions3 || lead.campaign.dripInstructions2 || lead.campaign.dripInstructions;
+  }
+
+  const followUpSubject = rawSubject?.trim() || `Re: ${lead.aiDraftSubject || 'Quick follow up'}`;
   const firstName = lead.firstName || lead.fullName?.split(' ')[0] || 'there';
-  const followUpBody = lead.dripDraftBody || `Hi ${firstName},\n\nJust following up on my previous note to see if you had a moment to review. Would love to share some relevant insights when convenient for you.\n\nBest regards`;
+  const followUpBody = lead.dripDraftBody || rawInstructions || `Hi ${firstName},\n\nJust following up on my previous note to see if you had a moment to review. Would love to share some relevant insights when convenient for you.\n\nBest regards`;
 
   // Use the same sender pool mechanism as dispatchOutreachLead
   let candidatePool = lead.campaign.accounts?.length > 0
@@ -398,7 +410,7 @@ export async function dispatchDripFollowUp(params: {
     <br/><br/>
     <hr style="border: none; border-top: 1px solid #e2e8f0; margin: 20px 0;" />
     <p style="font-size: 11px; color: #64748b; margin: 0;">
-      You received this follow-up message from ${senderName}. <a href="${unsubscribeUrl}" style="color: #6366f1; text-decoration: underline;">Unsubscribe here</a>.
+      You received this follow-up message from ${senderName} (Step ${targetStep}). <a href="${unsubscribeUrl}" style="color: #6366f1; text-decoration: underline;">Unsubscribe here</a>.
     </p>
   </div>`;
 
@@ -418,15 +430,20 @@ export async function dispatchDripFollowUp(params: {
         'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click',
         'X-Outreach-Campaign-Id': lead.campaignId,
         'X-Outreach-Lead-Id': lead.id,
-        'X-Outreach-Step': 'drip-followup',
+        'X-Outreach-Step': `drip-followup-step-${targetStep}`,
       },
     });
+
+    const isComplete = targetStep >= (lead.campaign.dripStepsCount || 1);
 
     await prisma.outreachLead.update({
       where: { id: lead.id },
       data: {
-        dripStatus: 'SENT',
+        currentDripStep: targetStep,
+        dripStatus: isComplete ? 'SENT' : 'IDLE',
         dripSentAt: new Date(),
+        lastMessageId: info.messageId || lead.lastMessageId,
+        errorMessage: null,
       },
     });
 
@@ -435,7 +452,7 @@ export async function dispatchDripFollowUp(params: {
       messageId: info.messageId,
     };
   } catch (error: any) {
-    console.error(`[OUTREACH DRIP] Failed to send drip follow-up to ${lead.email}:`, error);
+    console.error(`[OUTREACH DRIP] Failed to send drip follow-up step ${targetStep} to ${lead.email}:`, error);
     return {
       success: false,
       error: error.message || 'Drip transmission failed',

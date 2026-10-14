@@ -326,9 +326,16 @@ model OutreachCampaign {
   searchQuery      String?
   promptInstructions String?              @db.Text
   dripEnabled      Boolean                @default(false)
-  dripDelayDays    Int                    @default(3)
+  dripStepsCount   Int                    @default(1) // 1, 2, or 3 follow-up steps
+  dripDelayDays    Int                    @default(3) // Step 1 delay
   dripSubject      String?
   dripInstructions String?                @db.Text
+  dripDelayDays2   Int                    @default(5) // Step 2 delay
+  dripSubject2     String?
+  dripInstructions2 String?               @db.Text
+  dripDelayDays3   Int                    @default(7) // Step 3 delay
+  dripSubject3     String?
+  dripInstructions3 String?               @db.Text
   status           OutreachCampaignStatus @default(DRAFT)
   createdAt        DateTime               @default(now())
   updatedAt        DateTime               @updatedAt
@@ -362,6 +369,8 @@ model OutreachLead {
   aiDraftBody     String?            @db.Text
   dripStatus      String             @default("IDLE") // IDLE, SENT, SKIPPED
   dripSentAt      DateTime?
+  currentDripStep Int                @default(0) // 0 = no drip sent, 1, 2, 3
+  nextDripAt      DateTime?
   dripDraftSubject String?
   dripDraftBody   String?            @db.Text
   lastMessageId   String?
