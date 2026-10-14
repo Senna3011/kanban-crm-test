@@ -340,7 +340,8 @@ export default function CampaignWorkspacePage({
       });
       if (!res.ok) throw new Error('Failed to reset status');
       setIsPollingWorker(false);
-      toast.success('Campaign status reset to DRAFT successfully!');
+      setActionLoading('');
+      toast.success('Pencarian berhasil dibatalkan dan status di-reset ke DRAFT!');
       await fetchCampaign();
     } catch (err: any) {
       toast.error(`Reset Error: ${err.message}`);

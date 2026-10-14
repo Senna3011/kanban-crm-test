@@ -52,6 +52,16 @@ export async function processOutreachScrape(job: OutreachScrapeJob) {
 
   console.log(`[Scrape Worker] Scraped ${scrapedLeads.length} raw leads from provider.`);
 
+  // Check if campaign was cancelled or reset before inserting
+  const checkCampaign = await prisma.outreachCampaign.findUnique({
+    where: { id: job.campaignId },
+    select: { status: true },
+  });
+  if (!checkCampaign || checkCampaign.status === 'DRAFT' || checkCampaign.status === 'PAUSED') {
+    console.log(`[Scrape Worker] Campaign ${job.campaignId} was cancelled by user. Aborting insertion.`);
+    return { success: false, cancelled: true };
+  }
+
   // Chunked batch insertion (500 leads per chunk) to optimize Supabase memory & network
   const chunkSize = 500;
   let insertedCount = 0;
