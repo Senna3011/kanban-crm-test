@@ -1093,10 +1093,11 @@ export default function CampaignWorkspacePage({
             <button
               type="button"
               onClick={handleResetStatus}
-              className="px-2.5 py-1 text-[11px] font-bold bg-rose-600 hover:bg-rose-700 text-white rounded-lg shadow-2xs transition-colors"
-              title="Click if search is stuck or locked"
+              className="px-3 py-1.5 text-xs font-bold bg-rose-600 hover:bg-rose-700 text-white rounded-xl shadow-xs transition-colors flex items-center gap-1.5"
+              title="Batalkan pencarian leads atau buka kunci status yang macet"
             >
-              🔄 Force Unlock Status
+              <span>🛑</span>
+              <span>Batalkan Pencarian</span>
             </button>
             <span className="text-[10px] font-bold px-2.5 py-1 rounded-full bg-indigo-100 text-indigo-800 flex items-center gap-1.5">
               <span className="w-1.5 h-1.5 rounded-full bg-indigo-600 animate-spin" />
