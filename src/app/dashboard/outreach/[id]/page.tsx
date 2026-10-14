@@ -1073,7 +1073,7 @@ export default function CampaignWorkspacePage({
       </div>
 
       {/* Background Scraping Active Live Indicator */}
-      {(isPollingWorker || campaign.status === 'RUNNING') && (
+      {(Boolean(actionLoading) || isPollingWorker || campaign.status === 'RUNNING') && (
         <div className="bg-indigo-50 border border-indigo-200 p-4 rounded-2xl flex items-center justify-between shadow-xs animate-pulse">
           <div className="flex items-center gap-3">
             <span className="relative flex h-3 w-3">
@@ -1082,7 +1082,7 @@ export default function CampaignWorkspacePage({
             </span>
             <div>
               <p className="text-xs font-bold text-indigo-900">
-                Pencarian Leads di Background Sedang Berjalan...
+                {actionLoading ? 'Memproses permintaan outreach...' : 'Pencarian Leads di Background Sedang Berjalan...'}
               </p>
               <p className="text-[11px] text-indigo-700">
                 Data sedang ditarik dan dimuat ke tabel secara otomatis (Saat ini: {allLeads.length} leads).
