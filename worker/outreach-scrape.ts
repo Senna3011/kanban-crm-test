@@ -94,10 +94,11 @@ export async function processOutreachScrape(job: OutreachScrapeJob) {
 
   console.log(`[Scrape Worker] Successfully inserted ${insertedCount} leads into campaign ${job.campaignId}`);
 
-  // Reset campaign status back to DRAFT or ACTIVE
+  // Reset campaign status: if drip automation is enabled, keep RUNNING so scheduler processes drip follow-ups; otherwise return to DRAFT
+  const finalStatus = campaign.dripEnabled ? 'RUNNING' : 'DRAFT';
   await prisma.outreachCampaign.update({
     where: { id: job.campaignId },
-    data: { status: 'DRAFT' },
+    data: { status: finalStatus },
   }).catch(() => {});
 
   return { success: true, count: insertedCount };

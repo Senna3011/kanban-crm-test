@@ -117,3 +117,40 @@ export async function DELETE(req: NextRequest) {
 
   return NextResponse.json({ success: true, count: validIds.length });
 }
+
+export async function PATCH(req: NextRequest) {
+  const session = await getServerSession(authOptions);
+  if (!session?.user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+
+  const tenantId = (session.user as any).tenantId;
+  const body = await req.json().catch(() => ({}));
+  const cardIds: string[] = body.cardIds || [];
+
+  if (!Array.isArray(cardIds) || cardIds.length === 0) {
+    return NextResponse.json({ error: 'No cards specified' }, { status: 400 });
+  }
+
+  const updateData: any = {};
+  if (body.status && typeof body.status === 'string') {
+    updateData.status = body.status;
+  }
+  if (body.columnId && typeof body.columnId === 'string') {
+    updateData.columnId = body.columnId;
+  }
+
+  if (Object.keys(updateData).length === 0) {
+    return NextResponse.json({ error: 'No valid update fields provided' }, { status: 400 });
+  }
+
+  const result = await prisma.card.updateMany({
+    where: { id: { in: cardIds }, tenantId },
+    data: updateData,
+  });
+
+  try {
+    const { broadcastAppEvent } = await import('@/lib/events');
+    broadcastAppEvent({ type: 'card_updated', tenantId });
+  } catch {}
+
+  return NextResponse.json({ success: true, count: result.count });
+}

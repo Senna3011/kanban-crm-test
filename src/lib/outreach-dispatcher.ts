@@ -345,7 +345,21 @@ export async function dispatchDripFollowUp(params: {
 
   const followUpSubject = rawSubject?.trim() || `Re: ${lead.aiDraftSubject || 'Quick follow up'}`;
   const firstName = lead.firstName || lead.fullName?.split(' ')[0] || 'there';
-  const followUpBody = lead.dripDraftBody || rawInstructions || `Hi ${firstName},\n\nJust following up on my previous note to see if you had a moment to review. Would love to share some relevant insights when convenient for you.\n\nBest regards`;
+  
+  let followUpBody = lead.dripDraftBody;
+  if (!followUpBody) {
+    const isPromptLike = rawInstructions && (
+      rawInstructions.toLowerCase().includes('prompt') ||
+      rawInstructions.toLowerCase().includes('highlight') ||
+      rawInstructions.toLowerCase().includes('instruction') ||
+      rawInstructions.toLowerCase().includes('offer a')
+    );
+    if (rawInstructions && !isPromptLike) {
+      followUpBody = rawInstructions;
+    } else {
+      followUpBody = `Hi ${firstName},\n\nI wanted to follow up on my previous note regarding ${lead.companyName || 'your organization'}. Would love to share how our team can help streamline your digital operations.\n\nDo you have 10 minutes this week for a brief conversation?\n\nBest regards,\nOutreach Team`;
+    }
+  }
 
   // Use the same sender pool mechanism as dispatchOutreachLead
   let candidatePool = lead.campaign.accounts?.length > 0
@@ -382,7 +396,11 @@ export async function dispatchDripFollowUp(params: {
     }
   }
 
-  const account = selectedAccount || (candidatePool.length > 0 ? candidatePool[0] : null);
+  if (candidatePool.length > 0 && !selectedAccount) {
+    return { success: false, error: 'Daily sending limit reached across all sender accounts' };
+  }
+
+  const account = selectedAccount;
 
   let rawAccountPass = account?.smtpPass;
   if (rawAccountPass) {
@@ -400,6 +418,10 @@ export async function dispatchDripFollowUp(params: {
   const senderName = account?.senderName || 'Outreach Team';
 
   if (!smtpUser || !smtpPass) {
+    await prisma.outreachLead.update({
+      where: { id: lead.id },
+      data: { errorMessage: 'No active SMTP credentials configured', dripSentAt: new Date() },
+    }).catch(() => {});
     return { success: false, error: 'No active SMTP credentials configured' };
   }
 
@@ -453,6 +475,19 @@ export async function dispatchDripFollowUp(params: {
     };
   } catch (error: any) {
     console.error(`[OUTREACH DRIP] Failed to send drip follow-up step ${targetStep} to ${lead.email}:`, error);
+    if (selectedAccount) {
+      await prisma.outreachAccountConfig.updateMany({
+        where: { id: selectedAccount.id, sentToday: { gt: 0 } },
+        data: { sentToday: { decrement: 1 } },
+      }).catch(() => {});
+    }
+    await prisma.outreachLead.update({
+      where: { id: lead.id },
+      data: {
+        errorMessage: error.message || 'Drip transmission failed',
+        dripSentAt: new Date(), // Postpone next retry so it doesn't starve queue
+      },
+    }).catch(() => {});
     return {
       success: false,
       error: error.message || 'Drip transmission failed',

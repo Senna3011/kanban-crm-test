@@ -651,6 +651,17 @@ export default function CampaignWorkspacePage({
     const currentIndex = leadsList.findIndex((l) => l.id === selectedLead.id);
     if (currentIndex === -1) return;
 
+    const isDirty = (
+      editSubject !== (selectedLead.aiDraftSubject || '') ||
+      editBody !== (selectedLead.aiDraftBody || '') ||
+      editEmail !== (selectedLead.email || '')
+    );
+
+    if (isDirty) {
+      const confirmDiscard = window.confirm('You have unsaved changes in this draft. Move to next lead and discard changes?');
+      if (!confirmDiscard) return;
+    }
+
     const targetIndex = direction === 'prev' ? currentIndex - 1 : currentIndex + 1;
     if (targetIndex >= 0 && targetIndex < leadsList.length) {
       openDraftModal(leadsList[targetIndex]);
@@ -1083,10 +1094,10 @@ export default function CampaignWorkspacePage({
             </span>
             <div>
               <p className="text-xs font-bold text-indigo-900">
-                {actionLoading ? 'Memproses permintaan outreach...' : 'Pencarian Leads di Background Sedang Berjalan...'}
+                {actionLoading ? 'Processing outreach request...' : 'Background lead discovery in progress...'}
               </p>
               <p className="text-[11px] text-indigo-700">
-                Data sedang ditarik dan dimuat ke tabel secara otomatis (Saat ini: {allLeads.length} leads).
+                Targeted leads are being extracted and populated automatically (Current: {allLeads.length} leads).
               </p>
             </div>
           </div>
@@ -1095,10 +1106,10 @@ export default function CampaignWorkspacePage({
               type="button"
               onClick={handleResetStatus}
               className="px-3 py-1.5 text-xs font-bold bg-rose-600 hover:bg-rose-700 text-white rounded-xl shadow-xs transition-colors flex items-center gap-1.5"
-              title="Batalkan pencarian leads atau buka kunci status yang macet"
+              title="Cancel active lead discovery or force unlock status"
             >
               <span>🛑</span>
-              <span>Batalkan Pencarian</span>
+              <span>Cancel Discovery</span>
             </button>
             <span className="text-[10px] font-bold px-2.5 py-1 rounded-full bg-indigo-100 text-indigo-800 flex items-center gap-1.5">
               <span className="w-1.5 h-1.5 rounded-full bg-indigo-600 animate-spin" />

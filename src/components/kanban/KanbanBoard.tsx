@@ -386,16 +386,18 @@ export default function KanbanBoard() {
   async function handleBulkMarkRead(read: boolean) {
     if (selectedIds.size === 0) return;
     const newStatus = read ? 'read' : 'unread';
-    for (const cardId of selectedIds) {
-      try {
-        await fetch(`/api/cards/${cardId}`, {
-          method: 'PATCH',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ status: newStatus }),
-        });
-      } catch {}
+    const cardIds = Array.from(selectedIds);
+    try {
+      const res = await fetch('/api/cards', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ cardIds, status: newStatus }),
+      });
+      if (!res.ok) throw new Error('Bulk update failed');
+      toast.success(`Marked ${cardIds.length} cards as ${newStatus}`);
+    } catch {
+      toast.error('Failed to update some cards');
     }
-    toast.success(`Marked ${selectedIds.size} cards as ${newStatus}`);
     setSelectedIds(new Set());
     setSelectionMode(false);
     fetchColumns();

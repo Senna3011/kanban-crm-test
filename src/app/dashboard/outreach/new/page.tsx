@@ -743,6 +743,33 @@ export default function NewOutreachCampaignPage() {
                       </div>
                     </div>
                   )}
+
+                  {/* Sequence Preview Box (Recognition over Recall) */}
+                  <div className="p-3.5 bg-slate-100/80 rounded-xl border border-slate-200 text-xs space-y-1.5">
+                    <p className="text-[11px] font-bold text-slate-700 uppercase tracking-wider flex items-center gap-1.5">
+                      <span>👁️</span>
+                      <span>Drip Sequence Preview</span>
+                    </p>
+                    <p className="text-slate-600 text-[11px]">
+                      • <strong>Initial Touch:</strong> Personalized cold email sent upon approval.
+                    </p>
+                    <p className="text-slate-600 text-[11px]">
+                      • <strong>Step 1:</strong> Follow-up after {dripDelayDays} days ({dripSubject || 'Re: Original Subject'}).
+                    </p>
+                    {dripStepsCount >= 2 && (
+                      <p className="text-slate-600 text-[11px]">
+                        • <strong>Step 2:</strong> Follow-up after +{dripDelayDays2} days ({dripSubject2 || 'Re: Following up again...'}).
+                      </p>
+                    )}
+                    {dripStepsCount >= 3 && (
+                      <p className="text-slate-600 text-[11px]">
+                        • <strong>Step 3 (Final):</strong> Final check-in after +{dripDelayDays3} days ({dripSubject3 || 'Re: Final check-in / Closing loop'}).
+                      </p>
+                    )}
+                    <p className="text-[10px] text-emerald-700 font-semibold pt-1">
+                      ✓ Sequence automatically halts if the prospect replies, books a call, bounces, or unsubscribes.
+                    </p>
+                  </div>
                 </div>
               )}
             </div>

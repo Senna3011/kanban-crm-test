@@ -10,13 +10,11 @@ export const dynamic = 'force-dynamic';
 export async function GET(req: NextRequest) {
   const authHeader = req.headers.get('authorization');
   const cronSecret = process.env.CRON_SECRET;
-  const isVercelCron =
-    req.headers.get('user-agent')?.includes('vercel-cron') ||
-    (cronSecret && authHeader === `Bearer ${cronSecret}`);
+  const isAuthorizedCron = Boolean(cronSecret && authHeader === `Bearer ${cronSecret}`);
 
   let tenantId: string | undefined;
 
-  if (!isVercelCron) {
+  if (!isAuthorizedCron) {
     const session = await getServerSession(authOptions);
     if (!session?.user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     tenantId = (session.user as any).tenantId;

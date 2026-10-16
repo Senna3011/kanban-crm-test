@@ -257,6 +257,8 @@ async function pollFolder(imapConfig: Record<string, string>, folder: string, te
               replyBody: msg.bodyText,
             });
             console.log(`[IMAP Poller] Auto-converted outreach lead to Kanban card: ${convertResult.cardId}`);
+            created++;
+            continue; // Prevent creating duplicate General card below
           }
         } catch (outreachErr: any) {
           console.warn('[IMAP Poller] Outreach reply detection check error:', outreachErr?.message);

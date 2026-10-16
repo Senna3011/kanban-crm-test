@@ -228,7 +228,7 @@ export default function KanbanCard({
           {card.assignedTo && (
             <span
               className="inline-flex items-center gap-1 text-[10px] font-medium px-1.5 py-0.5 rounded-md bg-indigo-50 text-indigo-700 border border-indigo-200/80"
-              title={`Ditugaskan ke: ${card.assignedTo.name || card.assignedTo.email}`}
+              title={`Assigned to: ${card.assignedTo.name || card.assignedTo.email}`}
             >
               <span className="w-3.5 h-3.5 rounded-full bg-indigo-600 text-white flex items-center justify-center text-[9px] font-bold overflow-hidden">
                 {card.assignedTo.avatar ? (
