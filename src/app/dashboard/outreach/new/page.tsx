@@ -42,8 +42,14 @@ export default function NewOutreachCampaignPage() {
   const [targetRole, setTargetRole] = useState('Chief Technology Officer');
   const [targetLocation, setTargetLocation] = useState('United States');
   const [targetIndustry, setTargetIndustry] = useState('Information Technology & Services');
+  const [selectedIndustries, setSelectedIndustries] = useState<string[]>([
+    'Information Technology & Services',
+  ]);
   const [searchQuery, setSearchQuery] = useState('');
   const [leadCount, setLeadCount] = useState(10);
+  const [icpChatInput, setIcpChatInput] = useState('');
+  const [icpBrandUrl, setIcpBrandUrl] = useState('');
+  const [isResearchingIcp, setIsResearchingIcp] = useState(false);
 
   // Step 3: AI Copywriting Strategy & Brand Research
   const [aiTone, setAiTone] = useState<'formal' | 'conversational' | 'direct'>('formal');
@@ -55,11 +61,14 @@ export default function NewOutreachCampaignPage() {
   );
   const [dripEnabled, setDripEnabled] = useState(false);
   const [dripStepsCount, setDripStepsCount] = useState(1);
-  const [dripDelayDays, setDripDelayDays] = useState(3);
+  const [dripDelayDays, setDripDelayDays] = useState(7); // Default 7 days from last email (Point 5)
+  const [customDelay1, setCustomDelay1] = useState(false);
   const [dripSubject, setDripSubject] = useState('');
-  const [dripDelayDays2, setDripDelayDays2] = useState(5);
+  const [dripDelayDays2, setDripDelayDays2] = useState(7);
+  const [customDelay2, setCustomDelay2] = useState(false);
   const [dripSubject2, setDripSubject2] = useState('');
   const [dripDelayDays3, setDripDelayDays3] = useState(7);
+  const [customDelay3, setCustomDelay3] = useState(false);
   const [dripSubject3, setDripSubject3] = useState('');
 
   const [loading, setLoading] = useState(false);
@@ -119,18 +128,46 @@ export default function NewOutreachCampaignPage() {
     }
   }
 
+  async function handleAutoResearchIcp() {
+    if (!icpChatInput.trim() && !icpBrandUrl.trim()) {
+      toast.error('Please enter your brand URL or describe your target ICP in the chatbox.');
+      return;
+    }
+    setIsResearchingIcp(true);
+    try {
+      const res = await fetch('/api/outreach/ai-target-assistant', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          brandOrUrl: icpBrandUrl.trim(),
+          icpDescription: icpChatInput.trim(),
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to auto-generate targeting');
+      if (data.data) {
+        if (data.data.targetRole) setTargetRole(data.data.targetRole);
+        if (data.data.targetLocation) setTargetLocation(data.data.targetLocation);
+        if (Array.isArray(data.data.targetIndustries) && data.data.targetIndustries.length > 0) {
+          setSelectedIndustries(data.data.targetIndustries);
+          setTargetIndustry(data.data.targetIndustries.join(', '));
+        }
+        if (data.data.searchQuery) setSearchQuery(data.data.searchQuery);
+        toast.success(`Targeting profile auto-filled by AI! (${data.data.summary || 'Ready'})`);
+      }
+    } catch (err: any) {
+      toast.error(err.message || 'AI targeting assistant error');
+    } finally {
+      setIsResearchingIcp(false);
+    }
+  }
+
   function handleToneChange(newTone: 'formal' | 'conversational' | 'direct') {
     setAiTone(newTone);
-    if (brandInput.trim() && !isResearchingBrand) {
-      handleAutoResearchBrand(newTone, aiLength);
-    }
   }
 
   function handleLengthChange(newLength: 'concise' | 'detailed') {
     setAiLength(newLength);
-    if (brandInput.trim() && !isResearchingBrand) {
-      handleAutoResearchBrand(aiTone, newLength);
-    }
   }
 
   function handleNextStep(e?: React.MouseEvent) {
@@ -244,10 +281,10 @@ export default function NewOutreachCampaignPage() {
               1
             </span>
             <span className={`text-xs font-semibold ${step >= 1 ? 'text-slate-900' : 'text-slate-400'}`}>
-              Basics & Mailbox
+              Campaign Setup & Mailbox
             </span>
           </div>
-          <div className="h-0.5 w-12 bg-slate-200" />
+          <div className="h-0.5 w-10 bg-slate-200" />
           <div className="flex items-center gap-2">
             <span
               className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold ${
@@ -257,10 +294,10 @@ export default function NewOutreachCampaignPage() {
               2
             </span>
             <span className={`text-xs font-semibold ${step >= 2 ? 'text-slate-900' : 'text-slate-400'}`}>
-              Prospect Targeting
+              Target Audience & ICP (AI-Assisted)
             </span>
           </div>
-          <div className="h-0.5 w-12 bg-slate-200" />
+          <div className="h-0.5 w-10 bg-slate-200" />
           <div className="flex items-center gap-2">
             <span
               className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold ${
@@ -270,7 +307,7 @@ export default function NewOutreachCampaignPage() {
               3
             </span>
             <span className={`text-xs font-semibold ${step >= 3 ? 'text-slate-900' : 'text-slate-400'}`}>
-              AI Pitch Strategy
+              AI Messaging Strategy & Follow-ups
             </span>
           </div>
         </div>
@@ -280,9 +317,8 @@ export default function NewOutreachCampaignPage() {
       <form
         onSubmit={handleSubmit}
         onKeyDown={(e) => {
-          if (e.key === 'Enter' && step < 3 && e.target instanceof HTMLInputElement) {
+          if (e.key === 'Enter' && e.target instanceof HTMLInputElement) {
             e.preventDefault();
-            handleNextStep();
           }
         }}
         className="bg-white p-6 rounded-2xl border border-slate-200/80 shadow-xs space-y-6"
@@ -401,8 +437,63 @@ export default function NewOutreachCampaignPage() {
         {step === 2 && (
           <div className="space-y-5 animate-in fade-in">
             <div>
-              <h2 className="text-sm font-bold text-slate-900">Step 2: Target Lead Parameters (LinkedIn Decision Makers)</h2>
+              <h2 className="text-sm font-bold text-slate-900">Step 2: Target Audience & ICP Parameters (AI-Assisted)</h2>
               <p className="text-xs text-slate-500 mt-0.5">Define your ideal prospect role, geographic territory, industry, and target volume.</p>
+            </div>
+
+            {/* AI ICP & Targeting Assistant Chatbox (Point 1) */}
+            <div className="p-4 bg-gradient-to-r from-blue-50/90 via-indigo-50/80 to-purple-50/90 rounded-2xl border border-indigo-200/80 space-y-3 shadow-2xs">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <span className="text-lg">✨</span>
+                  <div>
+                    <h3 className="text-xs font-bold text-indigo-950">
+                      AI ICP & Targeting Assistant
+                    </h3>
+                    <p className="text-[11px] text-indigo-700/80">
+                      Describe your brand and ideal customer profile (ICP) in natural language. AI will research and auto-fill the targeting parameters below.
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                <input
+                  type="text"
+                  placeholder="Brand / URL (e.g. jetdigitalpro.com)"
+                  value={icpBrandUrl}
+                  onChange={(e) => setIcpBrandUrl(e.target.value)}
+                  className="px-3 py-2 bg-white border border-indigo-200 rounded-xl text-xs text-slate-800 placeholder:text-slate-400 focus:ring-2 focus:ring-indigo-500"
+                />
+                <input
+                  type="text"
+                  placeholder="Target ICP description (e.g. Founder/CTO e-commerce in US who need scaling...)"
+                  value={icpChatInput}
+                  onChange={(e) => setIcpChatInput(e.target.value)}
+                  className="sm:col-span-2 px-3 py-2 bg-white border border-indigo-200 rounded-xl text-xs text-slate-800 placeholder:text-slate-400 focus:ring-2 focus:ring-indigo-500"
+                />
+              </div>
+
+              <div className="flex justify-end">
+                <button
+                  type="button"
+                  onClick={handleAutoResearchIcp}
+                  disabled={isResearchingIcp || (!icpChatInput.trim() && !icpBrandUrl.trim())}
+                  className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-xl transition-all shadow-xs disabled:opacity-50 flex items-center gap-1.5 cursor-pointer"
+                >
+                  {isResearchingIcp ? (
+                    <>
+                      <span className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                      <span>Researching ICP...</span>
+                    </>
+                  ) : (
+                    <>
+                      <span>✨</span>
+                      <span>Auto-Fill Targeting with AI</span>
+                    </>
+                  )}
+                </button>
+              </div>
             </div>
 
             {/* Structured Inputs */}
@@ -438,21 +529,52 @@ export default function NewOutreachCampaignPage() {
                 />
               </div>
 
-              <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">
-                  Target Industry / Sector
-                </label>
-                <select
-                  value={targetIndustry}
-                  onChange={(e) => setTargetIndustry(e.target.value)}
-                  className="w-full px-3.5 py-2.5 border border-slate-300 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-primary-500 bg-white"
-                >
-                  {INDUSTRY_OPTIONS.map((ind) => (
-                    <option key={ind} value={ind}>
-                      {ind}
-                    </option>
-                  ))}
-                </select>
+              {/* Multi-Select Target Industry (Point 2) */}
+              <div className="sm:col-span-2">
+                <div className="flex items-center justify-between mb-1.5">
+                  <label className="block text-xs font-semibold text-slate-700">
+                    Target Industry / Vertical (Multi-Select) <span className="text-red-500">*</span>
+                  </label>
+                  <span className="text-[11px] text-slate-400 font-medium">
+                    {selectedIndustries.length} selected
+                  </span>
+                </div>
+
+                <div className="flex flex-wrap gap-1.5 p-3 bg-slate-50 border border-slate-200 rounded-xl">
+                  {INDUSTRY_OPTIONS.map((ind) => {
+                    const isSelected = selectedIndustries.includes(ind);
+                    return (
+                      <button
+                        key={ind}
+                        type="button"
+                        onClick={() => {
+                          if (ind === 'All Industries (Broad)') {
+                            setSelectedIndustries(['All Industries (Broad)']);
+                            setTargetIndustry('All Industries (Broad)');
+                            return;
+                          }
+                          let updated: string[];
+                          if (isSelected) {
+                            updated = selectedIndustries.filter((i) => i !== ind);
+                            if (updated.length === 0) updated = ['All Industries (Broad)'];
+                          } else {
+                            updated = [...selectedIndustries.filter((i) => i !== 'All Industries (Broad)'), ind];
+                          }
+                          setSelectedIndustries(updated);
+                          setTargetIndustry(updated.join(', '));
+                        }}
+                        className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all border cursor-pointer ${
+                          isSelected
+                            ? 'bg-primary-600 text-white border-primary-600 shadow-2xs'
+                            : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-100 hover:border-slate-300'
+                        }`}
+                      >
+                        {isSelected ? '✓ ' : '+ '}
+                        {ind}
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
 
               <div>
@@ -474,7 +596,7 @@ export default function NewOutreachCampaignPage() {
                 </select>
               </div>
 
-              <div className="sm:col-span-2">
+              <div>
                 <label className="block text-xs font-semibold text-slate-700 mb-1">
                   Additional Search Qualifier / Niche Keyword (Optional)
                 </label>
@@ -654,24 +776,57 @@ export default function NewOutreachCampaignPage() {
                     <p className="text-xs font-bold text-slate-800">Follow-Up Step 1</p>
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                       <div>
-                        <label className="block text-[11px] font-semibold text-slate-700 mb-1">Delay (Days)</label>
-                        <select
-                          value={dripDelayDays}
-                          onChange={(e) => setDripDelayDays(Number(e.target.value))}
-                          className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl text-xs"
-                        >
-                          <option value={1}>After 1 Day</option>
-                          <option value={2}>After 2 Days</option>
-                          <option value={3}>After 3 Days (Recommended)</option>
-                          <option value={5}>After 5 Days</option>
-                          <option value={7}>After 7 Days</option>
-                        </select>
+                        <label className="block text-[11px] font-semibold text-slate-700 mb-1">
+                          Delay (after previous email) <span className="text-slate-400 font-normal">• 7d default</span>
+                        </label>
+                        {!customDelay1 ? (
+                          <div className="flex gap-1.5">
+                            <select
+                              value={dripDelayDays}
+                              onChange={(e) => {
+                                const val = Number(e.target.value);
+                                if (val === -1) {
+                                  setCustomDelay1(true);
+                                } else {
+                                  setDripDelayDays(val);
+                                }
+                              }}
+                              className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl text-xs font-medium"
+                            >
+                              <option value={3}>After 3 Days</option>
+                              <option value={5}>After 5 Days</option>
+                              <option value={7}>After 7 Days (Default)</option>
+                              <option value={10}>After 10 Days</option>
+                              <option value={14}>After 14 Days</option>
+                              <option value={-1}>Custom Days...</option>
+                            </select>
+                          </div>
+                        ) : (
+                          <div className="flex items-center gap-1.5">
+                            <input
+                              type="number"
+                              min={1}
+                              max={60}
+                              value={dripDelayDays}
+                              onChange={(e) => setDripDelayDays(Math.max(1, Number(e.target.value)))}
+                              className="w-24 px-3 py-2 bg-white border border-indigo-300 rounded-xl text-xs font-bold"
+                            />
+                            <span className="text-xs text-slate-500">days</span>
+                            <button
+                              type="button"
+                              onClick={() => { setCustomDelay1(false); setDripDelayDays(7); }}
+                              className="text-[10px] text-slate-400 hover:text-slate-600 underline"
+                            >
+                              Presets
+                            </button>
+                          </div>
+                        )}
                       </div>
                       <div>
                         <label className="block text-[11px] font-semibold text-slate-700 mb-1">Subject (Optional)</label>
                         <input
                           type="text"
-                          placeholder="Re: Quick follow up"
+                          placeholder="Re: Quick follow up (defaults to Re: Original Subject)"
                           value={dripSubject}
                           onChange={(e) => setDripSubject(e.target.value)}
                           className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl text-xs"
@@ -686,17 +841,51 @@ export default function NewOutreachCampaignPage() {
                       <p className="text-xs font-bold text-slate-800">Follow-Up Step 2</p>
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                         <div>
-                          <label className="block text-[11px] font-semibold text-slate-700 mb-1">Delay after Step 1 (Days)</label>
-                          <select
-                            value={dripDelayDays2}
-                            onChange={(e) => setDripDelayDays2(Number(e.target.value))}
-                            className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl text-xs"
-                          >
-                            <option value={2}>After 2 Days</option>
-                            <option value={3}>After 3 Days</option>
-                            <option value={5}>After 5 Days (Recommended)</option>
-                            <option value={7}>After 7 Days</option>
-                          </select>
+                          <label className="block text-[11px] font-semibold text-slate-700 mb-1">
+                            Delay (after Step 1 email) <span className="text-slate-400 font-normal">• 7d default</span>
+                          </label>
+                          {!customDelay2 ? (
+                            <div className="flex gap-1.5">
+                              <select
+                                value={dripDelayDays2}
+                                onChange={(e) => {
+                                  const val = Number(e.target.value);
+                                  if (val === -1) {
+                                    setCustomDelay2(true);
+                                  } else {
+                                    setDripDelayDays2(val);
+                                  }
+                                }}
+                                className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl text-xs font-medium"
+                              >
+                                <option value={3}>After 3 Days</option>
+                                <option value={5}>After 5 Days</option>
+                                <option value={7}>After 7 Days (Default)</option>
+                                <option value={10}>After 10 Days</option>
+                                <option value={14}>After 14 Days</option>
+                                <option value={-1}>Custom Days...</option>
+                              </select>
+                            </div>
+                          ) : (
+                            <div className="flex items-center gap-1.5">
+                              <input
+                                type="number"
+                                min={1}
+                                max={60}
+                                value={dripDelayDays2}
+                                onChange={(e) => setDripDelayDays2(Math.max(1, Number(e.target.value)))}
+                                className="w-24 px-3 py-2 bg-white border border-indigo-300 rounded-xl text-xs font-bold"
+                              />
+                              <span className="text-xs text-slate-500">days</span>
+                              <button
+                                type="button"
+                                onClick={() => { setCustomDelay2(false); setDripDelayDays2(7); }}
+                                className="text-[10px] text-slate-400 hover:text-slate-600 underline"
+                              >
+                                Presets
+                              </button>
+                            </div>
+                          )}
                         </div>
                         <div>
                           <label className="block text-[11px] font-semibold text-slate-700 mb-1">Subject 2 (Optional)</label>
@@ -718,17 +907,51 @@ export default function NewOutreachCampaignPage() {
                       <p className="text-xs font-bold text-slate-800">Follow-Up Step 3 (Final)</p>
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                         <div>
-                          <label className="block text-[11px] font-semibold text-slate-700 mb-1">Delay after Step 2 (Days)</label>
-                          <select
-                            value={dripDelayDays3}
-                            onChange={(e) => setDripDelayDays3(Number(e.target.value))}
-                            className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl text-xs"
-                          >
-                            <option value={3}>After 3 Days</option>
-                            <option value={5}>After 5 Days</option>
-                            <option value={7}>After 7 Days (Recommended)</option>
-                            <option value={10}>After 10 Days</option>
-                          </select>
+                          <label className="block text-[11px] font-semibold text-slate-700 mb-1">
+                            Delay (after Step 2 email) <span className="text-slate-400 font-normal">• 7d default</span>
+                          </label>
+                          {!customDelay3 ? (
+                            <div className="flex gap-1.5">
+                              <select
+                                value={dripDelayDays3}
+                                onChange={(e) => {
+                                  const val = Number(e.target.value);
+                                  if (val === -1) {
+                                    setCustomDelay3(true);
+                                  } else {
+                                    setDripDelayDays3(val);
+                                  }
+                                }}
+                                className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl text-xs font-medium"
+                              >
+                                <option value={3}>After 3 Days</option>
+                                <option value={5}>After 5 Days</option>
+                                <option value={7}>After 7 Days (Default)</option>
+                                <option value={10}>After 10 Days</option>
+                                <option value={14}>After 14 Days</option>
+                                <option value={-1}>Custom Days...</option>
+                              </select>
+                            </div>
+                          ) : (
+                            <div className="flex items-center gap-1.5">
+                              <input
+                                type="number"
+                                min={1}
+                                max={60}
+                                value={dripDelayDays3}
+                                onChange={(e) => setDripDelayDays3(Math.max(1, Number(e.target.value)))}
+                                className="w-24 px-3 py-2 bg-white border border-indigo-300 rounded-xl text-xs font-bold"
+                              />
+                              <span className="text-xs text-slate-500">days</span>
+                              <button
+                                type="button"
+                                onClick={() => { setCustomDelay3(false); setDripDelayDays3(7); }}
+                                className="text-[10px] text-slate-400 hover:text-slate-600 underline"
+                              >
+                                Presets
+                              </button>
+                            </div>
+                          )}
                         </div>
                         <div>
                           <label className="block text-[11px] font-semibold text-slate-700 mb-1">Subject 3 (Optional)</label>

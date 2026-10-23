@@ -80,17 +80,40 @@ export async function POST(
       customInstructions: customInstructions || undefined,
     });
 
+    const firstName = lead.firstName || lead.fullName?.split(' ')[0] || 'there';
+    const dripCount = campaign.dripStepsCount || 1;
+
+    // Generate follow-up drafts if drip sequences are enabled (Point 13)
+    const followUpSubject1 = campaign.dripSubject || `Re: ${draft.subject}`;
+    const followUpBody1 = `Hi ${firstName},\n\nI wanted to follow up on my previous note regarding ${lead.companyName || 'your organization'}. Would love to share how our team can help streamline your digital operations and engineering bottlenecks.\n\nDo you have 10 minutes this week for a brief conversation?\n\nBest regards,\n${senderName}`;
+
+    const followUpSubject2 = campaign.dripSubject2 || `Re: ${draft.subject}`;
+    const followUpBody2 = `Hi ${firstName},\n\nCircling back on this as I know how busy you must be heading ${lead.jobTitle || 'your team'}. We recently helped a similar enterprise accelerate their delivery pipelines with significant efficiency gains.\n\nHappy to send over a quick 2-page brief if you'd find that helpful.\n\nBest,\n${senderName}`;
+
+    const followUpSubject3 = campaign.dripSubject3 || `Re: Final check-in / ${draft.subject}`;
+    const followUpBody3 = `Hi ${firstName},\n\nI haven't heard back, so I assume this isn't a priority right now, which is completely understandable. I'll stop reaching out for now so I don't crowd your inbox.\n\nFeel free to reach out anytime if your priorities shift.\n\nBest of luck with everything at ${lead.companyName || 'your company'}!\n\nBest,\n${senderName}`;
+
+    const sequenceDrafts = [
+      { step: 0, title: 'Initial Touch (Cold Pitch)', subject: draft.subject, body: draft.body },
+      { step: 1, title: 'Follow-Up #1', subject: followUpSubject1, body: followUpBody1 },
+      ...(dripCount >= 2 ? [{ step: 2, title: 'Follow-Up #2', subject: followUpSubject2, body: followUpBody2 }] : []),
+      ...(dripCount >= 3 ? [{ step: 3, title: 'Follow-Up #3 (Closing)', subject: followUpSubject3, body: followUpBody3 }] : []),
+    ];
+
     const updated = await prisma.outreachLead.update({
       where: { id: lead.id },
       data: {
         aiDraftSubject: draft.subject,
         aiDraftBody: draft.body,
+        dripDraftSubject: followUpSubject1,
+        dripDraftBody: followUpBody1,
         status: 'DRAFT_READY',
         metadata: {
           ...(typeof lead.metadata === 'object' && lead.metadata !== null ? lead.metadata : {}),
           isAiGenerated: draft.isAiGenerated,
           alternativeSubject: draft.alternativeSubject,
           scoreEstimate: draft.scoreEstimate,
+          sequenceDrafts,
           draftedAt: new Date().toISOString(),
         },
       },

@@ -9,6 +9,7 @@ import toast, { Toaster } from 'react-hot-toast';
 interface Lead {
   id: string;
   fullName: string;
+  firstName?: string;
   jobTitle?: string;
   companyName?: string;
   companyDomain?: string;
@@ -19,6 +20,8 @@ interface Lead {
   verifyScore?: number;
   aiDraftSubject?: string;
   aiDraftBody?: string;
+  dripDraftSubject?: string;
+  dripDraftBody?: string;
   status: string;
   errorMessage?: string;
   sentAt?: string;
@@ -53,6 +56,14 @@ interface CampaignDetail {
   status: string;
   accountId?: string;
   createdAt: string;
+  dripEnabled?: boolean;
+  dripStepsCount?: number;
+  dripSubject?: string;
+  dripSubject2?: string;
+  dripSubject3?: string;
+  dripDelayDays?: number;
+  dripDelayDays2?: number;
+  dripDelayDays3?: number;
   account?: {
     id?: string;
     senderEmail: string;
@@ -129,10 +140,17 @@ export default function CampaignWorkspacePage({
   const [selectedBoardId, setSelectedBoardId] = useState('');
   const [selectedColumnId, setSelectedColumnId] = useState('');
 
-  // Selected Lead for Sequential Draft Review Modal
+  // Selected Lead for Sequential Draft Review Modal (Supports 4 drafts: Initial + 3 Follow-ups - Point 13)
   const [selectedLead, setSelectedLead] = useState<Lead | null>(null);
+  const [activeDraftTab, setActiveDraftTab] = useState(0);
   const [editSubject, setEditSubject] = useState('');
   const [editBody, setEditBody] = useState('');
+  const [editDripSubject1, setEditDripSubject1] = useState('');
+  const [editDripBody1, setEditDripBody1] = useState('');
+  const [editDripSubject2, setEditDripSubject2] = useState('');
+  const [editDripBody2, setEditDripBody2] = useState('');
+  const [editDripSubject3, setEditDripSubject3] = useState('');
+  const [editDripBody3, setEditDripBody3] = useState('');
   const [editEmail, setEditEmail] = useState('');
   const [modalCustomPrompt, setModalCustomPrompt] = useState('');
   const [regeneratingDraft, setRegeneratingDraft] = useState(false);
@@ -469,7 +487,7 @@ export default function CampaignWorkspacePage({
         if (bList.length > 0) {
           setSelectedBoardId(bList[0].id);
           const cols = bList[0].columns || [];
-          const leadsCol = cols.find((c: any) => c.title.toLowerCase() === 'leads') || cols[0];
+          const leadsCol = cols.find((c: any) => c.title.toLowerCase() === 'fresh leads') || cols.find((c: any) => c.title.toLowerCase() === 'leads') || cols[0];
           if (leadsCol) setSelectedColumnId(leadsCol.id);
         }
       }
@@ -484,7 +502,7 @@ export default function CampaignWorkspacePage({
     setSelectedBoardId(boardId);
     const b = boardsList.find((item) => item.id === boardId);
     if (b && b.columns?.length > 0) {
-      const leadsCol = b.columns.find((c: any) => c.title.toLowerCase() === 'leads') || b.columns[0];
+      const leadsCol = b.columns.find((c: any) => c.title.toLowerCase() === 'fresh leads') || b.columns.find((c: any) => c.title.toLowerCase() === 'leads') || b.columns[0];
       setSelectedColumnId(leadsCol?.id || '');
     }
   }
@@ -505,7 +523,12 @@ export default function CampaignWorkspacePage({
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Failed to push leads to CRM');
-      toast.success(`Successfully pushed ${data.convertedCount || crmTargetLeadIds.length} leads into Kanban CRM!`);
+      
+      const count = data.convertedCount || crmTargetLeadIds.length;
+      toast.success(
+        `✓ ${count} lead(s) successfully pushed to "Fresh leads" in CRM! Cards saved safely as drafts (No email sent).`,
+        { duration: 7000 }
+      );
       clearSelection();
       setIsPushCrmModalOpen(false);
       await fetchCampaign();
@@ -636,13 +659,42 @@ export default function CampaignWorkspacePage({
     }
   }
 
-  // Sequential Draft Reviewer Modal Navigation
+  // Sequential Draft Reviewer Modal Navigation (Point 13: 4 drafts for 3 follow-ups)
   function openDraftModal(lead: Lead) {
     setSelectedLead(lead);
+    setActiveDraftTab(0);
     setEditSubject(lead.aiDraftSubject || '');
     setEditBody(lead.aiDraftBody || '');
     setEditEmail(lead.email || '');
     setModalCustomPrompt('');
+
+    const seq = (lead.metadata as any)?.sequenceDrafts || [];
+    const d1 = seq.find((s: any) => s.step === 1);
+    const d2 = seq.find((s: any) => s.step === 2);
+    const d3 = seq.find((s: any) => s.step === 3);
+
+    const fName = lead.firstName || lead.fullName?.split(' ')[0] || 'there';
+
+    setEditDripSubject1(
+      d1?.subject || lead.dripDraftSubject || campaign?.dripSubject || `Re: ${lead.aiDraftSubject || 'Quick follow up'}`
+    );
+    setEditDripBody1(
+      d1?.body || lead.dripDraftBody || `Hi ${fName},\n\nI wanted to follow up on my previous note regarding ${lead.companyName || 'your organization'}. Would love to share how our team can help streamline your digital operations.\n\nDo you have 10 minutes this week for a brief conversation?\n\nBest regards`
+    );
+
+    setEditDripSubject2(
+      d2?.subject || campaign?.dripSubject2 || `Re: Following up / ${lead.aiDraftSubject || 'Quick check'}`
+    );
+    setEditDripBody2(
+      d2?.body || `Hi ${fName},\n\nCircling back on this as I know how busy you must be heading ${lead.jobTitle || 'your team'}. We recently helped a similar enterprise accelerate their delivery pipelines with significant efficiency gains.\n\nHappy to send over a quick 2-page brief if you'd find that helpful.\n\nBest regards`
+    );
+
+    setEditDripSubject3(
+      d3?.subject || campaign?.dripSubject3 || `Re: Final check-in / Closing loop`
+    );
+    setEditDripBody3(
+      d3?.body || `Hi ${fName},\n\nI haven't heard back, so I assume this isn't a priority right now, which is completely understandable. I'll stop reaching out for now so I don't crowd your inbox.\n\nFeel free to reach out anytime if your priorities shift.\n\nBest of luck with everything at ${lead.companyName || 'your company'}!\n\nBest regards`
+    );
   }
 
   function navigateDraftModal(direction: 'prev' | 'next') {
@@ -701,13 +753,26 @@ export default function CampaignWorkspacePage({
     if (!selectedLead) return;
     setSavingDraft(true);
     try {
+      const sequenceDrafts = [
+        { step: 0, title: 'Initial Touch (Cold Pitch)', subject: editSubject.trim(), body: editBody.trim() },
+        { step: 1, title: 'Follow-Up #1', subject: editDripSubject1.trim(), body: editDripBody1.trim() },
+        { step: 2, title: 'Follow-Up #2', subject: editDripSubject2.trim(), body: editDripBody2.trim() },
+        { step: 3, title: 'Follow-Up #3 (Closing)', subject: editDripSubject3.trim(), body: editDripBody3.trim() },
+      ];
+
       const res = await fetch(`/api/outreach/leads/${selectedLead.id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           aiDraftSubject: editSubject.trim(),
           aiDraftBody: editBody.trim(),
+          dripDraftSubject: editDripSubject1.trim(),
+          dripDraftBody: editDripBody1.trim(),
           email: editEmail.trim() || undefined,
+          metadata: {
+            ...(typeof selectedLead.metadata === 'object' && selectedLead.metadata !== null ? selectedLead.metadata : {}),
+            sequenceDrafts,
+          },
         }),
       });
       if (!res.ok) throw new Error('Failed to save draft changes');
@@ -722,6 +787,8 @@ export default function CampaignWorkspacePage({
                   ...l,
                   aiDraftSubject: editSubject.trim(),
                   aiDraftBody: editBody.trim(),
+                  dripDraftSubject: editDripSubject1.trim(),
+                  dripDraftBody: editDripBody1.trim(),
                   email: editEmail.trim() || l.email,
                 }
               : l
@@ -729,7 +796,7 @@ export default function CampaignWorkspacePage({
         };
       });
       setSelectedLead(null);
-      toast.success('Draft details saved successfully.');
+      toast.success('All email sequence drafts saved successfully.');
     } catch (err: any) {
       toast.error(`Save draft error: ${err.message}`);
     } finally {
@@ -873,13 +940,119 @@ export default function CampaignWorkspacePage({
   const uncommittedSafeDrafts = allLeads.filter((l) => l.status !== 'CONVERTED' && l.verifyStatus === 'SAFE' && Boolean(l.aiDraftSubject)).length;
   const uncommittedTotalLeads = allLeads.filter((l) => l.status !== 'CONVERTED').length;
 
-  const filteredLeads = allLeads.filter((l) => {
-    if (filterStatus === 'MISSING_EMAIL') return !l.email;
-    if (filterStatus === 'SAFE') return l.verifyStatus === 'SAFE';
-    if (filterStatus === 'DRAFT_READY') return Boolean(l.aiDraftSubject);
-    if (filterStatus === 'DISPATCHED') return l.status === 'DISPATCHED' || l.status === 'CONVERTED';
-    return true;
-  });
+  function computeLeadIcpScore(lead: Lead): { score: number; label: string; badgeClass: string } {
+    if (!campaign) return { score: 60, label: 'Moderate Match', badgeClass: 'bg-blue-50 text-blue-700 border-blue-200' };
+
+    let score = 50; // Base score
+    const targetRole = (campaign.targetRole || '').toLowerCase();
+    const leadRole = (lead.jobTitle || '').toLowerCase();
+    const targetLocation = (campaign.targetLocation || '').toLowerCase();
+    const leadLocation = (lead.location || '').toLowerCase();
+
+    // 1. Role / Seniority Match (up to +30 pts)
+    if (targetRole && leadRole) {
+      const roles = targetRole.split(/[,/|]/).map((r) => r.trim().toLowerCase());
+      const matched = roles.some((r) => r.length > 2 && leadRole.includes(r));
+      if (matched || leadRole.includes('founder') || leadRole.includes('owner') || leadRole.includes('ceo') || leadRole.includes('chief') || leadRole.includes('cto')) {
+        score += 30;
+      } else if (leadRole.includes('director') || leadRole.includes('vp') || leadRole.includes('head') || leadRole.includes('lead')) {
+        score += 20;
+      } else {
+        score += 10;
+      }
+    }
+
+    // 2. Location Match (+10 pts)
+    if (targetLocation && leadLocation) {
+      const locs = targetLocation.split(/[,/|]/).map((l) => l.trim().toLowerCase());
+      if (locs.some((l) => l.length > 2 && leadLocation.includes(l))) {
+        score += 10;
+      }
+    }
+
+    // 3. Email presence (+10 pts)
+    if (lead.email) {
+      score += 10;
+    }
+
+    score = Math.min(score, 100);
+
+    let label = 'Moderate';
+    let badgeClass = 'bg-blue-50 text-blue-700 border-blue-200';
+    if (score >= 85) {
+      label = '🔥 High ICP Match';
+      badgeClass = 'bg-emerald-50 text-emerald-800 border-emerald-300 font-bold';
+    } else if (score >= 70) {
+      label = '⭐ Strong Match';
+      badgeClass = 'bg-indigo-50 text-indigo-700 border-indigo-200 font-semibold';
+    }
+
+    return { score, label, badgeClass };
+  }
+
+  function copyLeadsToClipboard(leads: Lead[], stepTitle: string) {
+    if (leads.length === 0) {
+      toast(`No leads to copy in ${stepTitle}`, { icon: 'ℹ️' });
+      return;
+    }
+    const tsvHeader = ['Full Name', 'Job Title', 'Company', 'Email', 'Location', 'LinkedIn'].join('\t');
+    const tsvRows = leads.map((l) => [
+      l.fullName || '',
+      l.jobTitle || '',
+      l.companyName || '',
+      l.email || '',
+      l.location || '',
+      l.linkedinUrl || '',
+    ].join('\t'));
+    const fullText = [tsvHeader, ...tsvRows].join('\n');
+    navigator.clipboard.writeText(fullText).then(() => {
+      toast.success(`Copied ${leads.length} leads to clipboard! (Ready to paste into Excel/Sheets)`, { icon: '📋' });
+    }).catch(() => {
+      toast.error('Failed to copy to clipboard');
+    });
+  }
+
+  function exportStepCsv(leads: Lead[], filename: string) {
+    if (leads.length === 0) {
+      toast(`No leads to export`, { icon: 'ℹ️' });
+      return;
+    }
+    const headers = ['Full Name', 'Job Title', 'Company', 'Company Domain', 'Email Address', 'Location', 'LinkedIn'];
+    const rows = leads.map((l) => [
+      `"${(l.fullName || '').replace(/"/g, '""')}"`,
+      `"${(l.jobTitle || '').replace(/"/g, '""')}"`,
+      `"${(l.companyName || '').replace(/"/g, '""')}"`,
+      `"${(l.companyDomain || '').replace(/"/g, '""')}"`,
+      `"${(l.email || '').replace(/"/g, '""')}"`,
+      `"${(l.location || '').replace(/"/g, '""')}"`,
+      `"${(l.linkedinUrl || '').replace(/"/g, '""')}"`,
+    ]);
+    const csvContent = '\uFEFF' + [headers.join(','), ...rows.map((r) => r.join(','))].join('\r\n');
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.setAttribute('download', `${filename}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+    toast.success(`Exported ${leads.length} leads to CSV!`);
+  }
+
+  const filteredLeads = allLeads
+    .filter((l) => {
+      if (filterStatus === 'MISSING_EMAIL') return !l.email;
+      if (filterStatus === 'SAFE') return l.verifyStatus === 'SAFE';
+      if (filterStatus === 'DRAFT_READY') return Boolean(l.aiDraftSubject);
+      if (filterStatus === 'DISPATCHED') return l.status === 'DISPATCHED' || l.status === 'CONVERTED';
+      return true;
+    })
+    .sort((a, b) => {
+      const scoreA = computeLeadIcpScore(a).score;
+      const scoreB = computeLeadIcpScore(b).score;
+      return scoreB - scoreA; // Sort highest ICP score first (Point 11)
+    });
 
   const totalPages = Math.ceil(filteredLeads.length / pageSize) || 1;
   const paginatedLeads = filteredLeads.slice((currentPage - 1) * pageSize, currentPage * pageSize);
@@ -894,8 +1067,8 @@ export default function CampaignWorkspacePage({
 
   // Determine current active wizard step & Next-Best-Action (NBA) button
   let currentStepNumber = 1;
-  let nextActionPrompt = 'Sourced leads ready. Click "Get Emails" to discover corporate addresses.';
-  let nextActionLabel = 'Get Candidate Emails';
+  let nextActionPrompt = 'Sourced leads ready. Click "Get Lead Emails" to discover corporate addresses.';
+  let nextActionLabel = 'Get Lead Emails';
   let nextActionHandler: () => void | Promise<void> = async () => { await handleFindEmails(); };
   let nextActionColor = 'bg-indigo-600 hover:bg-indigo-700';
 
@@ -1159,20 +1332,38 @@ export default function CampaignWorkspacePage({
         {/* Step Progression Grid */}
         <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
           {/* Step 1: Leads Sourced */}
-          <div className={`p-3.5 rounded-xl border transition-all ${currentStepNumber === 1 ? 'bg-white/15 border-amber-400 ring-2 ring-amber-400/30' : allLeads.length > 0 ? 'bg-emerald-950/30 border-emerald-500/30' : 'bg-white/5 border-white/10'}`}>
-            <div className="flex items-center justify-between">
-              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Step 1</span>
-              {allLeads.length > 0 ? (
-                <span className="text-emerald-400 text-xs font-bold bg-emerald-500/20 px-1.5 py-0.5 rounded-md">✓ Done</span>
-              ) : (
-                <span className="text-slate-500 text-[10px]">Pending</span>
-              )}
+          <div className={`p-3.5 rounded-xl border transition-all ${currentStepNumber === 1 ? 'bg-white/15 border-amber-400 ring-2 ring-amber-400/30' : allLeads.length > 0 ? 'bg-emerald-950/30 border-emerald-500/30' : 'bg-white/5 border-white/10'} flex flex-col justify-between`}>
+            <div>
+              <div className="flex items-center justify-between">
+                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Step 1</span>
+                {allLeads.length > 0 ? (
+                  <span className="text-emerald-400 text-xs font-bold bg-emerald-500/20 px-1.5 py-0.5 rounded-md">✓ Done</span>
+                ) : (
+                  <span className="text-slate-500 text-[10px]">Pending</span>
+                )}
+              </div>
+              <p className="text-xs font-semibold text-slate-200 mt-1">Leads Sourced</p>
+              <p className="text-lg font-bold text-blue-400 mt-0.5">{allLeads.length}</p>
             </div>
-            <p className="text-xs font-semibold text-slate-200 mt-1">Leads Sourced</p>
-            <p className="text-lg font-bold text-blue-400 mt-0.5">{allLeads.length}</p>
+            <div className="flex items-center gap-1.5 mt-2 pt-1.5 border-t border-white/10">
+              <button
+                onClick={() => exportStepCsv(allLeads, `${campaign.name}_step1_sourced_leads`)}
+                className="text-[10px] text-slate-300 hover:text-white px-1.5 py-0.5 rounded bg-white/5 hover:bg-white/10 flex items-center gap-1"
+                title="Export Step 1 leads to CSV"
+              >
+                <span>📥 CSV</span>
+              </button>
+              <button
+                onClick={() => copyLeadsToClipboard(allLeads, 'Step 1: Leads Sourced')}
+                className="text-[10px] text-slate-300 hover:text-white px-1.5 py-0.5 rounded bg-white/5 hover:bg-white/10 flex items-center gap-1"
+                title="Copy Step 1 leads to clipboard"
+              >
+                <span>📋 Copy</span>
+              </button>
+            </div>
           </div>
 
-          {/* Step 2: Candidate Emails */}
+          {/* Step 2: Lead Emails */}
           <div className={`p-3.5 rounded-xl border transition-all ${currentStepNumber === 2 ? 'bg-white/15 border-amber-400 ring-2 ring-amber-400/30' : missingEmailCount === 0 && allLeads.length > 0 ? 'bg-emerald-950/30 border-emerald-500/30' : 'bg-white/5 border-white/10'} flex flex-col justify-between`}>
             <div>
               <div className="flex items-center justify-between">
@@ -1183,23 +1374,41 @@ export default function CampaignWorkspacePage({
                   <span className="text-slate-500 text-[10px]">{missingEmailCount} Missing</span>
                 )}
               </div>
-              <p className="text-xs font-semibold text-slate-200 mt-1">Candidate Emails</p>
+              <p className="text-xs font-semibold text-slate-200 mt-1">Lead Emails</p>
               <p className="text-lg font-bold text-indigo-300 mt-0.5">{leadsWithEmail} <span className="text-xs font-normal text-slate-400">/ {allLeads.length}</span></p>
             </div>
-            <button
-              onClick={() => handleFindEmails()}
-              disabled={Boolean(actionLoading) || missingEmailCount === 0 || allLeads.length === 0}
-              className="mt-2 w-full py-1 bg-indigo-600 hover:bg-indigo-500 text-white text-[11px] font-semibold rounded-lg transition-colors flex items-center justify-center gap-1 disabled:opacity-40"
-              title="Run pattern generator & domain lookup to find candidate emails"
-            >
-              {actionLoading === 'find-emails' ? (
-                <span className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin" />
-              ) : missingEmailCount === 0 && allLeads.length > 0 ? (
-                <span>✓ All Found</span>
-              ) : (
-                <span>📬 Get Emails</span>
-              )}
-            </button>
+            <div>
+              <button
+                onClick={() => handleFindEmails()}
+                disabled={Boolean(actionLoading) || missingEmailCount === 0 || allLeads.length === 0}
+                className="mt-2 w-full py-1 bg-indigo-600 hover:bg-indigo-500 text-white text-[11px] font-semibold rounded-lg transition-colors flex items-center justify-center gap-1 disabled:opacity-40"
+                title="Run pattern generator & domain lookup to find lead emails"
+              >
+                {actionLoading === 'find-emails' ? (
+                  <span className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                ) : missingEmailCount === 0 && allLeads.length > 0 ? (
+                  <span>✓ All Found</span>
+                ) : (
+                  <span>📬 Get Emails</span>
+                )}
+              </button>
+              <div className="flex items-center gap-1.5 mt-1.5 pt-1 border-t border-white/10">
+                <button
+                  onClick={() => exportStepCsv(allLeads.filter((l) => Boolean(l.email)), `${campaign.name}_step2_emails`)}
+                  className="text-[10px] text-slate-300 hover:text-white px-1.5 py-0.5 rounded bg-white/5 hover:bg-white/10 flex items-center gap-1"
+                  title="Export discovered emails to CSV"
+                >
+                  <span>📥 CSV</span>
+                </button>
+                <button
+                  onClick={() => copyLeadsToClipboard(allLeads.filter((l) => Boolean(l.email)), 'Step 2: Lead Emails')}
+                  className="text-[10px] text-slate-300 hover:text-white px-1.5 py-0.5 rounded bg-white/5 hover:bg-white/10 flex items-center gap-1"
+                  title="Copy discovered emails to clipboard"
+                >
+                  <span>📋 Copy</span>
+                </button>
+              </div>
+            </div>
           </div>
 
           {/* Step 3: Verify Emails */}
@@ -1216,20 +1425,38 @@ export default function CampaignWorkspacePage({
               <p className="text-xs font-semibold text-slate-200 mt-1">Deliverability</p>
               <p className="text-lg font-bold text-emerald-400 mt-0.5">{safeLeads} <span className="text-xs font-normal text-emerald-300/70">Safe</span></p>
             </div>
-            <button
-              onClick={() => handleVerifyEmails()}
-              disabled={Boolean(actionLoading) || unverifiedCount === 0 || leadsWithEmail === 0}
-              className="mt-2 w-full py-1 bg-emerald-600 hover:bg-emerald-500 text-white text-[11px] font-semibold rounded-lg transition-colors flex items-center justify-center gap-1 disabled:opacity-40"
-              title="Verify mailbox deliverability and safety score"
-            >
-              {actionLoading === 'verify' ? (
-                <span className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin" />
-              ) : unverifiedCount === 0 && leadsWithEmail > 0 ? (
-                <span>✓ Verified</span>
-              ) : (
-                <span>🛡️ Verify</span>
-              )}
-            </button>
+            <div>
+              <button
+                onClick={() => handleVerifyEmails()}
+                disabled={Boolean(actionLoading) || unverifiedCount === 0 || leadsWithEmail === 0}
+                className="mt-2 w-full py-1 bg-emerald-600 hover:bg-emerald-500 text-white text-[11px] font-semibold rounded-lg transition-colors flex items-center justify-center gap-1 disabled:opacity-40"
+                title="Verify mailbox deliverability and safety score"
+              >
+                {actionLoading === 'verify' ? (
+                  <span className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                ) : unverifiedCount === 0 && leadsWithEmail > 0 ? (
+                  <span>✓ Verified</span>
+                ) : (
+                  <span>🛡️ Verify</span>
+                )}
+              </button>
+              <div className="flex items-center gap-1.5 mt-1.5 pt-1 border-t border-white/10">
+                <button
+                  onClick={() => exportStepCsv(allLeads.filter((l) => l.verifyStatus === 'SAFE'), `${campaign.name}_step3_safe_leads`)}
+                  className="text-[10px] text-slate-300 hover:text-white px-1.5 py-0.5 rounded bg-white/5 hover:bg-white/10 flex items-center gap-1"
+                  title="Export safe verified leads to CSV"
+                >
+                  <span>📥 CSV</span>
+                </button>
+                <button
+                  onClick={() => copyLeadsToClipboard(allLeads.filter((l) => l.verifyStatus === 'SAFE'), 'Step 3: Safe Leads')}
+                  className="text-[10px] text-slate-300 hover:text-white px-1.5 py-0.5 rounded bg-white/5 hover:bg-white/10 flex items-center gap-1"
+                  title="Copy safe leads to clipboard"
+                >
+                  <span>📋 Copy</span>
+                </button>
+              </div>
+            </div>
           </div>
 
           {/* Step 4: AI Drafts */}
@@ -1246,20 +1473,38 @@ export default function CampaignWorkspacePage({
               <p className="text-xs font-semibold text-slate-200 mt-1">AI Pitch Copy</p>
               <p className="text-lg font-bold text-purple-400 mt-0.5">{readyDrafts} <span className="text-xs font-normal text-purple-300/70">Ready</span></p>
             </div>
-            <button
-              onClick={() => handleGenerateDrafts()}
-              disabled={Boolean(actionLoading) || safeLeads === 0 || (readyDrafts >= safeLeads && safeLeads > 0)}
-              className="mt-2 w-full py-1 bg-purple-600 hover:bg-purple-500 text-white text-[11px] font-semibold rounded-lg transition-colors flex items-center justify-center gap-1 disabled:opacity-40"
-              title="Generate personalized cold pitches with JetDigitalPro AI"
-            >
-              {actionLoading === 'draft' ? (
-                <span className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin" />
-              ) : readyDrafts >= safeLeads && safeLeads > 0 ? (
-                <span>✓ All Drafted</span>
-              ) : (
-                <span>🤖 AI Drafts</span>
-              )}
-            </button>
+            <div>
+              <button
+                onClick={() => handleGenerateDrafts()}
+                disabled={Boolean(actionLoading) || safeLeads === 0 || (readyDrafts >= safeLeads && safeLeads > 0)}
+                className="mt-2 w-full py-1 bg-purple-600 hover:bg-purple-500 text-white text-[11px] font-semibold rounded-lg transition-colors flex items-center justify-center gap-1 disabled:opacity-40"
+                title="Generate personalized cold pitches with JetDigitalPro AI"
+              >
+                {actionLoading === 'draft' ? (
+                  <span className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                ) : readyDrafts >= safeLeads && safeLeads > 0 ? (
+                  <span>✓ All Drafted</span>
+                ) : (
+                  <span>🤖 AI Drafts</span>
+                )}
+              </button>
+              <div className="flex items-center gap-1.5 mt-1.5 pt-1 border-t border-white/10">
+                <button
+                  onClick={() => exportStepCsv(allLeads.filter((l) => Boolean(l.aiDraftSubject)), `${campaign.name}_step4_drafts`)}
+                  className="text-[10px] text-slate-300 hover:text-white px-1.5 py-0.5 rounded bg-white/5 hover:bg-white/10 flex items-center gap-1"
+                  title="Export drafted leads to CSV"
+                >
+                  <span>📥 CSV</span>
+                </button>
+                <button
+                  onClick={() => copyLeadsToClipboard(allLeads.filter((l) => Boolean(l.aiDraftSubject)), 'Step 4: AI Drafts')}
+                  className="text-[10px] text-slate-300 hover:text-white px-1.5 py-0.5 rounded bg-white/5 hover:bg-white/10 flex items-center gap-1"
+                  title="Copy drafted leads to clipboard"
+                >
+                  <span>📋 Copy</span>
+                </button>
+              </div>
+            </div>
           </div>
 
           {/* Step 5: Push to CRM & Dispatch */}
@@ -1276,20 +1521,38 @@ export default function CampaignWorkspacePage({
               <p className="text-xs font-semibold text-slate-200 mt-1">CRM Bridge</p>
               <p className="text-lg font-bold text-amber-400 mt-0.5">{convertedLeads} <span className="text-xs font-normal text-amber-300/70">in CRM</span></p>
             </div>
-            <button
-              onClick={() => openPushCrmModal()}
-              disabled={Boolean(actionLoading) || uncommittedSafeDrafts === 0 || allLeads.length === 0}
-              className="mt-2 w-full py-1 bg-amber-500 hover:bg-amber-400 text-slate-950 text-[11px] font-bold rounded-lg transition-colors flex items-center justify-center gap-1 disabled:opacity-40"
-              title="Bridge verified leads into Kanban CRM pipeline board"
-            >
-              {actionLoading === 'push-crm' ? (
-                <span className="w-3 h-3 border-2 border-slate-900 border-t-transparent rounded-full animate-spin" />
-              ) : uncommittedTotalLeads === 0 && allLeads.length > 0 ? (
-                <span>✓ All in CRM</span>
-              ) : (
-                <span>📋 Push CRM</span>
-              )}
-            </button>
+            <div>
+              <button
+                onClick={() => openPushCrmModal()}
+                disabled={Boolean(actionLoading) || uncommittedSafeDrafts === 0 || allLeads.length === 0}
+                className="mt-2 w-full py-1 bg-amber-500 hover:bg-amber-400 text-slate-950 text-[11px] font-bold rounded-lg transition-colors flex items-center justify-center gap-1 disabled:opacity-40"
+                title="Bridge verified leads into Kanban CRM Fresh leads column"
+              >
+                {actionLoading === 'push-crm' ? (
+                  <span className="w-3 h-3 border-2 border-slate-900 border-t-transparent rounded-full animate-spin" />
+                ) : uncommittedTotalLeads === 0 && allLeads.length > 0 ? (
+                  <span>✓ All in CRM</span>
+                ) : (
+                  <span>📋 Push CRM</span>
+                )}
+              </button>
+              <div className="flex items-center gap-1.5 mt-1.5 pt-1 border-t border-white/10">
+                <button
+                  onClick={() => exportStepCsv(allLeads.filter((l) => l.status === 'CONVERTED'), `${campaign.name}_step5_crm_leads`)}
+                  className="text-[10px] text-slate-300 hover:text-white px-1.5 py-0.5 rounded bg-white/5 hover:bg-white/10 flex items-center gap-1"
+                  title="Export CRM leads to CSV"
+                >
+                  <span>📥 CSV</span>
+                </button>
+                <button
+                  onClick={() => copyLeadsToClipboard(allLeads.filter((l) => l.status === 'CONVERTED'), 'Step 5: CRM Leads')}
+                  className="text-[10px] text-slate-300 hover:text-white px-1.5 py-0.5 rounded bg-white/5 hover:bg-white/10 flex items-center gap-1"
+                  title="Copy CRM leads to clipboard"
+                >
+                  <span>📋 Copy</span>
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       </div>
@@ -1407,7 +1670,7 @@ export default function CampaignWorkspacePage({
             <table className="w-full text-left text-xs text-slate-600">
               <thead className="bg-slate-50/80 text-[11px] font-bold text-slate-400 uppercase tracking-wider border-b border-slate-100">
                 <tr>
-                  <th className="px-3 py-3 w-8 text-center">
+                  <th className="px-3 py-3 w-10 text-center">
                     <input
                       type="checkbox"
                       checked={isAllSelected}
@@ -1416,33 +1679,28 @@ export default function CampaignWorkspacePage({
                       title="Select / Deselect All on this page"
                     />
                   </th>
-                  <th className="px-4 py-3">Prospect & Organization</th>
-                  <th className="px-4 py-3">Email Address</th>
-                  <th className="px-4 py-3 text-center">Deliverability</th>
-                  <th className="px-4 py-3">AI Pitch Draft (JetDigitalPro)</th>
-                  <th className="px-4 py-3 text-right">Quick Actions</th>
+                  <th className="px-5 py-3">Lead & Organization Profile</th>
+                  <th className="px-4 py-3">Corporate Email</th>
+                  <th className="px-4 py-3 text-center">ICP Match Score</th>
+                  <th className="px-4 py-3 text-right">CRM Pipeline</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
                 {paginatedLeads.map((lead) => {
                   const isChecked = selectedIds.includes(lead.id);
-                  const isSafe = lead.verifyStatus === 'SAFE';
-                  const isRisky = lead.verifyStatus === 'RISKY';
-                  const isInvalid = lead.verifyStatus === 'INVALID';
                   const isFinding = rowLoading[`${lead.id}-find`];
-                  const isVerifying = rowLoading[`${lead.id}-verify`];
-                  const isDrafting = rowLoading[`${lead.id}-draft`];
                   const isPushing = rowLoading[`${lead.id}-push`];
 
                   return (
                     <tr
                       key={lead.id}
-                      className={`transition-colors ${
-                        isChecked ? 'bg-primary-50/40' : 'hover:bg-slate-50/60'
+                      onClick={() => toggleSelectLead(lead.id)}
+                      className={`transition-colors cursor-pointer ${
+                        isChecked ? 'bg-primary-50/50' : 'hover:bg-slate-50/70'
                       }`}
                     >
                       {/* Checkbox */}
-                      <td className="px-3 py-3.5 text-center">
+                      <td className="px-3 py-4 text-center" onClick={(e) => e.stopPropagation()}>
                         <input
                           type="checkbox"
                           checked={isChecked}
@@ -1451,164 +1709,131 @@ export default function CampaignWorkspacePage({
                         />
                       </td>
 
-                      {/* Name & Company & Direct Links */}
-                      <td className="px-4 py-3.5">
-                        <div className="font-bold text-slate-900 text-xs">
-                          {lead.fullName}
-                        </div>
-                        <div className="text-[11px] text-slate-500 mt-0.5 flex items-center gap-1.5 flex-wrap">
-                          <span className="font-medium text-slate-600">{lead.jobTitle}</span>
-                          <span>•</span>
-                          <span className="font-semibold text-slate-800">{lead.companyName}</span>
-                          {lead.location && (
-                            <>
-                              <span>•</span>
-                              <span className="text-slate-400">📍 {lead.location}</span>
-                            </>
-                          )}
-                        </div>
-                        {/* Dedicated Fixed Action Row for LinkedIn & Website */}
-                        {(lead.linkedinUrl || isValidWebsiteDomain(lead.companyDomain)) && (
-                          <div className="flex items-center gap-2 mt-2 pt-1.5 border-t border-slate-100">
-                            {lead.linkedinUrl && (
-                              <a
-                                href={lead.linkedinUrl.startsWith('http') ? lead.linkedinUrl : `https://${lead.linkedinUrl}`}
-                                target="_blank"
-                                rel="noreferrer"
-                                className="inline-flex items-center gap-1.5 px-2 py-1 text-[11px] font-medium text-slate-700 bg-slate-100 hover:bg-[#0077b5]/10 hover:text-[#0077b5] border border-slate-200/90 hover:border-[#0077b5]/30 rounded-md transition-all"
-                                title="Buka Profil / Halaman LinkedIn Resmi"
-                              >
-                                <svg className="w-3 h-3 fill-current text-[#0077b5]" viewBox="0 0 24 24">
-                                  <path d="M19 3a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h14m-.5 15.5v-5.3a3.26 3.26 0 0 0-3.26-3.26c-.85 0-1.84.52-2.28 1.3v-1.11h-2.79v8.37h2.79v-4.93c0-.77.62-1.4 1.39-1.4a1.4 1.4 0 0 1 1.4 1.4v4.93h2.75M6.46 10.9v8.37H9.2V10.9H6.46M7.83 6.64a1.66 1.66 0 0 0-1.66 1.66 1.66 1.66 0 0 0 1.66 1.66 1.66 1.66 0 0 0 1.66-1.66c0-.92-.74-1.66-1.66-1.66Z" />
-                                </svg>
-                                <span>LinkedIn</span>
-                                <span className="text-[9px] text-slate-400">↗</span>
-                              </a>
+                      {/* 4-Line Detailed Lead & Organization Layout */}
+                      <td className="px-5 py-4">
+                        <div className="space-y-1">
+                          {/* Line 1: Full Name & Credentials */}
+                          <div className="font-bold text-slate-900 text-sm tracking-tight flex items-center gap-2">
+                            <span>{lead.fullName}</span>
+                            {lead.status === 'CONVERTED' && (
+                              <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-200">
+                                ✓ in CRM
+                              </span>
                             )}
+                          </div>
 
+                          {/* Line 2: Full Job Title / Role (No truncation) */}
+                          <div className="text-xs font-semibold text-indigo-950 leading-snug">
+                            {lead.jobTitle || 'Decision Maker'}
+                          </div>
+
+                          {/* Line 3: Company & Direct Links */}
+                          <div className="text-xs text-slate-700 flex items-center gap-2.5 flex-wrap pt-0.5">
+                            <span className="font-bold text-slate-900">{lead.companyName || 'Enterprise'}</span>
                             {isValidWebsiteDomain(lead.companyDomain) && (
                               <a
                                 href={lead.companyDomain!.startsWith('http') ? lead.companyDomain! : `https://${lead.companyDomain}`}
                                 target="_blank"
                                 rel="noreferrer"
-                                className="inline-flex items-center gap-1.5 px-2 py-1 text-[11px] font-medium text-slate-700 bg-slate-100 hover:bg-indigo-50 hover:text-indigo-700 border border-slate-200/90 hover:border-indigo-200 rounded-md transition-all"
-                                title="Kunjungi Website Perusahaan"
+                                className="inline-flex items-center gap-1 text-[11px] text-primary-600 hover:text-primary-800 font-semibold hover:underline"
+                                title="Visit Official Company Website"
+                                onClick={(e) => e.stopPropagation()}
                               >
-                                <span className="text-slate-400">🌐</span>
-                                <span className="max-w-[140px] truncate">{lead.companyDomain!.replace(/^https?:\/\//, '').replace(/\/.*$/, '')}</span>
-                                <span className="text-[9px] text-slate-400">↗</span>
+                                <span>🌐 {lead.companyDomain!.replace(/^https?:\/\//, '').replace(/\/.*$/, '')}</span>
+                                <span className="text-[9px]">↗</span>
+                              </a>
+                            )}
+                            {lead.linkedinUrl && (
+                              <a
+                                href={lead.linkedinUrl.startsWith('http') ? lead.linkedinUrl : `https://${lead.linkedinUrl}`}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="inline-flex items-center gap-1 text-[11px] text-[#0077b5] hover:text-[#005582] font-semibold hover:underline"
+                                title="Open Official LinkedIn Profile"
+                                onClick={(e) => e.stopPropagation()}
+                              >
+                                <svg className="w-3.5 h-3.5 fill-current" viewBox="0 0 24 24">
+                                  <path d="M19 3a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h14m-.5 15.5v-5.3a3.26 3.26 0 0 0-3.26-3.26c-.85 0-1.84.52-2.28 1.3v-1.11h-2.79v8.37h2.79v-4.93c0-.77.62-1.4 1.39-1.4a1.4 1.4 0 0 1 1.4 1.4v4.93h2.75M6.46 10.9v8.37H9.2V10.9H6.46M7.83 6.64a1.66 1.66 0 0 0-1.66 1.66 1.66 1.66 0 0 0 1.66 1.66 1.66 1.66 0 0 0 1.66-1.66c0-.92-.74-1.66-1.66-1.66Z" />
+                                </svg>
+                                <span>LinkedIn</span>
+                                <span className="text-[9px]">↗</span>
                               </a>
                             )}
                           </div>
-                        )}
+
+                          {/* Line 4: Location */}
+                          {lead.location && (
+                            <div className="text-[11px] text-slate-500 flex items-center gap-1 pt-0.5">
+                              <span>📍</span>
+                              <span>{lead.location}</span>
+                            </div>
+                          )}
+                        </div>
                       </td>
 
-                      {/* Email */}
-                      <td className="px-4 py-3.5 font-mono text-[11px] text-slate-800">
+                      {/* Email Address */}
+                      <td className="px-4 py-4 font-mono text-xs text-slate-800" onClick={(e) => e.stopPropagation()}>
                         {lead.email ? (
-                          <div className="flex items-center gap-1.5">
-                            <span>{lead.email}</span>
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            <span className="font-semibold text-slate-900 select-all">{lead.email}</span>
                             <button
-                              onClick={() => openDraftModal(lead)}
-                              className="text-slate-400 hover:text-primary-600 text-[10px]"
-                              title="Edit Target Email"
+                              onClick={() => {
+                                navigator.clipboard.writeText(lead.email!);
+                                toast.success(`Copied ${lead.email} to clipboard!`);
+                              }}
+                              className="text-slate-400 hover:text-slate-700 text-xs p-1 rounded hover:bg-slate-100"
+                              title="Copy email to clipboard"
                             >
-                              ✏️
+                              📋
                             </button>
                           </div>
                         ) : (
                           <button
                             onClick={() => handleFindEmails([lead.id])}
                             disabled={isFinding}
-                            className="px-2 py-0.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 text-[10px] font-bold rounded-md transition-colors"
+                            className="px-2.5 py-1 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 text-xs font-bold rounded-lg transition-colors inline-flex items-center gap-1"
                           >
-                            {isFinding ? 'Finding...' : '+ Get Email'}
+                            {isFinding ? (
+                              <>
+                                <span className="w-3 h-3 border-2 border-indigo-600 border-t-transparent rounded-full animate-spin" />
+                                <span>Finding...</span>
+                              </>
+                            ) : (
+                              <>
+                                <span>📬</span>
+                                <span>+ Get Email</span>
+                              </>
+                            )}
                           </button>
                         )}
                       </td>
 
-                      {/* Deliverability */}
-                      <td className="px-4 py-3.5 text-center">
-                        {isSafe && (
-                          <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800">
-                            🟢 Safe ({lead.verifyScore || 95}%)
-                          </span>
-                        )}
-                        {isRisky && (
-                          <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-800">
-                            🟡 Risky ({lead.verifyScore || 60}%)
-                          </span>
-                        )}
-                        {(isInvalid || lead.verifyStatus === 'DISPOSABLE') && (
-                          <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-red-100 text-red-800">
-                            🔴 {lead.verifyStatus === 'DISPOSABLE' ? 'Disposable' : 'Invalid'}
-                          </span>
-                        )}
-                        {!isSafe && !isRisky && !isInvalid && lead.verifyStatus !== 'DISPOSABLE' && (
-                          lead.email ? (
-                            <button
-                              onClick={() => handleVerifyEmails([lead.id])}
-                              disabled={isVerifying}
-                              className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-100 hover:bg-slate-200 text-slate-600 transition-colors border border-slate-200 shadow-2xs"
-                              title="Click to check deliverability via Reoon Verifier"
-                            >
-                              {isVerifying ? 'Checking...' : '⚪ Verify'}
-                            </button>
-                          ) : (
-                            <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium text-slate-400 bg-slate-50 border border-slate-200">
-                              ⚪ No Email
-                            </span>
-                          )
-                        )}
-                      </td>
-
-                      {/* AI Draft Preview */}
-                      <td className="px-4 py-3.5 max-w-xs">
-                        {lead.aiDraftSubject ? (
-                          <button
-                            onClick={() => openDraftModal(lead)}
-                            className="p-2 bg-purple-50/60 hover:bg-purple-100/70 border border-purple-200/80 rounded-xl text-left block w-full transition-all group"
-                          >
-                            <div className="flex items-center justify-between gap-1 mb-0.5">
-                              <span className="text-[10px] font-bold text-purple-700 bg-purple-100 px-1.5 py-0.2 rounded">
-                                📝 JetDigital AI Draft
+                      {/* ICP Match Score */}
+                      <td className="px-4 py-4 text-center" onClick={(e) => e.stopPropagation()}>
+                        {(() => {
+                          const { score, label, badgeClass } = computeLeadIcpScore(lead);
+                          return (
+                            <div className="inline-flex flex-col items-center gap-1">
+                              <span className={`px-2.5 py-0.5 rounded-full text-[11px] border ${badgeClass}`}>
+                                {label} ({score}%)
                               </span>
-                              <span className="text-[10px] text-purple-600 group-hover:underline font-semibold">
-                                Review →
-                              </span>
+                              <div className="w-16 h-1.5 bg-slate-100 rounded-full overflow-hidden border border-slate-200">
+                                <div
+                                  className={`h-full rounded-full ${score >= 85 ? 'bg-emerald-500' : score >= 70 ? 'bg-indigo-500' : 'bg-blue-400'}`}
+                                  style={{ width: `${score}%` }}
+                                />
+                              </div>
                             </div>
-                            <p className="font-semibold text-slate-900 truncate text-[11px]">
-                              {lead.aiDraftSubject}
-                            </p>
-                            <p className="text-[10px] text-slate-500 truncate mt-0.5">
-                              {lead.aiDraftBody?.slice(0, 70)}...
-                            </p>
-                          </button>
-                        ) : (
-                          <button
-                            onClick={() => handleGenerateDrafts([lead.id])}
-                            disabled={isDrafting || lead.verifyStatus === 'INVALID'}
-                            className="px-2.5 py-1 bg-slate-100 hover:bg-purple-50 hover:text-purple-700 text-slate-600 text-[10px] font-bold rounded-lg transition-colors border border-slate-200 disabled:opacity-40"
-                          >
-                            {isDrafting ? 'Writing AI...' : '🤖 Generate AI Copy'}
-                          </button>
-                        )}
+                          );
+                        })()}
                       </td>
 
-                      {/* Actions */}
-                      <td className="px-4 py-3.5 text-right space-x-1.5 whitespace-nowrap">
-                        {lead.aiDraftSubject && (
-                          <button
-                            onClick={() => openDraftModal(lead)}
-                            className="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-800 text-[11px] font-bold rounded-lg transition-colors"
-                          >
-                            Review
-                          </button>
-                        )}
+                      {/* CRM Status / Action */}
+                      <td className="px-4 py-4 text-right whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
                         {lead.status === 'CONVERTED' && lead.convertedCardId ? (
                           <Link
                             href={`/dashboard?cardId=${lead.convertedCardId}`}
-                            className="px-2.5 py-1 bg-emerald-50 text-emerald-800 border border-emerald-300 text-[11px] font-bold rounded-lg hover:bg-emerald-100 transition-colors inline-flex items-center gap-1 shadow-2xs"
+                            className="px-3 py-1.5 bg-emerald-50 text-emerald-800 border border-emerald-300 text-xs font-bold rounded-xl hover:bg-emerald-100 transition-colors inline-flex items-center gap-1 shadow-2xs"
                             title="View Card on Kanban CRM Board"
                           >
                             <span>✓ In CRM</span>
@@ -1617,11 +1842,12 @@ export default function CampaignWorkspacePage({
                         ) : (
                           <button
                             onClick={() => openPushCrmModal([lead.id])}
-                            disabled={isPushing || lead.verifyStatus === 'INVALID'}
-                            className="px-2.5 py-1 bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-300 text-[11px] font-bold rounded-lg transition-colors disabled:opacity-40"
-                            title="Convert immediately to Kanban CRM Lead Card"
+                            disabled={isPushing}
+                            className="px-3 py-1.5 bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-300 text-xs font-bold rounded-xl transition-colors inline-flex items-center gap-1 shadow-2xs disabled:opacity-40"
+                            title="Push directly into Kanban CRM Fresh leads column"
                           >
-                            <span>📋 Push CRM</span>
+                            <span>📋</span>
+                            <span>Push CRM</span>
                           </button>
                         )}
                       </td>
@@ -1680,16 +1906,20 @@ export default function CampaignWorkspacePage({
             </div>
 
             {/* Target Count & Summary */}
-            <div className="p-3.5 bg-indigo-50/80 border border-indigo-100 rounded-xl text-xs space-y-1">
+            <div className="p-3.5 bg-indigo-50/80 border border-indigo-100 rounded-xl text-xs space-y-1.5">
               <div className="flex items-center justify-between font-bold text-indigo-950">
-                <span>Eligible Prospects to Push:</span>
+                <span>Eligible Leads to Push:</span>
                 <span className="bg-indigo-600 text-white px-2 py-0.5 rounded-full text-[11px]">
                   {crmTargetLeadIds.length} Leads
                 </span>
               </div>
               <p className="text-[11px] text-indigo-700/80">
-                Each prospect will be converted into a Kanban card with their contact info, LinkedIn link, and generated AI pitch draft.
+                Leads are saved into your Kanban board under <strong>&quot;Fresh leads&quot;</strong>.
               </p>
+              <div className="pt-1.5 border-t border-indigo-100/80 text-[11px] font-semibold text-emerald-800 flex items-center gap-1">
+                <span>🛡️</span>
+                <span>Safe Mode Active: Pushing will NOT send emails. Leads remain as pending drafts until you review and click &quot;Start Sending All&quot;.</span>
+              </div>
             </div>
 
             {/* Board & Column Selectors */}
@@ -1826,6 +2056,58 @@ export default function CampaignWorkspacePage({
               </div>
             </div>
 
+            {/* Sequence Tabs for Initial + 3 Follow-ups (Point 13) */}
+            <div className="flex items-center gap-1.5 border-b border-slate-200 pb-2 overflow-x-auto">
+              <button
+                type="button"
+                onClick={() => setActiveDraftTab(0)}
+                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                  activeDraftTab === 0
+                    ? 'bg-primary-600 text-white shadow-2xs'
+                    : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                }`}
+              >
+                ✉️ Initial Cold Email
+              </button>
+              <button
+                type="button"
+                onClick={() => setActiveDraftTab(1)}
+                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                  activeDraftTab === 1
+                    ? 'bg-indigo-600 text-white shadow-2xs'
+                    : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                }`}
+              >
+                ⚡ Follow-Up #1
+              </button>
+              {(campaign?.dripStepsCount || 1) >= 2 && (
+                <button
+                  type="button"
+                  onClick={() => setActiveDraftTab(2)}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                    activeDraftTab === 2
+                      ? 'bg-indigo-600 text-white shadow-2xs'
+                      : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                  }`}
+                >
+                  ⚡ Follow-Up #2
+                </button>
+              )}
+              {(campaign?.dripStepsCount || 1) >= 3 && (
+                <button
+                  type="button"
+                  onClick={() => setActiveDraftTab(3)}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                    activeDraftTab === 3
+                      ? 'bg-indigo-600 text-white shadow-2xs'
+                      : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                  }`}
+                >
+                  ⚡ Follow-Up #3 (Closing)
+                </button>
+              )}
+            </div>
+
             {/* Email Edit Inputs */}
             <div className="space-y-3">
               <div>
@@ -1843,8 +2125,12 @@ export default function CampaignWorkspacePage({
 
               <div>
                 <div className="flex items-center justify-between mb-1">
-                  <label className="block text-xs font-semibold text-slate-700">Subject Line</label>
-                  {Boolean(selectedLead.metadata && (selectedLead.metadata as any).alternativeSubject) && (
+                  <label className="block text-xs font-semibold text-slate-700">
+                    {activeDraftTab === 0
+                      ? 'Subject Line (Initial Outreach)'
+                      : `Subject Line (Follow-up #${activeDraftTab})`}
+                  </label>
+                  {activeDraftTab === 0 && Boolean(selectedLead.metadata && (selectedLead.metadata as any).alternativeSubject) && (
                     <button
                       type="button"
                       onClick={() => setEditSubject((selectedLead.metadata as any).alternativeSubject)}
@@ -1857,44 +2143,78 @@ export default function CampaignWorkspacePage({
                 </div>
                 <input
                   type="text"
-                  value={editSubject}
-                  onChange={(e) => setEditSubject(e.target.value)}
+                  value={
+                    activeDraftTab === 0
+                      ? editSubject
+                      : activeDraftTab === 1
+                      ? editDripSubject1
+                      : activeDraftTab === 2
+                      ? editDripSubject2
+                      : editDripSubject3
+                  }
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    if (activeDraftTab === 0) setEditSubject(val);
+                    else if (activeDraftTab === 1) setEditDripSubject1(val);
+                    else if (activeDraftTab === 2) setEditDripSubject2(val);
+                    else if (activeDraftTab === 3) setEditDripSubject3(val);
+                  }}
                   className="w-full px-3 py-2 border border-slate-300 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-primary-500 font-semibold text-slate-800"
                 />
               </div>
 
               {/* Custom AI Regeneration Guidance */}
-              <div className="p-3 bg-purple-50/50 rounded-xl border border-purple-100 space-y-2">
-                <div className="flex items-center justify-between">
-                  <label className="text-[11px] font-bold text-purple-900 flex items-center gap-1">
-                    <span>✨</span>
-                    <span>AI Regeneration Directives for this Lead (Optional)</span>
-                  </label>
-                  <button
-                    type="button"
-                    onClick={handleRegenerateModalDraft}
-                    disabled={regeneratingDraft}
-                    className="text-[11px] text-purple-700 hover:text-purple-900 font-bold flex items-center gap-1 bg-white px-2 py-1 rounded-lg border border-purple-200 shadow-2xs"
-                  >
-                    <span>{regeneratingDraft ? '⏳' : '⚡'}</span>
-                    <span>{regeneratingDraft ? 'Regenerating AI...' : 'Regenerate AI Copy'}</span>
-                  </button>
+              {activeDraftTab === 0 && (
+                <div className="p-3 bg-purple-50/50 rounded-xl border border-purple-100 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <label className="text-[11px] font-bold text-purple-900 flex items-center gap-1">
+                      <span>✨</span>
+                      <span>AI Regeneration Directives for this Lead (Optional)</span>
+                    </label>
+                    <button
+                      type="button"
+                      onClick={handleRegenerateModalDraft}
+                      disabled={regeneratingDraft}
+                      className="text-[11px] text-purple-700 hover:text-purple-900 font-bold flex items-center gap-1 bg-white px-2 py-1 rounded-lg border border-purple-200 shadow-2xs"
+                    >
+                      <span>{regeneratingDraft ? '⏳' : '⚡'}</span>
+                      <span>{regeneratingDraft ? 'Regenerating AI...' : 'Regenerate AI Copy'}</span>
+                    </button>
+                  </div>
+                  <input
+                    type="text"
+                    value={modalCustomPrompt}
+                    onChange={(e) => setModalCustomPrompt(e.target.value)}
+                    placeholder="e.g. Make it under 80 words, emphasize cloud security, or use a conversational tone."
+                    className="w-full px-3 py-1.5 border border-purple-200 bg-white rounded-lg text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-purple-500"
+                  />
                 </div>
-                <input
-                  type="text"
-                  value={modalCustomPrompt}
-                  onChange={(e) => setModalCustomPrompt(e.target.value)}
-                  placeholder="e.g. Make it under 80 words, emphasize cloud security, or use a conversational tone."
-                  className="w-full px-3 py-1.5 border border-purple-200 bg-white rounded-lg text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-purple-500"
-                />
-              </div>
+              )}
 
               <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">Email Pitch Body</label>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">
+                  {activeDraftTab === 0
+                    ? 'Email Pitch Body (Initial Touch)'
+                    : `Follow-up Message Body (Step #${activeDraftTab})`}
+                </label>
                 <textarea
                   rows={7}
-                  value={editBody}
-                  onChange={(e) => setEditBody(e.target.value)}
+                  value={
+                    activeDraftTab === 0
+                      ? editBody
+                      : activeDraftTab === 1
+                      ? editDripBody1
+                      : activeDraftTab === 2
+                      ? editDripBody2
+                      : editDripBody3
+                  }
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    if (activeDraftTab === 0) setEditBody(val);
+                    else if (activeDraftTab === 1) setEditDripBody1(val);
+                    else if (activeDraftTab === 2) setEditDripBody2(val);
+                    else if (activeDraftTab === 3) setEditDripBody3(val);
+                  }}
                   className="w-full px-3 py-2.5 border border-slate-300 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-primary-500 text-slate-800 leading-relaxed font-sans"
                 />
               </div>
@@ -2389,6 +2709,55 @@ export default function CampaignWorkspacePage({
               </div>
             </form>
           </div>
+        </div>
+      )}
+
+      {/* Sticky Bottom Lead Selection Action Bar (UX Improvement for Lead Selection) */}
+      {selectedIds.length > 0 && (
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-40 bg-slate-900/95 backdrop-blur-md text-white px-5 py-3 rounded-2xl shadow-2xl border border-slate-700/80 flex items-center gap-3 sm:gap-4 animate-in slide-in-from-bottom-5 max-w-[95vw] overflow-x-auto">
+          <div className="flex items-center gap-2 flex-shrink-0">
+            <span className="w-6 h-6 rounded-full bg-indigo-600 text-white flex items-center justify-center text-xs font-bold shadow-2xs">
+              {selectedIds.length}
+            </span>
+            <span className="text-xs font-semibold text-slate-200">
+              Leads Selected
+            </span>
+          </div>
+
+          <div className="h-4 w-px bg-slate-700 flex-shrink-0" />
+
+          <button
+            onClick={() => openPushCrmModal(selectedIds)}
+            disabled={Boolean(actionLoading)}
+            className="px-4 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl transition-all shadow-xs flex items-center gap-1.5 cursor-pointer disabled:opacity-50 flex-shrink-0"
+          >
+            <span>📋</span>
+            <span>Push {selectedIds.length} to CRM (Fresh leads)</span>
+          </button>
+
+          <button
+            onClick={() => handleFindEmails(selectedIds)}
+            disabled={Boolean(actionLoading)}
+            className="px-3.5 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold rounded-xl transition-all shadow-xs flex items-center gap-1.5 cursor-pointer disabled:opacity-50 flex-shrink-0"
+          >
+            <span>📬</span>
+            <span>Get Emails</span>
+          </button>
+
+          <button
+            onClick={() => copyLeadsToClipboard(selectedLeadsList, 'Selected Leads')}
+            className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-medium rounded-xl transition-all flex items-center gap-1 flex-shrink-0"
+            title="Copy selected leads to clipboard"
+          >
+            <span>📋 Copy</span>
+          </button>
+
+          <button
+            onClick={clearSelection}
+            className="text-xs text-slate-400 hover:text-white transition-colors underline ml-1 flex-shrink-0 cursor-pointer"
+          >
+            Deselect
+          </button>
         </div>
       )}
     </div>

@@ -48,6 +48,8 @@ export async function GET(req: NextRequest) {
 
     const dispatchedMap = new Map<string, number>();
     const convertedMap = new Map<string, number>();
+    const repliedMap = new Map<string, number>();
+    const bouncedMap = new Map<string, number>();
 
     for (const item of leadStatusGroups) {
       const cId = item.campaignId;
@@ -58,13 +60,25 @@ export async function GET(req: NextRequest) {
       if (item.status === 'CONVERTED') {
         convertedMap.set(cId, (convertedMap.get(cId) || 0) + count);
       }
+      if (item.status === 'REPLIED') {
+        repliedMap.set(cId, (repliedMap.get(cId) || 0) + count);
+      }
+      if (item.status === 'BOUNCED') {
+        bouncedMap.set(cId, (bouncedMap.get(cId) || 0) + count);
+      }
     }
 
     const formatted = campaigns.map((c) => {
-      const totalLeads = c._count.leads;
+      const prospects = c._count.leads;
       const verifiedSafe = safeCountMap.get(c.id) || 0;
-      const dispatched = dispatchedMap.get(c.id) || 0;
+      const sent = dispatchedMap.get(c.id) || 0;
       const converted = convertedMap.get(c.id) || 0;
+      const replied = repliedMap.get(c.id) || 0;
+      const bounced = bouncedMap.get(c.id) || 0;
+      const reached = Math.max(0, sent - bounced);
+      const opened = 0; // Tracking count
+      const clicked = 0; // Tracking count
+      const opportunities = converted * 100; // Estimated pipeline opportunity value
 
       return {
         id: c.id,
@@ -78,9 +92,18 @@ export async function GET(req: NextRequest) {
         account: c.account,
         accounts: c.accounts || [],
         metrics: {
-          totalLeads,
+          prospects,
+          totalLeads: prospects,
+          sent,
+          reached,
+          opened,
+          clicked,
+          replied,
+          interested: converted,
+          opportunities,
+          bounced,
           verifiedSafe,
-          dispatched,
+          dispatched: sent,
           converted,
         },
       };

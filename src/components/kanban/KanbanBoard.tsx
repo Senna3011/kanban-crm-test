@@ -449,6 +449,41 @@ export default function KanbanBoard() {
     });
   }
 
+  function handleStartSendingColumn(columnId: string, columnTitle: string) {
+    const col = columns.find((c) => c.id === columnId);
+    const count = col?.cards.length || 0;
+    if (count === 0) {
+      toast('No leads found in this column to dispatch.', { icon: 'ℹ️' });
+      return;
+    }
+
+    setConfirmDialog({
+      isOpen: true,
+      title: `Start Sending All to "${columnTitle}"?`,
+      message: `Send outreach emails to all ${count} lead(s) in "${columnTitle}"? Emails will be safely dispatched one by one to protect domain deliverability.`,
+      confirmText: `🚀 Send to ${count} Leads`,
+      variant: 'primary',
+      onConfirm: async () => {
+        setConfirmDialog((prev) => ({ ...prev, isLoading: true }));
+        try {
+          const res = await fetch('/api/cards/send-column-drafts', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ columnId }),
+          });
+          const data = await res.json();
+          if (!res.ok) throw new Error(data.error || 'Failed to dispatch column emails');
+          toast.success(data.message || `Successfully dispatched ${data.sentCount} email(s)!`);
+          fetchColumns();
+        } catch (err: any) {
+          toast.error(err.message || 'Failed to send outreach emails');
+        } finally {
+          setConfirmDialog((prev) => ({ ...prev, isOpen: false, isLoading: false }));
+        }
+      },
+    });
+  }
+
   async function handleSync() {
     setSyncing(true);
     try {
@@ -944,6 +979,7 @@ export default function KanbanBoard() {
               onToggleSelect={handleToggleSelect}
               onSelectColumn={handleSelectColumn}
               forcedSortMode={globalSortMode}
+              onStartSendingAll={handleStartSendingColumn}
             />
           ))}
         </div>

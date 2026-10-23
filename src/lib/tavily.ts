@@ -35,7 +35,7 @@ function extractTextFromHtml(html: string): string {
 /**
  * Fetch webpage content directly
  */
-async function fetchDirectWebpageContent(targetUrl: string): Promise<string | null> {
+export async function fetchDirectWebpageContent(targetUrl: string): Promise<string | null> {
   let url = targetUrl.trim();
   if (!url.startsWith('http://') && !url.startsWith('https://')) {
     url = `https://${url}`;

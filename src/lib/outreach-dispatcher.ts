@@ -524,7 +524,7 @@ export async function convertOutreachLeadToKanbanCard(params: {
     }
   }
 
-  // Find target column based on custom boardId/columnId or default board
+  // Find target column based on custom boardId/columnId or default board with "Fresh leads" column
   let targetColumn;
 
   if (params.columnId) {
@@ -533,31 +533,29 @@ export async function convertOutreachLeadToKanbanCard(params: {
     });
   }
 
-  if (!targetColumn && params.boardId) {
-    const targetBoard = await prisma.board.findFirst({
-      where: { id: params.boardId, tenantId: params.tenantId },
-      include: { columns: { orderBy: { position: 'asc' } } },
-    });
-    if (targetBoard && targetBoard.columns.length > 0) {
-      targetColumn = targetBoard.columns.find((c) => c.title.toLowerCase() === 'leads') || targetBoard.columns[0];
-    }
-  }
-
   if (!targetColumn) {
-    // Find or create primary board
-    let board = await prisma.board.findFirst({
-      where: { tenantId: params.tenantId },
-      include: { columns: { orderBy: { position: 'asc' } } },
-    });
+    let board: any = null;
+    if (params.boardId) {
+      board = await prisma.board.findFirst({
+        where: { id: params.boardId, tenantId: params.tenantId },
+        include: { columns: { orderBy: { position: 'asc' } } },
+      });
+    }
+    if (!board) {
+      board = await prisma.board.findFirst({
+        where: { tenantId: params.tenantId },
+        include: { columns: { orderBy: { position: 'asc' } } },
+      });
+    }
 
     if (!board) {
       board = await prisma.board.create({
         data: {
-          title: 'Main Sales Board',
+          title: 'Main Board',
           tenantId: params.tenantId,
           columns: {
             create: [
-              { title: 'Leads', position: 0, color: '#3b82f6', isSystem: true },
+              { title: 'Fresh leads', position: 0, color: '#6366f1', isSystem: true },
               { title: 'In Progress', position: 1, color: '#f59e0b', isSystem: false },
               { title: 'Resolved', position: 2, color: '#10b981', isSystem: false },
             ],
@@ -567,7 +565,19 @@ export async function convertOutreachLeadToKanbanCard(params: {
       });
     }
 
-    targetColumn = board.columns.find((c) => c.title.toLowerCase() === 'leads') || board.columns[0];
+    targetColumn = board.columns.find((c: any) => c.title.toLowerCase() === 'fresh leads');
+    if (!targetColumn) {
+      // Auto-create "Fresh leads" column in the board
+      const maxPosition = board.columns.reduce((max: number, col: any) => Math.max(max, col.position), -1);
+      targetColumn = await prisma.column.create({
+        data: {
+          title: 'Fresh leads',
+          position: maxPosition + 1,
+          color: '#6366f1',
+          boardId: board.id,
+        },
+      });
+    }
   }
 
   // Find an active email config to attach if available
