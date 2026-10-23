@@ -45,6 +45,7 @@ export default function NewOutreachCampaignPage() {
   const [selectedIndustries, setSelectedIndustries] = useState<string[]>([
     'Information Technology & Services',
   ]);
+  const [customIndustryInput, setCustomIndustryInput] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
   const [leadCount, setLeadCount] = useState(10);
   const [icpChatInput, setIcpChatInput] = useState('');
@@ -540,40 +541,109 @@ export default function NewOutreachCampaignPage() {
                   </span>
                 </div>
 
-                <div className="flex flex-wrap gap-1.5 p-3 bg-slate-50 border border-slate-200 rounded-xl">
-                  {INDUSTRY_OPTIONS.map((ind) => {
-                    const isSelected = selectedIndustries.includes(ind);
-                    return (
-                      <button
-                        key={ind}
-                        type="button"
-                        onClick={() => {
-                          if (ind === 'All Industries (Broad)') {
-                            setSelectedIndustries(['All Industries (Broad)']);
-                            setTargetIndustry('All Industries (Broad)');
-                            return;
+                <div className="space-y-2.5 p-3.5 bg-slate-50 border border-slate-200 rounded-xl">
+                  <div className="flex flex-wrap gap-1.5">
+                    {INDUSTRY_OPTIONS.map((ind) => {
+                      const isSelected = selectedIndustries.includes(ind);
+                      return (
+                        <button
+                          key={ind}
+                          type="button"
+                          onClick={() => {
+                            if (ind === 'All Industries (Broad)') {
+                              setSelectedIndustries(['All Industries (Broad)']);
+                              setTargetIndustry('All Industries (Broad)');
+                              return;
+                            }
+                            let updated: string[];
+                            if (isSelected) {
+                              updated = selectedIndustries.filter((i) => i !== ind);
+                              if (updated.length === 0) updated = ['All Industries (Broad)'];
+                            } else {
+                              updated = [...selectedIndustries.filter((i) => i !== 'All Industries (Broad)'), ind];
+                            }
+                            setSelectedIndustries(updated);
+                            setTargetIndustry(updated.join(', '));
+                          }}
+                          className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all border cursor-pointer ${
+                            isSelected
+                              ? 'bg-primary-600 text-white border-primary-600 shadow-2xs'
+                              : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-100 hover:border-slate-300'
+                          }`}
+                        >
+                          {isSelected ? '✓ ' : '+ '}
+                          {ind}
+                        </button>
+                      );
+                    })}
+
+                    {/* Custom Industry Tags added by user */}
+                    {selectedIndustries
+                      .filter((ind) => !INDUSTRY_OPTIONS.includes(ind))
+                      .map((customInd) => (
+                        <span
+                          key={customInd}
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold bg-indigo-600 text-white shadow-2xs"
+                        >
+                          <span>✓ {customInd}</span>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const updated = selectedIndustries.filter((i) => i !== customInd);
+                              const finalInd = updated.length > 0 ? updated : ['All Industries (Broad)'];
+                              setSelectedIndustries(finalInd);
+                              setTargetIndustry(finalInd.join(', '));
+                            }}
+                            className="hover:text-red-200 font-bold ml-0.5 text-xs"
+                            title="Remove custom industry"
+                          >
+                            ✕
+                          </button>
+                        </span>
+                      ))}
+                  </div>
+
+                  {/* Add Custom Industry Input Box */}
+                  <div className="flex items-center gap-2 pt-2 border-t border-slate-200/70">
+                    <input
+                      type="text"
+                      placeholder="Add custom niche industry (e.g. Dental Clinics, Solar Energy, B2B SaaS)..."
+                      value={customIndustryInput}
+                      onChange={(e) => setCustomIndustryInput(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          e.preventDefault();
+                          if (customIndustryInput.trim()) {
+                            const val = customIndustryInput.trim();
+                            if (!selectedIndustries.includes(val)) {
+                              const updated = [...selectedIndustries.filter((i) => i !== 'All Industries (Broad)'), val];
+                              setSelectedIndustries(updated);
+                              setTargetIndustry(updated.join(', '));
+                            }
+                            setCustomIndustryInput('');
                           }
-                          let updated: string[];
-                          if (isSelected) {
-                            updated = selectedIndustries.filter((i) => i !== ind);
-                            if (updated.length === 0) updated = ['All Industries (Broad)'];
-                          } else {
-                            updated = [...selectedIndustries.filter((i) => i !== 'All Industries (Broad)'), ind];
+                        }
+                      }}
+                      className="flex-1 px-3 py-1.5 bg-white border border-slate-300 rounded-lg text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-primary-500"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (customIndustryInput.trim()) {
+                          const val = customIndustryInput.trim();
+                          if (!selectedIndustries.includes(val)) {
+                            const updated = [...selectedIndustries.filter((i) => i !== 'All Industries (Broad)'), val];
+                            setSelectedIndustries(updated);
+                            setTargetIndustry(updated.join(', '));
                           }
-                          setSelectedIndustries(updated);
-                          setTargetIndustry(updated.join(', '));
-                        }}
-                        className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all border cursor-pointer ${
-                          isSelected
-                            ? 'bg-primary-600 text-white border-primary-600 shadow-2xs'
-                            : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-100 hover:border-slate-300'
-                        }`}
-                      >
-                        {isSelected ? '✓ ' : '+ '}
-                        {ind}
-                      </button>
-                    );
-                  })}
+                          setCustomIndustryInput('');
+                        }
+                      }}
+                      className="px-3 py-1.5 bg-slate-800 hover:bg-slate-900 text-white text-xs font-bold rounded-lg transition-colors cursor-pointer"
+                    >
+                      + Add Niche
+                    </button>
+                  </div>
                 </div>
               </div>
 

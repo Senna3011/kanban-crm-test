@@ -53,7 +53,20 @@ function buildDiversifiedDorkQueries(params: OutscraperSearchParams, limit: numb
   const location = (params.location || 'Indonesia').trim();
   const isIndonesia = location.toLowerCase().includes('indonesia') || location.toLowerCase().includes('jakarta');
   const locFilter = isIndonesia ? '"Indonesia"' : `"${location}"`;
-  const indFilter = (params.industry && !params.industry.toLowerCase().includes('all')) ? ` "${params.industry.trim()}"` : '';
+
+  // Format multi-industry as Boolean OR: ("Industry A" OR "Industry B")
+  const formatIndustryFilter = (rawIndustry?: string): string => {
+    if (!rawIndustry || rawIndustry.toLowerCase().includes('all')) return '';
+    const parts = rawIndustry
+      .split(',')
+      .map((p) => p.trim())
+      .filter((p) => Boolean(p) && !p.toLowerCase().includes('all'));
+    if (parts.length === 0) return '';
+    if (parts.length === 1) return ` "${parts[0]}"`;
+    return ` (${parts.map((p) => `"${p}"`).join(' OR ')})`;
+  };
+
+  const indFilter = formatIndustryFilter(params.industry);
 
   if (params.query) {
     return [

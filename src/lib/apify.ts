@@ -202,7 +202,20 @@ function buildTargetSearchQuery(params: ApifySearchParams, isTargetingIndonesia:
 
   const role = (params.role || 'Executive').trim();
   const loc = (params.location || (isTargetingIndonesia ? 'Indonesia' : 'United States')).trim();
-  const industry = (params.industry && !params.industry.toLowerCase().includes('all')) ? params.industry.trim() : '';
+  
+  // Format multi-industry as Boolean OR: ("Industry A" OR "Industry B")
+  const formatIndustryFilter = (rawIndustry?: string): string => {
+    if (!rawIndustry || rawIndustry.toLowerCase().includes('all')) return '';
+    const parts = rawIndustry
+      .split(',')
+      .map((p) => p.trim())
+      .filter((p) => Boolean(p) && !p.toLowerCase().includes('all'));
+    if (parts.length === 0) return '';
+    if (parts.length === 1) return ` "${parts[0]}"`;
+    return ` (${parts.map((p) => `"${p}"`).join(' OR ')})`;
+  };
+
+  const indFilter = formatIndustryFilter(params.industry);
 
   // For small batches (limit <= 10), use single Boolean OR query
   if (isSmallBatch) {
@@ -222,7 +235,6 @@ function buildTargetSearchQuery(params: ApifySearchParams, isTargetingIndonesia:
     }
 
     const locFilter = isTargetingIndonesia ? '"Indonesia"' : loc ? `"${loc}"` : '"United States"';
-    const indFilter = industry ? ` "${industry}"` : '';
 
     return `site:linkedin.com/in/ ${queryRole} ${locFilter}${indFilter}`.trim();
   }
@@ -244,9 +256,9 @@ function buildTargetSearchQuery(params: ApifySearchParams, isTargetingIndonesia:
 
   for (const r of roleSynonyms.slice(0, 3)) {
     if (isTargetingIndonesia) {
-      queries.push(`site:linkedin.com/in/ ${r} Indonesia`);
+      queries.push(`site:linkedin.com/in/ ${r} Indonesia${indFilter}`);
     } else {
-      queries.push(`site:linkedin.com/in/ ${r} ${loc ? loc : 'United States'}`);
+      queries.push(`site:linkedin.com/in/ ${r} ${loc ? loc : 'United States'}${indFilter}`);
     }
   }
 
