@@ -478,6 +478,11 @@ export default function CardDetailPanel({ card, onClose }: Props) {
         }
 
         const addresses: string[] = [];
+        const cardRecipient = ((card.metadata as any)?.toEmail || (card.metadata as any)?.deliveredTo)?.toLowerCase()?.trim();
+        if (cardRecipient && cardRecipient.includes('@')) {
+          addresses.push(cardRecipient);
+        }
+
         if (configRes.status === 'fulfilled' && configRes.value.ok) {
           const configs = await configRes.value.json();
           if (Array.isArray(configs)) {
@@ -494,7 +499,7 @@ export default function CardDetailPanel({ card, onClose }: Props) {
         const uniqueAddrs = [...new Set(addresses)] as string[];
         setFromAddresses(uniqueAddrs);
         if (uniqueAddrs.length > 0) {
-          setSelectedFrom((prev) => prev || uniqueAddrs[0]);
+          setSelectedFrom((prev) => prev || (cardRecipient && uniqueAddrs.includes(cardRecipient) ? cardRecipient : uniqueAddrs[0]));
         }
 
         if (threadRes.status === 'fulfilled' && threadRes.value.ok) {
@@ -743,6 +748,13 @@ export default function CardDetailPanel({ card, onClose }: Props) {
                   <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-slate-700 bg-slate-200/80 px-2.5 py-0.5 rounded-full">
                     <span className="w-1.5 h-1.5 rounded-full bg-primary-600" />
                     {columnName}
+                  </span>
+                )}
+
+                {Boolean((card.metadata as any)?.toEmail) && (
+                  <span className="inline-flex items-center gap-1 text-[11px] font-medium text-indigo-750 bg-indigo-50 border border-indigo-200/80 px-2.5 py-0.5 rounded-full" title="Delivered to team alias">
+                    <span>📫</span>
+                    <span>To: {(card.metadata as any).toEmail}</span>
                   </span>
                 )}
 

@@ -10,21 +10,20 @@ import toast from 'react-hot-toast';
 type BoardItem = { id: string; title: string };
 
 type EmailValues = {
-	  id?: string;
-	  name?: string;
-	  boardId?: string;
-	  authType?: string;
-	  hasOAuthToken?: boolean;
-	  imapHost: string;
-	  imapPort: number;
-	  imapUser: string;
-	  imapPass: string;
-	  smtpHost: string;
-	  smtpPort: number;
-	  smtpUser: string;
-	  smtpPass: string;
-	  teamAliases?: string;
-	};
+  id?: string;
+  name?: string;
+  boardId?: string;
+  authType?: string;
+  hasOAuthToken?: boolean;
+  imapHost: string;
+  imapPort: number;
+  imapUser: string;
+  imapPass: string;
+  smtpHost: string;
+  smtpPort: number;
+  smtpUser: string;
+  smtpPass: string;
+};
 
 const PRESETS: Record<string, { name: string; icon: string; imapHost: string; imapPort: number; smtpHost: string; smtpPort: number; hint: string }> = {
   zoho: {
@@ -372,24 +371,6 @@ export default function EmailConfigForm({ initial, boards = [], isNew = false }:
             <p className="text-[11px] text-primary-700 font-medium mt-1">💡 {activePresetInfo.hint}</p>
           </div>
         </div>
-      </div>
-
-      {/* Team Aliases / Shared Mailboxes Support */}
-      <div className="p-4 bg-indigo-50/50 border border-indigo-100 rounded-xl space-y-2">
-        <label className="block text-xs font-bold text-indigo-950 uppercase tracking-wider flex items-center gap-1.5">
-          <span>👥</span>
-          <span>Associated Team Aliases / Shared Mailboxes (Optional)</span>
-        </label>
-        <textarea
-          rows={2}
-          value={form.teamAliases || ''}
-          onChange={(e) => setForm((prev) => ({ ...prev, teamAliases: e.target.value }))}
-          placeholder="e.g., jdp-elite-team@jetdigitalpro.com, jdp-gold-team@jetdigitalpro.com, jdp-diamond-team@jetdigitalpro.com"
-          className="w-full px-3 py-2 border border-indigo-200 rounded-xl text-xs bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500 text-slate-800"
-        />
-        <p className="text-[11px] text-indigo-700/80">
-          Paste comma-separated team email aliases. The system will automatically provision separate inbox configurations for each team alias using this master account's password.
-        </p>
       </div>
 
       {/* Advanced Server Ports & Hosts Details */}

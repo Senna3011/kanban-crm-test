@@ -69,15 +69,43 @@ const DEFAULT_FOLDER_MAPPING: Record<string, string> = {
   'Nell': 'Nell VH',
 };
 
-async function resolveBoard(tenantId: string, emailConfigId?: string, toEmail?: string, folder?: string) {
-  // 1. If the email config is directly linked to a board, route there first
-  if (emailConfigId) {
-    const config = await prisma.emailConfig.findUnique({
-      where: { id: emailConfigId },
-      include: { board: true },
-    });
-    if (config?.board) return config.board;
+// Generic tokens to exclude when extracting distinctive team keywords
+const GENERIC_PREFIX_TOKENS = new Set([
+  'jdp', 'team', 'mail', 'inbox', 'group', 'crm', 'admin', 'info', 'contact', 'office', 'help', 'no-reply', 'noreply'
+]);
+
+function extractTeamKeyword(email: string): { keyword?: string; autoTitle?: string; isTeamAlias: boolean } {
+  if (!email || !email.includes('@')) return { isTeamAlias: false };
+  const prefix = email.split('@')[0].toLowerCase().trim();
+  const tokens = prefix.split(/[-_.]+/).filter(Boolean);
+
+  const isTeam = tokens.includes('team') || prefix.startsWith('jdp-') || prefix.includes('group');
+  const meaningfulTokens = tokens.filter((t) => !GENERIC_PREFIX_TOKENS.has(t));
+
+  const keyword = meaningfulTokens[0];
+  let autoTitle: string | undefined;
+
+  if (meaningfulTokens.length > 0) {
+    const capitalized = meaningfulTokens.map((t) => t.charAt(0).toUpperCase() + t.slice(1)).join(' ');
+    autoTitle = isTeam ? `${capitalized} Team` : capitalized;
+  } else if (isTeam) {
+    autoTitle = 'Team Mailbox';
   }
+
+  return { keyword, autoTitle, isTeamAlias: isTeam || Boolean(keyword) };
+}
+
+async function resolveBoard(
+  tenantId: string,
+  emailConfigId?: string,
+  toEmail?: string,
+  folder?: string,
+  candidateRecipients: string[] = []
+) {
+  // 1. Gather all candidate recipient emails (to, deliveredTo, cc, etc.)
+  const allRecipients = Array.from(
+    new Set([toEmail, ...candidateRecipients].filter(Boolean).map((e) => e!.toLowerCase().trim()))
+  );
 
   const tenant = await prisma.tenant.findUnique({ where: { id: tenantId }, select: { companyInfo: true } });
   let routing: Record<string, string> = {};
@@ -90,51 +118,112 @@ async function resolveBoard(tenantId: string, emailConfigId?: string, toEmail?: 
     }
   } catch {}
 
-  // 2. Try recipient-based routing (e.g. toEmail = "nell@jetdigitalpro.com" -> board titled "nell@jetdigitalpro.com" or "Nell VH")
-  if (toEmail) {
-    const cleanTo = toEmail.trim().toLowerCase();
-    if (routing[cleanTo]) {
-      const board = await prisma.board.findFirst({ where: { tenantId, title: routing[cleanTo] } });
-      if (board) return board;
+  // Fetch all existing boards in this tenant
+  const tenantBoards = await prisma.board.findMany({ where: { tenantId } });
+
+  // 2. PRIORITY 1: Check if any candidate recipient matches a team routing or existing board
+  for (const recipient of allRecipients) {
+    // 2a. Explicit routing in companyInfo
+    if (routing[recipient]) {
+      const match = tenantBoards.find((b) => b.title.toLowerCase() === routing[recipient].toLowerCase());
+      if (match) return match;
     }
 
-    // Direct match: board title matches toEmail exactly or matches username part before @
-    const directToBoard = await prisma.board.findFirst({
-      where: {
-        tenantId,
-        OR: [
-          { title: { equals: cleanTo, mode: 'insensitive' } },
-          { title: { equals: cleanTo.split('@')[0], mode: 'insensitive' } },
-        ],
-      },
+    // 2b. Exact board title match with email or prefix
+    const prefix = recipient.split('@')[0];
+    const exactMatch = tenantBoards.find(
+      (b) =>
+        b.title.toLowerCase() === recipient ||
+        b.title.toLowerCase() === prefix ||
+        b.title.toLowerCase() === prefix.replace(/[-_.]+/g, ' ')
+    );
+    if (exactMatch) return exactMatch;
+
+    // 2c. Distinctive Team Keyword Match (e.g. jdp-diamond-team -> "Diamond" matches "Diamond Team")
+    const { keyword } = extractTeamKeyword(recipient);
+    if (keyword && keyword.length >= 3) {
+      const keywordMatch = tenantBoards.find((b) => {
+        const boardLower = b.title.toLowerCase();
+        return boardLower.includes(keyword) || prefix.includes(boardLower);
+      });
+      if (keywordMatch) return keywordMatch;
+    }
+  }
+
+  // 3. PRIORITY 2: Folder-based routing (e.g. IMAP folder 'Elite' -> 'Elite Team', 'Nell' -> 'Nell VH')
+  if (folder && folder.toUpperCase() !== 'INBOX') {
+    if (folderRouting[folder]) {
+      const match = tenantBoards.find((b) => b.title.toLowerCase() === folderRouting[folder].toLowerCase());
+      if (match) return match;
+    }
+
+    const folderMatch = tenantBoards.find(
+      (b) => b.title.toLowerCase() === folder.toLowerCase() || b.title.toLowerCase().includes(folder.toLowerCase())
+    );
+    if (folderMatch) return folderMatch;
+
+    if (DEFAULT_FOLDER_MAPPING[folder]) {
+      const defaultMatch = tenantBoards.find(
+        (b) => b.title.toLowerCase() === DEFAULT_FOLDER_MAPPING[folder].toLowerCase()
+      );
+      if (defaultMatch) return defaultMatch;
+    }
+  }
+
+  // 4. PRIORITY 3: Auto-provision a new Board if this email is addressed to an unrecognized team alias
+  // (e.g. jdp-ruby-team@... -> auto-creates "Ruby Team" board so user NEVER has to configure aliases manually!)
+  for (const recipient of allRecipients) {
+    const { keyword, autoTitle, isTeamAlias } = extractTeamKeyword(recipient);
+    if (isTeamAlias && autoTitle && autoTitle !== 'Team Mailbox') {
+      try {
+        console.log(`[IMAP Poller] Auto-provisioning new board "${autoTitle}" for detected team alias: ${recipient}`);
+        const newBoard = await prisma.board.create({
+          data: { title: autoTitle, tenantId },
+        });
+
+        const defaultColumns = [
+          { title: 'General', position: 0, color: '#64748b', isSystem: false },
+          { title: 'Leads', position: 1, color: '#3b82f6', isSystem: false },
+          { title: 'Follow up 1', position: 2, color: '#f59e0b', isSystem: false },
+          { title: 'Follow up 2', position: 3, color: '#f59e0b', isSystem: false },
+          { title: 'Follow up 3', position: 4, color: '#f59e0b', isSystem: false },
+          { title: 'Fail', position: 5, color: '#ef4444', isSystem: false },
+          { title: 'Pending', position: 6, color: '#8b5cf6', isSystem: false },
+          { title: 'Success', position: 7, color: '#22c55e', isSystem: false },
+        ];
+
+        for (const col of defaultColumns) {
+          await prisma.column.create({ data: { ...col, boardId: newBoard.id } });
+        }
+
+        return newBoard;
+      } catch (boardErr: any) {
+        console.warn('[IMAP Poller] Failed to auto-provision board:', boardErr?.message);
+      }
+    }
+  }
+
+  // 5. PRIORITY 4: Explicit EmailConfig board link if configured
+  if (emailConfigId) {
+    const config = await prisma.emailConfig.findUnique({
+      where: { id: emailConfigId },
+      include: { board: true },
     });
-    if (directToBoard) return directToBoard;
+    if (config?.board) return config.board;
   }
 
-  // 3. Try tenant custom folder-based routing
-  if (folder && folderRouting[folder]) {
-    const board = await prisma.board.findFirst({ where: { tenantId, title: folderRouting[folder] } });
-    if (board) return board;
-  }
-
-  // 4. Try matching folder name directly to board title
-  if (folder) {
-    const directMatch = await prisma.board.findFirst({
-      where: { tenantId, title: { equals: folder, mode: 'insensitive' } },
-    });
-    if (directMatch) return directMatch;
-  }
-
-  // 5. Try default mapping
+  // 6. PRIORITY 5: Default INBOX mapping if folder is INBOX
   if (folder && DEFAULT_FOLDER_MAPPING[folder]) {
-    const board = await prisma.board.findFirst({ where: { tenantId, title: DEFAULT_FOLDER_MAPPING[folder] } });
-    if (board) return board;
+    const defaultBoard = tenantBoards.find(
+      (b) => b.title.toLowerCase() === DEFAULT_FOLDER_MAPPING[folder].toLowerCase()
+    );
+    if (defaultBoard) return defaultBoard;
   }
 
-  // 6. Fallback: Main Board or first board of the tenant
-  const mainBoard = await prisma.board.findFirst({ where: { tenantId, title: 'Main Board' } });
+  // 7. Fallback: Main Board or first board in tenant
+  const mainBoard = tenantBoards.find((b) => b.title.toLowerCase() === 'main board');
   if (mainBoard) return mainBoard;
-  return prisma.board.findFirst({ where: { tenantId } });
+  return tenantBoards[0] || (await prisma.board.findFirst({ where: { tenantId } }));
 }
 
 async function pollFolder(imapConfig: Record<string, string>, folder: string, tenantId: string, emailConfigId: string) {
@@ -295,13 +384,18 @@ async function pollFolder(imapConfig: Record<string, string>, folder: string, te
         console.log(`[IMAP Poller] Reply to unknown message ${msg.inReplyTo}, creating new card`);
       }
 
-      const board = await resolveBoard(tenantId, emailConfigId, msg.toEmail, folder);
+      const board = await resolveBoard(tenantId, emailConfigId, msg.toEmail, folder, msg.recipientEmails);
       if (!board) continue;
 
       const general = await prisma.column.findFirst({ where: { boardId: board.id, title: 'General' } });
       if (!general) continue;
 
       try {
+        const cardMetadata: any = {};
+        if (msg.toEmail) cardMetadata.toEmail = msg.toEmail;
+        if (msg.deliveredTo) cardMetadata.deliveredTo = msg.deliveredTo;
+        if (msg.recipientEmails && msg.recipientEmails.length > 0) cardMetadata.recipientEmails = msg.recipientEmails;
+
         const card = await prisma.card.create({
           data: {
             subject: msg.subject, fromEmail: msg.fromEmail, fromName: msg.fromName,
@@ -311,6 +405,7 @@ async function pollFolder(imapConfig: Record<string, string>, folder: string, te
             status: msg.isRead ? 'read' : 'unread',
             channel: 'email', columnId: general.id, tenantId, emailConfigId: emailConfigId,
             lastActivityAt: msg.receivedAt || new Date(),
+            metadata: Object.keys(cardMetadata).length > 0 ? cardMetadata : undefined,
           },
         });
         await prisma.activityLog.create({

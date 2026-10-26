@@ -83,7 +83,15 @@ export async function composeAndSendEmail(data: {
   });
 
   const sendFrom = fromAddress || emailConfig.smtpUser;
-  const senderDisplayName = (session.user as any).name || (session.user as any).tenantName || 'Sales Team';
+  const JDP_TEAM_NAMES: Record<string, string> = {
+    'jdp-diamond-team@jetdigitalpro.com': 'Diamond Team',
+    'jdp-elite-team@jetdigitalpro.com': 'Elite Team',
+    'jdp-gold-team@jetdigitalpro.com': 'Gold Team',
+    'jdp-premiere-team@jetdigitalpro.com': 'Premiere Team',
+    'nellvh@jetdigitalpro.com': 'Nell VH',
+  };
+  const teamDisplayName = sendFrom ? JDP_TEAM_NAMES[sendFrom.toLowerCase()] : undefined;
+  const senderDisplayName = teamDisplayName || (session.user as any).name || (session.user as any).tenantName || 'Sales Team';
   const fromHeader = `"${senderDisplayName}" <${sendFrom}>`;
 
   let info;

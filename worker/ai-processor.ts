@@ -43,7 +43,7 @@ export async function processAIClassify(data: {
   const suggestedColumn = classification.suggestedColumn || (classification.isLead ? 'Leads' : 'General');
   const currentCard = await prisma.card.findUnique({
     where: { id: cardId },
-    select: { column: { select: { boardId: true } } },
+    select: { column: { select: { boardId: true } }, metadata: true },
   });
   const boardId = currentCard?.column.boardId;
   if (!boardId) return;
@@ -53,11 +53,17 @@ export async function processAIClassify(data: {
   });
 
   if (targetColumn) {
+    const existingMeta = (typeof currentCard.metadata === 'object' && currentCard.metadata !== null)
+      ? (currentCard.metadata as Record<string, any>)
+      : {};
     await prisma.card.update({
       where: { id: cardId },
       data: {
         columnId: targetColumn.id,
-        metadata: classification as any,
+        metadata: {
+          ...existingMeta,
+          ...classification,
+        },
         lastActivityAt: new Date(),
       },
     });

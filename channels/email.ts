@@ -28,6 +28,69 @@ function createImapConnection(config: Record<string, string>): ImapFlow {
   });
 }
 
+function extractRecipientEmails(parsed: any): { primaryTo?: string; deliveredTo?: string; allRecipients: string[] } {
+  const recipients = new Set<string>();
+
+  const addAddress = (addr: any) => {
+    if (!addr) return;
+    if (typeof addr === 'string') {
+      const match = addr.match(/[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/);
+      if (match) recipients.add(match[0].toLowerCase().trim());
+    } else if (addr.address && typeof addr.address === 'string') {
+      recipients.add(addr.address.toLowerCase().trim());
+    }
+  };
+
+  const processAddressField = (field: any) => {
+    if (!field) return;
+    if (Array.isArray(field)) {
+      field.forEach((item) => {
+        if (item?.value && Array.isArray(item.value)) item.value.forEach(addAddress);
+        else addAddress(item);
+      });
+    } else if (field.value && Array.isArray(field.value)) {
+      field.value.forEach(addAddress);
+    } else {
+      addAddress(field);
+    }
+  };
+
+  processAddressField(parsed.to);
+  processAddressField(parsed.cc);
+  processAddressField(parsed.bcc);
+
+  // Check header aliases (Delivered-To, X-Original-To, Envelope-To, etc.)
+  const headerKeys = ['delivered-to', 'x-original-to', 'x-delivered-to', 'envelope-to', 'x-forwarded-to', 'x-envelope-to'];
+  let deliveredTo: string | undefined;
+
+  if (parsed.headers && typeof parsed.headers.get === 'function') {
+    for (const key of headerKeys) {
+      const val = parsed.headers.get(key);
+      if (val) {
+        if (typeof val === 'string') {
+          addAddress(val);
+          if (!deliveredTo) {
+            const m = val.match(/[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/);
+            if (m) deliveredTo = m[0].toLowerCase().trim();
+          }
+        } else if (val.text && typeof val.text === 'string') {
+          addAddress(val.text);
+          if (!deliveredTo) {
+            const m = val.text.match(/[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/);
+            if (m) deliveredTo = m[0].toLowerCase().trim();
+          }
+        }
+      }
+    }
+  }
+
+  const allRecipients = Array.from(recipients);
+  // Prefer deliveredTo or specific alias over generic recipient if available
+  const primaryTo = deliveredTo || (allRecipients.length > 0 ? allRecipients[0] : undefined);
+
+  return { primaryTo, deliveredTo, allRecipients };
+}
+
 export class EmailAdapter implements ChannelAdapter {
   readonly channel = 'email';
 
@@ -79,6 +142,8 @@ export class EmailAdapter implements ChannelAdapter {
 
           const isRead = message.flags instanceof Set && [...message.flags].some(f => f.endsWith('Seen'));
           const cleanText = sanitizeEmailBody(parsed.text, parsed.html || undefined);
+          const { primaryTo, deliveredTo, allRecipients } = extractRecipientEmails(parsed);
+          const toEmail = primaryTo || (Array.isArray(parsed.to) ? parsed.to[0]?.value[0]?.address : parsed.to?.value[0]?.address || undefined);
 
           messages.push({
             messageId,
@@ -87,7 +152,9 @@ export class EmailAdapter implements ChannelAdapter {
             inReplyTo: parsed.inReplyTo || undefined,
             fromEmail: parsed.from?.value[0]?.address || 'unknown',
             fromName: parsed.from?.value[0]?.name || undefined,
-            toEmail: Array.isArray(parsed.to) ? parsed.to[0]?.value[0]?.address : parsed.to?.value[0]?.address || undefined,
+            toEmail,
+            recipientEmails: allRecipients,
+            deliveredTo,
             subject: parsed.subject || '(No subject)',
             bodyText: cleanText,
             bodyHtml: parsed.html || undefined,
