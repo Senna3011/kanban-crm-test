@@ -34,16 +34,79 @@ export async function DELETE(
 
   const target = await prisma.board.findFirst({
     where: { id, tenantId },
+    include: {
+      columns: {
+        select: { id: true },
+      },
+    },
   });
 
   if (!target) {
     return NextResponse.json({ error: 'Board tidak ditemukan.' }, { status: 404 });
   }
 
-  // Delete board (cascade deletes columns and related cards)
-  await prisma.board.delete({
-    where: { id },
-  });
+  const columnIds = target.columns.map((c) => c.id);
 
-  return NextResponse.json({ success: true });
+  try {
+    await prisma.$transaction(async (tx) => {
+      if (columnIds.length > 0) {
+        // Find all cards in these columns
+        const cards = await tx.card.findMany({
+          where: { columnId: { in: columnIds } },
+          select: { id: true },
+        });
+        const cardIds = cards.map((c) => c.id);
+
+        if (cardIds.length > 0) {
+          // 1. Delete notifications referencing these cards
+          await tx.notification.deleteMany({
+            where: { cardId: { in: cardIds } },
+          });
+
+          // 2. Unlink spam logs referencing these cards
+          await tx.spamLog.updateMany({
+            where: { recoveredToId: { in: cardIds } },
+            data: { recoveredToId: null },
+          });
+
+          // 3. Delete activity logs and draft messages
+          await tx.activityLog.deleteMany({
+            where: { cardId: { in: cardIds } },
+          });
+          await tx.draftMessage.deleteMany({
+            where: { cardId: { in: cardIds } },
+          });
+
+          // 4. Delete all cards
+          await tx.card.deleteMany({
+            where: { id: { in: cardIds } },
+          });
+        }
+
+        // 5. Delete all columns of the board
+        await tx.column.deleteMany({
+          where: { id: { in: columnIds } },
+        });
+      }
+
+      // 6. Unlink any EmailConfig assigned to this board
+      await tx.emailConfig.updateMany({
+        where: { boardId: id },
+        data: { boardId: null },
+      });
+
+      // 7. Finally delete the board
+      await tx.board.delete({
+        where: { id },
+      });
+    });
+
+    return NextResponse.json({ success: true });
+  } catch (err: any) {
+    console.error(`[DELETE /api/boards/${id}] Error:`, err);
+    return NextResponse.json(
+      { error: err?.message || 'Gagal menghapus board karena kendala database.' },
+      { status: 500 }
+    );
+  }
 }

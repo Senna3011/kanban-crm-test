@@ -76,7 +76,7 @@ model EmailConfig {
   tenant    Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
   boardId String?
-  board   Board? @relation(fields: [boardId], references: [id])
+  board   Board? @relation(fields: [boardId], references: [id], onDelete: SetNull)
 
   cards    Card[]
   spamLogs SpamLog[]
@@ -137,7 +137,7 @@ model Card {
   updatedAt      DateTime @updatedAt
 
   columnId String
-  column   Column @relation(fields: [columnId], references: [id])
+  column   Column @relation(fields: [columnId], references: [id], onDelete: Cascade)
 
   tenantId  String
   tenant    Tenant  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
@@ -203,7 +203,7 @@ model Notification {
   user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   cardId   String?
-  card     Card?   @relation(fields: [cardId], references: [id])
+  card     Card?   @relation(fields: [cardId], references: [id], onDelete: Cascade)
 
   tenantId String
   tenant   Tenant  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
@@ -241,7 +241,7 @@ model SpamLog {
   emailConfig    EmailConfig  @relation(fields: [emailConfigId], references: [id])
 
   recoveredToId  String?
-  recoveredTo    Card?        @relation(fields: [recoveredToId], references: [id])
+  recoveredTo    Card?        @relation(fields: [recoveredToId], references: [id], onDelete: SetNull)
 }
 
 model Invitation {

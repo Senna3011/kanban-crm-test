@@ -6,6 +6,7 @@ import { useEffect, useState } from 'react';
 import { useSession } from 'next-auth/react';
 import clsx from 'clsx';
 import ConfirmDialog from '@/components/ui/ConfirmDialog';
+import toast, { Toaster } from 'react-hot-toast';
 
 const navItems = [
   { href: '/dashboard', label: 'Board', icon: '📋' },
@@ -323,13 +324,20 @@ export default function Sidebar() {
               if (activeBoard === boardToDelete.id && updated.length > 0) {
                 selectBoard(updated[0].id);
               }
+              window.dispatchEvent(new Event('board-refresh'));
+              toast.success(`Board '${boardToDelete.title}' berhasil dihapus.`);
+            } else {
+              const data = await res.json().catch(() => ({}));
+              toast.error(data.error || 'Gagal menghapus board.');
             }
-          } catch {
+          } catch (err: any) {
+            toast.error(err.message || 'Terjadi kesalahan saat menghapus board.');
           } finally {
             setDeleteDialog({ isOpen: false, board: null, isLoading: false });
           }
         }}
       />
+      <Toaster position="top-right" />
     </>
   );
 }

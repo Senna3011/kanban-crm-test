@@ -219,6 +219,15 @@ export async function PUT(req: NextRequest) {
     for (const id of body.deleteIds) {
       const col = await prisma.column.findUnique({ where: { id } });
       if (col && !col.isSystem) {
+        const general = await prisma.column.findFirst({
+          where: { boardId: col.boardId, title: 'General' },
+        });
+        if (general && general.id !== id) {
+          await prisma.card.updateMany({
+            where: { columnId: id },
+            data: { columnId: general.id },
+          });
+        }
         await prisma.column.delete({ where: { id } });
       }
     }
