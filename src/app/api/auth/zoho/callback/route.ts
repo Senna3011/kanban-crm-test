@@ -36,7 +36,8 @@ export async function GET(req: NextRequest) {
     let userInfo: { primaryEmail: string; accountId?: string; accounts: Array<{ email: string; displayName?: string; accountId?: string; isPrimary?: boolean }> };
     try {
       userInfo = await fetchZohoUserInfo(tokenResult.accessToken);
-    } catch {
+    } catch (userErr: any) {
+      console.error('[Zoho OAuth Callback] fetchZohoUserInfo failed:', userErr?.message || userErr);
       if (loginEmail && loginEmail.includes('@')) {
         const cleanLogin = loginEmail.trim().toLowerCase();
         userInfo = {
@@ -44,7 +45,7 @@ export async function GET(req: NextRequest) {
           accounts: [{ email: cleanLogin, displayName: 'Zoho Mail', isPrimary: true }],
         };
       } else {
-        return NextResponse.redirect(`${settingsUrl}?error=could_not_determine_email`);
+        return NextResponse.redirect(`${settingsUrl}?error=${encodeURIComponent(userErr?.message || 'could_not_determine_email')}`);
       }
     }
 
