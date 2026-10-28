@@ -38,6 +38,9 @@ export async function GET(req: NextRequest) {
   // Prefer configured ZOHO_REDIRECT_URI if set, otherwise use current origin callback
   const redirectUri = normalizeRedirectUri(process.env.ZOHO_REDIRECT_URI || dynamicCallbackUrl);
 
+  console.log('[Zoho OAuth Start] Client ID:', clientId);
+  console.log('[Zoho OAuth Start] Final redirectUri:', redirectUri);
+
   const state = signOAuthState({
     tenantId,
     boardId,
@@ -47,5 +50,7 @@ export async function GET(req: NextRequest) {
   });
 
   const authUrl = buildZohoAuthUrl(state, redirectUri);
-  return NextResponse.redirect(authUrl);
+  const response = NextResponse.redirect(authUrl);
+  response.headers.set('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0');
+  return response;
 }
