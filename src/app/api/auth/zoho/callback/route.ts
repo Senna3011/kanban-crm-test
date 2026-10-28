@@ -12,8 +12,10 @@ export async function GET(req: NextRequest) {
   const state = searchParams.get('state');
   const error = searchParams.get('error');
 
-  const baseUrl = process.env.NEXTAUTH_URL || `${req.nextUrl.protocol}//${req.nextUrl.host}`;
-  const settingsUrl = `${baseUrl.replace(/\/$/, '')}/dashboard/settings`;
+  const proto = req.headers.get('x-forwarded-proto') || req.nextUrl.protocol.replace(':', '') || 'https';
+  const host = req.headers.get('x-forwarded-host') || req.headers.get('host') || req.nextUrl.host;
+  let dynamicBaseUrl = `${proto}://${host}`;
+  let settingsUrl = `${dynamicBaseUrl.replace(/\/$/, '')}/dashboard/settings`;
 
   if (error) {
     return NextResponse.redirect(`${settingsUrl}?error=${encodeURIComponent(error)}`);
@@ -29,6 +31,14 @@ export async function GET(req: NextRequest) {
   }
 
   const { tenantId, boardId, loginEmail, redirectUri } = stateData;
+
+  // Use the origin from the user's active redirect URI (matches their current Cloudflare tunnel)
+  if (redirectUri) {
+    try {
+      dynamicBaseUrl = new URL(redirectUri).origin;
+      settingsUrl = `${dynamicBaseUrl.replace(/\/$/, '')}/dashboard/settings`;
+    } catch {}
+  }
 
   try {
     const tokenResult = await exchangeZohoCode(code, normalizeRedirectUri(redirectUri || ''));
