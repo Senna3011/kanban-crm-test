@@ -3,6 +3,7 @@ import { authOptions } from '@/server/auth';
 import { getEmailConfigs } from '@/server/actions/email-config';
 import CompanyInfoForm from '@/components/setup/CompanyInfoForm';
 import EmailConfigForm from '@/components/setup/EmailConfigForm';
+import BoardSenderManager from '@/components/setup/BoardSenderManager';
 import Link from 'next/link';
 import AiStatusBanner from '@/components/AiStatusBanner';
 
@@ -29,7 +30,7 @@ export default async function SettingsPage() {
       <AiStatusBanner />
 
       {/* Quick Navigation / Category Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
         <a
           href="#company-profile"
           className="p-3.5 bg-white border border-slate-200 hover:border-primary-400 rounded-xl transition-all shadow-2xs hover:shadow-xs group"
@@ -42,6 +43,17 @@ export default async function SettingsPage() {
         </a>
 
         <a
+          href="#board-senders"
+          className="p-3.5 bg-white border border-slate-200 hover:border-indigo-400 rounded-xl transition-all shadow-2xs hover:shadow-xs group"
+        >
+          <div className="flex items-center gap-2">
+            <span className="text-lg">🛡️</span>
+            <span className="text-xs font-bold text-slate-800 group-hover:text-indigo-600">Board Sender Isolation</span>
+          </div>
+          <p className="text-[11px] text-slate-500 mt-1">{data.boards.length} board(s) configured</p>
+        </a>
+
+        <a
           href="#crm-mailboxes"
           className="p-3.5 bg-white border border-slate-200 hover:border-primary-400 rounded-xl transition-all shadow-2xs hover:shadow-xs group"
         >
@@ -49,7 +61,7 @@ export default async function SettingsPage() {
             <span className="text-lg">📬</span>
             <span className="text-xs font-bold text-slate-800 group-hover:text-primary-600">CRM Inbound Mailboxes</span>
           </div>
-          <p className="text-[11px] text-slate-500 mt-1">{data.configs.length} mailbox(es) connected to boards</p>
+          <p className="text-[11px] text-slate-500 mt-1">{data.configs.length} mailbox(es) connected</p>
         </a>
 
         <Link
@@ -63,7 +75,7 @@ export default async function SettingsPage() {
             </div>
             <span className="text-xs text-indigo-600 font-bold">→</span>
           </div>
-          <p className="text-[11px] text-indigo-800/80 mt-1">Dedicated cold SMTP & Discovery API tokens</p>
+          <p className="text-[11px] text-indigo-800/80 mt-1">Dedicated cold SMTP & Discovery tokens</p>
         </Link>
       </div>
 
@@ -91,6 +103,29 @@ export default async function SettingsPage() {
           </div>
         </div>
         <CompanyInfoForm initial={data.company} readOnly={!isAdmin} />
+      </section>
+
+      {/* Board Mailbox & Outbound Sender Isolation Section */}
+      <section id="board-senders" className="bg-white rounded-2xl border border-gray-200/90 p-6 shadow-2xs space-y-4">
+        <div className="flex items-center justify-between border-b border-gray-100 pb-3">
+          <div>
+            <h2 className="text-base font-bold text-slate-900">
+              Board Mailbox & Sender Isolation
+            </h2>
+            <p className="text-xs text-slate-500 mt-0.5">
+              Control which mailboxes can send from each board, and configure multi-ESP cold outreach mode.
+            </p>
+          </div>
+          <span className="text-xs font-semibold px-2.5 py-1 bg-slate-100 text-slate-700 rounded-lg">
+            {data.boards.length} board(s)
+          </span>
+        </div>
+        <BoardSenderManager
+          boards={data.boards}
+          configs={data.configs as any}
+          initialBoardSettings={(data as any).boardSettings}
+          readOnly={!isAdmin}
+        />
       </section>
 
       {/* Email Configurations Section */}

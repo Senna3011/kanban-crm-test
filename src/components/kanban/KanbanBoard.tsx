@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
+import Link from 'next/link';
 import { DndContext, DragEndEvent, DragOverlay, DragStartEvent, MouseSensor, TouchSensor, useSensor, useSensors } from '@dnd-kit/core';
 import KanbanColumn from './KanbanColumn';
 import KanbanCard from './KanbanCard';
@@ -60,22 +61,31 @@ export default function KanbanBoard() {
   const [composeBody, setComposeBody] = useState('');
   const [sendingCompose, setSendingCompose] = useState(false);
 
-  // Fetch available sender mailboxes on mount
-  useEffect(() => {
-    fetch('/api/email-configs')
+  // Fetch available sender mailboxes strictly authorized for the active board
+  const fetchBoardSenders = useCallback((boardId: string) => {
+    if (!boardId) return;
+    fetch(`/api/email-configs?boardId=${boardId}`)
       .then((r) => (r.ok ? r.json() : []))
       .then((configs: any[]) => {
         if (Array.isArray(configs)) {
           const senders = configs.map((c) => c.smtpUser).filter(Boolean);
-          const uniqueSenders = Array.from(new Set(senders));
+          const uniqueSenders = Array.from(new Set(senders)) as string[];
           setComposeFromList(uniqueSenders);
-          if (uniqueSenders.length > 0 && !composeFrom) {
-            setComposeFrom(uniqueSenders[0]);
+          if (uniqueSenders.length > 0) {
+            setComposeFrom((prev) => (uniqueSenders.includes(prev) ? prev : uniqueSenders[0]));
+          } else {
+            setComposeFrom('');
           }
         }
       })
       .catch(() => {});
-  }, [composeFrom]);
+  }, []);
+
+  useEffect(() => {
+    if (activeBoardId) {
+      fetchBoardSenders(activeBoardId);
+    }
+  }, [activeBoardId, fetchBoardSenders]);
 
   async function handleSendCompose(e: React.FormEvent) {
     e.preventDefault();
@@ -220,10 +230,12 @@ export default function KanbanBoard() {
     const handler = () => {
       setLoading(true);
       fetchColumns();
+      const switchedId = localStorage.getItem('activeBoardId') || '';
+      if (switchedId) fetchBoardSenders(switchedId);
     };
     window.addEventListener('board-switched', handler);
     return () => window.removeEventListener('board-switched', handler);
-  }, [fetchColumns]);
+  }, [fetchColumns, fetchBoardSenders]);
 
   // Global keyboard shortcut '/' to search, 'Esc' to clear search
   useEffect(() => {
@@ -1020,12 +1032,14 @@ export default function KanbanBoard() {
             <form onSubmit={handleSendCompose} className="space-y-3.5 text-xs sm:text-sm">
               {/* Sender mailbox selector */}
               <div>
-                <label className="block text-xs font-semibold text-slate-700 uppercase mb-1">From (Mailbox)</label>
+                <label className="block text-xs font-semibold text-slate-700 uppercase mb-1">
+                  From (Authorized for &quot;{boardName}&quot;) *
+                </label>
                 {composeFromList.length > 0 ? (
                   <select
                     value={composeFrom}
                     onChange={(e) => setComposeFrom(e.target.value)}
-                    className="w-full px-3 py-2 border border-slate-300 rounded-xl bg-white text-xs sm:text-sm focus:ring-2 focus:ring-primary-500 focus:outline-none"
+                    className="w-full px-3 py-2 border border-slate-300 rounded-xl bg-white text-xs sm:text-sm focus:ring-2 focus:ring-primary-500 focus:outline-none font-medium text-slate-800"
                   >
                     {composeFromList.map((addr) => (
                       <option key={addr} value={addr}>
@@ -1034,13 +1048,21 @@ export default function KanbanBoard() {
                     ))}
                   </select>
                 ) : (
-                  <input
-                    type="text"
-                    value={composeFrom}
-                    onChange={(e) => setComposeFrom(e.target.value)}
-                    placeholder="e.g., info@jetdigitalpro.com"
-                    className="w-full px-3 py-2 border border-slate-300 rounded-xl bg-white text-xs sm:text-sm focus:ring-2 focus:ring-primary-500 focus:outline-none"
-                  />
+                  <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl text-xs text-amber-800 space-y-1">
+                    <p className="font-semibold flex items-center gap-1">
+                      <span>⚠️</span>
+                      <span>No Mailbox Assigned to &quot;{boardName}&quot;</span>
+                    </p>
+                    <p className="text-[11px] text-amber-700">
+                      Emails can only be sent from mailboxes explicitly assigned to this board. Please link an email in Settings.
+                    </p>
+                    <Link
+                      href="/dashboard/settings"
+                      className="inline-block mt-1 text-primary-600 font-bold underline hover:text-primary-800 text-[11px]"
+                    >
+                      Assign Mailbox in Settings →
+                    </Link>
+                  </div>
                 )}
               </div>
 
@@ -1092,7 +1114,7 @@ export default function KanbanBoard() {
                 </button>
                 <button
                   type="submit"
-                  disabled={sendingCompose}
+                  disabled={sendingCompose || composeFromList.length === 0}
                   className="px-5 py-2 text-xs bg-primary-600 hover:bg-primary-700 text-white font-bold rounded-xl shadow-xs disabled:opacity-50 flex items-center gap-1.5"
                 >
                   <span>{sendingCompose ? 'Sending...' : 'Send Outbound Email →'}</span>

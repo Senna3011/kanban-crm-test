@@ -15,25 +15,45 @@ export async function sendDraft(draftId: string, fromAddress?: string) {
 
   const draft = await prisma.draftMessage.findUnique({
     where: { id: draftId },
-    include: { card: true },
+    include: { card: { include: { column: true } } },
   });
 
   if (!draft || draft.tenantId !== tenantId) throw new Error('Not found');
 
-  // Find the right email config: prefer one matching fromAddress, or card emailConfigId, else first active
+  const boardId = draft.card.column?.boardId;
+
+  // Check board-level multi-sender outreach authorization
+  let allowAllOutreach = false;
+  if (boardId) {
+    try {
+      const tenantRecord = await prisma.tenant.findUnique({
+        where: { id: tenantId },
+        select: { companyInfo: true },
+      });
+      if (tenantRecord?.companyInfo) {
+        const info = JSON.parse(tenantRecord.companyInfo);
+        allowAllOutreach = Boolean(info.boardSettings?.[boardId]?.allowAllOutreach);
+      }
+    } catch {}
+  }
+
+  // Find board-authorized email config
   let emailConfig: any = null;
   let isOutreachAccount = false;
 
   if (fromAddress) {
+    // 1. Check board-specific email configs
     emailConfig = await prisma.emailConfig.findFirst({
       where: {
         tenantId,
         isActive: true,
+        ...(boardId ? { boardId } : {}),
         OR: [{ smtpUser: fromAddress }, { imapUser: fromAddress }, { id: fromAddress }],
       },
     });
 
-    if (!emailConfig) {
+    // 2. If board allows outreach, check outreach accounts
+    if (!emailConfig && allowAllOutreach) {
       emailConfig = await prisma.outreachAccountConfig.findFirst({
         where: {
           tenantId,
@@ -45,23 +65,36 @@ export async function sendDraft(draftId: string, fromAddress?: string) {
     }
   }
 
+  // 3. Fallback to card's linked email config if it belongs to this board
   if (!emailConfig && draft.card.emailConfigId) {
     emailConfig = await prisma.emailConfig.findFirst({
-      where: { id: draft.card.emailConfigId, tenantId, isActive: true },
+      where: {
+        id: draft.card.emailConfigId,
+        tenantId,
+        isActive: true,
+        ...(boardId ? { boardId } : {}),
+      },
     });
   }
 
-  if (!emailConfig) {
-    emailConfig = await prisma.emailConfig.findFirst({ where: { tenantId, isActive: true } });
+  // 4. Fallback to board's primary email config
+  if (!emailConfig && boardId) {
+    emailConfig = await prisma.emailConfig.findFirst({
+      where: { tenantId, isActive: true, boardId },
+    });
   }
 
-  // Fallback to OutreachAccountConfig if main CRM email config is not configured
-  if (!emailConfig) {
-    emailConfig = await prisma.outreachAccountConfig.findFirst({ where: { tenantId, isActive: true } });
+  // 5. Fallback to outreach account if board allows
+  if (!emailConfig && allowAllOutreach) {
+    emailConfig = await prisma.outreachAccountConfig.findFirst({
+      where: { tenantId, isActive: true },
+    });
     if (emailConfig) isOutreachAccount = true;
   }
 
-  if (!emailConfig) throw new Error('No active email mailbox configured in Settings or Outreach Settings.');
+  if (!emailConfig) {
+    throw new Error('No authorized email mailbox configured for this board. Please check Settings.');
+  }
 
   // Send via SMTP
   const authConfig: any = { user: emailConfig.smtpUser || emailConfig.senderEmail };
@@ -81,15 +114,7 @@ export async function sendDraft(draftId: string, fromAddress?: string) {
   });
 
   const sendFrom = fromAddress || emailConfig.senderEmail || emailConfig.smtpUser;
-  const JDP_TEAM_NAMES: Record<string, string> = {
-    'jdp-diamond-team@jetdigitalpro.com': 'Diamond Team',
-    'jdp-elite-team@jetdigitalpro.com': 'Elite Team',
-    'jdp-gold-team@jetdigitalpro.com': 'Gold Team',
-    'jdp-premiere-team@jetdigitalpro.com': 'Premiere Team',
-    'nellvh@jetdigitalpro.com': 'Nell VH',
-  };
-  const teamDisplayName = sendFrom ? JDP_TEAM_NAMES[sendFrom.toLowerCase()] : undefined;
-  const senderDisplayName = teamDisplayName || emailConfig.senderName || (session.user as any).name || (session.user as any).tenantName || 'Support Team';
+  const senderDisplayName = emailConfig.senderName || (session.user as any).name || 'Support Team';
   const fromHeader = `"${senderDisplayName}" <${sendFrom}>`;
 
   try {

@@ -456,18 +456,19 @@ export default function CardDetailPanel({ card, onClose }: Props) {
     async function loadBackgroundDetails() {
       try {
         setBackgroundLoading(true);
-        const [cardRes, configRes, outreachAccRes, threadRes] = await Promise.allSettled([
+        const [cardRes, threadRes] = await Promise.allSettled([
           fetch(`/api/cards/${card.id}`),
-          fetch(`/api/email-configs`),
-          fetch(`/api/outreach/accounts`),
           fetch(`/api/cards/${card.id}/thread`),
         ]);
+
+        let cardBoardId = (card as any).column?.boardId || (card as any).boardId || '';
 
         if (cardRes.status === 'fulfilled' && cardRes.value.ok) {
           const data = await cardRes.value.json();
           setActivityLogs(data.activityLogs || []);
           setCardData(data);
           setCardHtml(data.bodyHtml || '');
+          if (data.column?.boardId) cardBoardId = data.column.boardId;
 
           const drafts = data.drafts || [];
           const pending = drafts.find((d: DraftData) => d.status === 'pending');
@@ -477,29 +478,29 @@ export default function CardDetailPanel({ card, onClose }: Props) {
           }
         }
 
-        const addresses: string[] = [];
-        const cardRecipient = ((card.metadata as any)?.toEmail || (card.metadata as any)?.deliveredTo)?.toLowerCase()?.trim();
-        if (cardRecipient && cardRecipient.includes('@')) {
-          addresses.push(cardRecipient);
+        if (!cardBoardId && typeof window !== 'undefined') {
+          cardBoardId = localStorage.getItem('activeBoardId') || '';
         }
 
-        if (configRes.status === 'fulfilled' && configRes.value.ok) {
-          const configs = await configRes.value.json();
+        // Fetch authorized senders strictly for this card's board
+        const configUrl = cardBoardId ? `/api/email-configs?boardId=${cardBoardId}` : `/api/email-configs`;
+        const configRes = await fetch(configUrl).catch(() => null);
+
+        const addresses: string[] = [];
+        if (configRes && configRes.ok) {
+          const configs = await configRes.json();
           if (Array.isArray(configs)) {
             addresses.push(...configs.map((c: any) => c.smtpUser).filter(Boolean));
           }
         }
 
-        if (outreachAccRes.status === 'fulfilled' && outreachAccRes.value.ok) {
-          const outreachAccs = await outreachAccRes.value.json();
-          const list = Array.isArray(outreachAccs) ? outreachAccs : outreachAccs.accounts || [];
-          addresses.push(...list.map((a: any) => a.senderEmail).filter(Boolean));
-        }
-
         const uniqueAddrs = [...new Set(addresses)] as string[];
         setFromAddresses(uniqueAddrs);
         if (uniqueAddrs.length > 0) {
-          setSelectedFrom((prev) => prev || (cardRecipient && uniqueAddrs.includes(cardRecipient) ? cardRecipient : uniqueAddrs[0]));
+          const cardRecipient = ((card.metadata as any)?.toEmail || (card.metadata as any)?.deliveredTo)?.toLowerCase()?.trim();
+          setSelectedFrom((prev) => (prev && uniqueAddrs.includes(prev) ? prev : cardRecipient && uniqueAddrs.includes(cardRecipient) ? cardRecipient : uniqueAddrs[0]));
+        } else {
+          setSelectedFrom('');
         }
 
         if (threadRes.status === 'fulfilled' && threadRes.value.ok) {
@@ -1223,7 +1224,7 @@ export default function CardDetailPanel({ card, onClose }: Props) {
 
                 <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2.5">
                   <div className="flex items-center gap-2">
-                    {fromAddresses.length > 0 && (
+                    {fromAddresses.length > 0 ? (
                       <select
                         className="w-full sm:w-auto px-2.5 py-1.5 border border-slate-200 rounded-lg text-xs font-medium text-slate-700 focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500 bg-white"
                         value={selectedFrom}
@@ -1235,6 +1236,10 @@ export default function CardDetailPanel({ card, onClose }: Props) {
                           </option>
                         ))}
                       </select>
+                    ) : (
+                      <span className="text-[11px] text-amber-700 bg-amber-50 px-2 py-1 rounded border border-amber-200 font-semibold">
+                        ⚠️ No sender mailbox assigned to this board
+                      </span>
                     )}
                   </div>
 
@@ -1246,7 +1251,13 @@ export default function CardDetailPanel({ card, onClose }: Props) {
                     >
                       Cancel
                     </button>
-                    <Button size="sm" onClick={handleSend} loading={sending} className="w-full sm:w-auto font-bold shadow-xs">
+                    <Button
+                      size="sm"
+                      onClick={handleSend}
+                      loading={sending}
+                      disabled={fromAddresses.length === 0}
+                      className="w-full sm:w-auto font-bold shadow-xs disabled:opacity-50"
+                    >
                       Send Reply & Advance Stage →
                     </Button>
                   </div>

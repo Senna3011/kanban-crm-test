@@ -81,8 +81,8 @@ export async function GET(req: NextRequest) {
         tokenExpiry: expiry,
         zohoAccountId: acc.accountId || userInfo.accountId || null,
         isActive: true,
-        // Only assign primary account to the requested boardId if provided
-        boardId: (acc.isPrimary && boardId) ? boardId : undefined,
+        // Assign both primary account and all its SendMailAs aliases to the requested boardId
+        boardId: boardId ? boardId : undefined,
       };
 
       if (encryptedRefreshToken) {
@@ -94,8 +94,8 @@ export async function GET(req: NextRequest) {
           where: { id: existing.id },
           data: {
             ...updateData,
-            // Preserve existing boardId if already assigned unless explicit primary
-            boardId: (acc.isPrimary && boardId) ? boardId : existing.boardId,
+            // Update boardId if explicitly selected during connect, otherwise preserve existing
+            boardId: boardId ? boardId : existing.boardId,
           },
         });
       } else {
@@ -103,7 +103,7 @@ export async function GET(req: NextRequest) {
           data: {
             tenantId,
             ...updateData,
-            boardId: (acc.isPrimary && boardId) ? boardId : null,
+            boardId: boardId || null,
           },
         });
       }

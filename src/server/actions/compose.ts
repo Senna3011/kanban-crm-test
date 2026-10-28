@@ -48,55 +48,98 @@ export async function composeAndSendEmail(data: {
     throw new Error('No column available in target board.');
   }
 
-  // Find email config matching fromAddress or first active
+  // 1. Verify board authorization for fromAddress
+  let allowAllOutreach = false;
+  try {
+    const tenantRecord = await prisma.tenant.findUnique({
+      where: { id: tenantId },
+      select: { companyInfo: true },
+    });
+    if (tenantRecord?.companyInfo) {
+      const info = JSON.parse(tenantRecord.companyInfo);
+      allowAllOutreach = Boolean(info.boardSettings?.[board.id]?.allowAllOutreach);
+    }
+  } catch {}
+
+  // Find board-authorized EmailConfig matching fromAddress
   let emailConfig = await prisma.emailConfig.findFirst({
     where: {
       tenantId,
       isActive: true,
+      boardId: board.id,
       OR: [{ smtpUser: fromAddress }, { imapUser: fromAddress }, { id: fromAddress }],
     },
   });
 
-  if (!emailConfig) {
-    emailConfig = await prisma.emailConfig.findFirst({ where: { tenantId, isActive: true } });
+  // If not found in board-specific configs, check if outreach account is authorized
+  let outreachAccount = null;
+  if (!emailConfig && allowAllOutreach && fromAddress) {
+    outreachAccount = await prisma.outreachAccountConfig.findFirst({
+      where: {
+        tenantId,
+        isActive: true,
+        senderEmail: { equals: fromAddress, mode: 'insensitive' },
+      },
+    });
   }
 
-  if (!emailConfig) {
-    throw new Error('No active email mailbox configured in Settings.');
+  // Fallback: if no fromAddress was passed, take the board's primary linked email config
+  if (!emailConfig && !outreachAccount && !fromAddress) {
+    emailConfig = await prisma.emailConfig.findFirst({
+      where: { tenantId, isActive: true, boardId: board.id },
+    });
   }
 
-  // Configure SMTP Transport
-  const authConfig: any = { user: emailConfig.smtpUser };
-  if (emailConfig.authType === 'oauth2') {
-    authConfig.type = 'OAuth2';
-    authConfig.accessToken = await getValidZohoAccessToken(emailConfig.id);
-  } else if (emailConfig.smtpPass) {
-    authConfig.pass = decrypt(emailConfig.smtpPass);
+  if (!emailConfig && !outreachAccount) {
+    throw new Error(
+      `Sender "${fromAddress || 'Default'}" is not authorized for board "${board.title}". Please select an email assigned to this board in Settings.`
+    );
   }
 
-  const transporter = createTransport({
-    host: emailConfig.smtpHost,
-    port: emailConfig.smtpPort,
-    secure: emailConfig.smtpPort === 465,
-    requireTLS: emailConfig.smtpPort === 587,
-    auth: authConfig,
-  });
+  let transporter;
+  let sendFrom = fromAddress;
+  let senderDisplayName = (session.user as any).name || 'Sales Team';
 
-  const sendFrom = fromAddress || emailConfig.smtpUser;
-  const JDP_TEAM_NAMES: Record<string, string> = {
-    'jdp-diamond-team@jetdigitalpro.com': 'Diamond Team',
-    'jdp-elite-team@jetdigitalpro.com': 'Elite Team',
-    'jdp-gold-team@jetdigitalpro.com': 'Gold Team',
-    'jdp-premiere-team@jetdigitalpro.com': 'Premiere Team',
-    'nellvh@jetdigitalpro.com': 'Nell VH',
-  };
-  const teamDisplayName = sendFrom ? JDP_TEAM_NAMES[sendFrom.toLowerCase()] : undefined;
-  const senderDisplayName = teamDisplayName || (session.user as any).name || (session.user as any).tenantName || 'Sales Team';
+  if (emailConfig) {
+    sendFrom = fromAddress || emailConfig.smtpUser;
+    senderDisplayName = (session.user as any).name || emailConfig.name || 'Sales Team';
+
+    const authConfig: any = { user: emailConfig.smtpUser };
+    if (emailConfig.authType === 'oauth2') {
+      authConfig.type = 'OAuth2';
+      authConfig.accessToken = await getValidZohoAccessToken(emailConfig.id);
+    } else if (emailConfig.smtpPass) {
+      authConfig.pass = decrypt(emailConfig.smtpPass);
+    }
+
+    transporter = createTransport({
+      host: emailConfig.smtpHost,
+      port: emailConfig.smtpPort,
+      secure: emailConfig.smtpPort === 465,
+      requireTLS: emailConfig.smtpPort === 587,
+      auth: authConfig,
+    });
+  } else if (outreachAccount) {
+    sendFrom = outreachAccount.senderEmail;
+    senderDisplayName = outreachAccount.senderName || (session.user as any).name || 'Outreach Team';
+
+    transporter = createTransport({
+      host: outreachAccount.smtpHost || 'smtp.zoho.com',
+      port: outreachAccount.smtpPort || 465,
+      secure: outreachAccount.smtpPort === 465,
+      requireTLS: outreachAccount.smtpPort === 587,
+      auth: {
+        user: outreachAccount.smtpUser,
+        pass: outreachAccount.smtpPass ? decrypt(outreachAccount.smtpPass) : '',
+      },
+    });
+  }
+
   const fromHeader = `"${senderDisplayName}" <${sendFrom}>`;
 
   let info;
   try {
-    info = await transporter.sendMail({
+    info = await transporter!.sendMail({
       from: fromHeader,
       to: toEmail,
       subject,
@@ -104,7 +147,8 @@ export async function composeAndSendEmail(data: {
     });
   } catch (smtpErr: any) {
     console.error('[composeAndSendEmail] SMTP error:', smtpErr);
-    throw new Error(`SMTP Error (${emailConfig.smtpHost}): ${smtpErr?.response || smtpErr?.message || 'Failed to send outbound email'}`);
+    const host = emailConfig?.smtpHost || outreachAccount?.smtpHost || 'SMTP';
+    throw new Error(`SMTP Error (${host}): ${smtpErr?.response || smtpErr?.message || 'Failed to send outbound email'}`);
   }
 
   // Create new card on Kanban board
@@ -116,7 +160,7 @@ export async function composeAndSendEmail(data: {
       bodyText: body,
       columnId: targetCol.id,
       tenantId,
-      emailConfigId: emailConfig.id,
+      emailConfigId: emailConfig?.id || undefined,
       messageId: info.messageId || undefined,
       status: 'read',
       highlighted: false,

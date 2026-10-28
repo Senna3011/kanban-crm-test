@@ -72,6 +72,7 @@ export async function getEmailConfigs() {
         isActive: c.isActive,
       })),
       boards: boards || [],
+      boardSettings: (companyInfo as any).boardSettings || {},
     };
   } catch (err: any) {
     console.error('[SETTINGS GET EMAIL CONFIGS ERROR]', err);
@@ -79,6 +80,7 @@ export async function getEmailConfigs() {
       company: { name: 'Kanban CRM', products: '', logoUrl: '', customPrompt: '', knowledgeBase: '' },
       configs: [],
       boards: [],
+      boardSettings: {},
     };
   }
 }
@@ -129,6 +131,14 @@ export async function saveEmailConfig(data: {
 
   if (existing) {
     await prisma.emailConfig.update({ where: { id: existing.id }, data: updateData });
+
+    // Cascade boardId to sibling Zoho SendMailAs aliases if applicable
+    if (existing.zohoAccountId && data.boardId !== undefined) {
+      await prisma.emailConfig.updateMany({
+        where: { tenantId, zohoAccountId: existing.zohoAccountId, id: { not: existing.id } },
+        data: { boardId: data.boardId || null },
+      });
+    }
   } else {
     if (!data.imapPass || !data.smtpPass) throw new Error('Password is required for new email configuration.');
     await prisma.emailConfig.create({
@@ -303,6 +313,55 @@ export async function updateCompanyInfo(data: {
     where: { id: tenantId },
     data: updateData,
   });
+
+  return { success: true };
+}
+
+export async function updateBoardEmailSettings(data: {
+  boardId: string;
+  allowAllOutreach?: boolean;
+  assignedConfigIds?: string[];
+}) {
+  const user = await requireAdmin();
+  const tenantId = user.tenantId;
+
+  const tenant = await prisma.tenant.findUnique({
+    where: { id: tenantId },
+    select: { companyInfo: true },
+  });
+
+  let companyInfoObj: any = {};
+  try {
+    if (tenant?.companyInfo) companyInfoObj = JSON.parse(tenant.companyInfo);
+  } catch {}
+
+  const currentBoardSettings = companyInfoObj.boardSettings || {};
+  currentBoardSettings[data.boardId] = {
+    ...currentBoardSettings[data.boardId],
+    ...(data.allowAllOutreach !== undefined ? { allowAllOutreach: data.allowAllOutreach } : {}),
+  };
+
+  companyInfoObj.boardSettings = currentBoardSettings;
+
+  await prisma.tenant.update({
+    where: { id: tenantId },
+    data: { companyInfo: JSON.stringify(companyInfoObj) },
+  });
+
+  if (Array.isArray(data.assignedConfigIds)) {
+    // Unassign configs previously assigned to this board that aren't in the list
+    await prisma.emailConfig.updateMany({
+      where: { tenantId, boardId: data.boardId, id: { notIn: data.assignedConfigIds } },
+      data: { boardId: null },
+    });
+    // Assign new configs to this board
+    if (data.assignedConfigIds.length > 0) {
+      await prisma.emailConfig.updateMany({
+        where: { tenantId, id: { in: data.assignedConfigIds } },
+        data: { boardId: data.boardId },
+      });
+    }
+  }
 
   return { success: true };
 }

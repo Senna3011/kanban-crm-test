@@ -1,75 +1,67 @@
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/server/auth';
 import prisma from '@/lib/prisma';
 
-export async function GET() {
+export async function GET(req: NextRequest) {
   const session = await getServerSession(authOptions);
   if (!session?.user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   const tenantId = (session.user as any).tenantId;
-  const configs = await prisma.emailConfig.findMany({
-    where: { tenantId, isActive: true },
-    select: { id: true, name: true, smtpUser: true, imapUser: true },
-  });
+  const { searchParams } = new URL(req.url);
+  const boardId = searchParams.get('boardId')?.trim();
 
-  // Also discover known team aliases from received cards in this tenant
-  const knownCards = await prisma.card.findMany({
-    where: {
-      tenantId,
-      metadata: { not: null as any },
-    },
-    select: { metadata: true },
-    take: 100,
-    orderBy: { createdAt: 'desc' },
-  });
+  // If boardId is provided, filter strictly to email accounts authorized for this specific board
+  if (boardId) {
+    const boardConfigs = await prisma.emailConfig.findMany({
+      where: { tenantId, isActive: true, boardId },
+      select: { id: true, name: true, smtpUser: true, imapUser: true, boardId: true },
+    });
 
-  const existingEmails = new Set(configs.map((c) => c.smtpUser?.toLowerCase().trim()).filter(Boolean));
-  const additionalAliases: any[] = [];
+    // Check if this board has Multi-ESP Outreach Senders enabled in Tenant companyInfo
+    let allowAllOutreach = false;
+    try {
+      const tenant = await prisma.tenant.findUnique({
+        where: { id: tenantId },
+        select: { companyInfo: true },
+      });
+      if (tenant?.companyInfo) {
+        const info = JSON.parse(tenant.companyInfo);
+        allowAllOutreach = Boolean(info.boardSettings?.[boardId]?.allowAllOutreach);
+      }
+    } catch {}
 
-  // Known official Send-Mail-As team alias addresses for Jet Digital Pro Zoho organization (from Pak Nell's Send-Mail-As config)
-  const JDP_ZOHO_ALIASES = [
-    { email: 'jdp-diamond-team@jetdigitalpro.com', name: 'Diamond Team' },
-    { email: 'jdp-elite-team@jetdigitalpro.com', name: 'Elite Team' },
-    { email: 'jdp-gold-team@jetdigitalpro.com', name: 'Gold Team' },
-    { email: 'jdp-premiere-team@jetdigitalpro.com', name: 'Premiere Team' },
-    { email: 'nellvh@jetdigitalpro.com', name: 'Nell VH' },
-  ];
+    const results: any[] = [...boardConfigs];
 
-  const hasJdpOrZoho = configs.some(
-    (c) =>
-      c.smtpUser?.includes('jetdigitalpro.com') ||
-      c.imapUser?.includes('jetdigitalpro.com') ||
-      c.name?.toLowerCase().includes('zoho')
-  );
+    // If multi-sender outreach is enabled for this board (hundreds of senders across ESPs)
+    if (allowAllOutreach) {
+      const outreachAccounts = await prisma.outreachAccountConfig.findMany({
+        where: { tenantId, isActive: true },
+        select: { id: true, name: true, senderEmail: true, senderName: true },
+      });
 
-  if (hasJdpOrZoho) {
-    for (const alias of JDP_ZOHO_ALIASES) {
-      if (!existingEmails.has(alias.email)) {
-        existingEmails.add(alias.email);
-        additionalAliases.push({
-          id: `alias-${alias.email}`,
-          name: `${alias.name} (${alias.email})`,
-          smtpUser: alias.email,
-          imapUser: alias.email,
-        });
+      for (const acc of outreachAccounts) {
+        if (!results.some((r) => r.smtpUser?.toLowerCase() === acc.senderEmail.toLowerCase())) {
+          results.push({
+            id: `outreach-${acc.id}`,
+            name: `${acc.senderName} (${acc.senderEmail})`,
+            smtpUser: acc.senderEmail,
+            imapUser: acc.senderEmail,
+            boardId,
+            isOutreachAccount: true,
+          });
+        }
       }
     }
+
+    return NextResponse.json(results);
   }
 
-  for (const card of knownCards) {
-    const meta: any = card.metadata;
-    const toEmail = meta?.toEmail?.toLowerCase().trim();
-    if (toEmail && toEmail.includes('@') && !existingEmails.has(toEmail)) {
-      existingEmails.add(toEmail);
-      additionalAliases.push({
-        id: `alias-${toEmail}`,
-        name: `Team Alias (${toEmail.split('@')[0]})`,
-        smtpUser: toEmail,
-        imapUser: toEmail,
-      });
-    }
-  }
+  // Without boardId (e.g. Settings management): return all tenant email configs
+  const allConfigs = await prisma.emailConfig.findMany({
+    where: { tenantId, isActive: true },
+    select: { id: true, name: true, smtpUser: true, imapUser: true, boardId: true },
+  });
 
-  return NextResponse.json([...configs, ...additionalAliases]);
+  return NextResponse.json(allConfigs);
 }

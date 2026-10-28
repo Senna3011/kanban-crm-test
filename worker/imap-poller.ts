@@ -121,7 +121,16 @@ async function resolveBoard(
   // Fetch all existing boards in this tenant
   const tenantBoards = await prisma.board.findMany({ where: { tenantId } });
 
-  // 2. PRIORITY 1: Check if any candidate recipient matches a team routing or existing board
+  // 1. PRIORITY 1: Explicit EmailConfig board link configured in Settings
+  if (emailConfigId) {
+    const config = await prisma.emailConfig.findUnique({
+      where: { id: emailConfigId },
+      include: { board: true },
+    });
+    if (config?.board) return config.board;
+  }
+
+  // 2. PRIORITY 2: Check if any candidate recipient matches explicit routing or board title
   for (const recipient of allRecipients) {
     // 2a. Explicit routing in companyInfo
     if (routing[recipient]) {
@@ -138,19 +147,9 @@ async function resolveBoard(
         b.title.toLowerCase() === prefix.replace(/[-_.]+/g, ' ')
     );
     if (exactMatch) return exactMatch;
-
-    // 2c. Distinctive Team Keyword Match (e.g. jdp-diamond-team -> "Diamond" matches "Diamond Team")
-    const { keyword } = extractTeamKeyword(recipient);
-    if (keyword && keyword.length >= 3) {
-      const keywordMatch = tenantBoards.find((b) => {
-        const boardLower = b.title.toLowerCase();
-        return boardLower.includes(keyword) || prefix.includes(boardLower);
-      });
-      if (keywordMatch) return keywordMatch;
-    }
   }
 
-  // 3. PRIORITY 2: Folder-based routing (e.g. IMAP folder 'Elite' -> 'Elite Team', 'Nell' -> 'Nell VH')
+  // 3. PRIORITY 3: Folder-based routing
   if (folder && folder.toUpperCase() !== 'INBOX') {
     if (folderRouting[folder]) {
       const match = tenantBoards.find((b) => b.title.toLowerCase() === folderRouting[folder].toLowerCase());
@@ -170,57 +169,7 @@ async function resolveBoard(
     }
   }
 
-  // 4. PRIORITY 3: Auto-provision a new Board if this email is addressed to an unrecognized team alias
-  // (e.g. jdp-ruby-team@... -> auto-creates "Ruby Team" board so user NEVER has to configure aliases manually!)
-  for (const recipient of allRecipients) {
-    const { keyword, autoTitle, isTeamAlias } = extractTeamKeyword(recipient);
-    if (isTeamAlias && autoTitle && autoTitle !== 'Team Mailbox') {
-      try {
-        console.log(`[IMAP Poller] Auto-provisioning new board "${autoTitle}" for detected team alias: ${recipient}`);
-        const newBoard = await prisma.board.create({
-          data: { title: autoTitle, tenantId },
-        });
-
-        const defaultColumns = [
-          { title: 'General', position: 0, color: '#64748b', isSystem: false },
-          { title: 'Leads', position: 1, color: '#3b82f6', isSystem: false },
-          { title: 'Follow up 1', position: 2, color: '#f59e0b', isSystem: false },
-          { title: 'Follow up 2', position: 3, color: '#f59e0b', isSystem: false },
-          { title: 'Follow up 3', position: 4, color: '#f59e0b', isSystem: false },
-          { title: 'Fail', position: 5, color: '#ef4444', isSystem: false },
-          { title: 'Pending', position: 6, color: '#8b5cf6', isSystem: false },
-          { title: 'Success', position: 7, color: '#22c55e', isSystem: false },
-        ];
-
-        for (const col of defaultColumns) {
-          await prisma.column.create({ data: { ...col, boardId: newBoard.id } });
-        }
-
-        return newBoard;
-      } catch (boardErr: any) {
-        console.warn('[IMAP Poller] Failed to auto-provision board:', boardErr?.message);
-      }
-    }
-  }
-
-  // 5. PRIORITY 4: Explicit EmailConfig board link if configured
-  if (emailConfigId) {
-    const config = await prisma.emailConfig.findUnique({
-      where: { id: emailConfigId },
-      include: { board: true },
-    });
-    if (config?.board) return config.board;
-  }
-
-  // 6. PRIORITY 5: Default INBOX mapping if folder is INBOX
-  if (folder && DEFAULT_FOLDER_MAPPING[folder]) {
-    const defaultBoard = tenantBoards.find(
-      (b) => b.title.toLowerCase() === DEFAULT_FOLDER_MAPPING[folder].toLowerCase()
-    );
-    if (defaultBoard) return defaultBoard;
-  }
-
-  // 7. Fallback: Main Board or first board in tenant
+  // 4. PRIORITY 4: Fallback to Main Board or first board in tenant (NEVER auto-create boards)
   const mainBoard = tenantBoards.find((b) => b.title.toLowerCase() === 'main board');
   if (mainBoard) return mainBoard;
   return tenantBoards[0] || (await prisma.board.findFirst({ where: { tenantId } }));
