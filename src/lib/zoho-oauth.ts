@@ -153,6 +153,36 @@ export async function fetchZohoUserInfo(accessToken: string): Promise<{
             }
           }
         }
+
+        // Explicitly query Zoho /api/accounts/{accountId}/sendmaildetails for configured Send-Mail-As addresses
+        if (accountId) {
+          try {
+            const smRes = await fetch(`${mailApiUrl.replace(/\/$/, '')}/api/accounts/${accountId}/sendmaildetails`, {
+              headers: { Authorization: `Zoho-oauthtoken ${accessToken}` },
+            });
+            if (smRes.ok) {
+              const smJson = await smRes.json();
+              const smList = smJson.data || [];
+              for (const item of smList) {
+                const itemEmail = item.fromAddress || item.emailAddress || item.email;
+                const itemName = item.displayName || item.fromName;
+                if (typeof itemEmail === 'string' && itemEmail.includes('@')) {
+                  const cleanEmail = itemEmail.trim().toLowerCase();
+                  if (!accounts.some(a => a.email === cleanEmail)) {
+                    accounts.push({
+                      email: cleanEmail,
+                      displayName: itemName || 'Team Alias',
+                      accountId,
+                      isPrimary: false,
+                    });
+                  }
+                }
+              }
+            }
+          } catch (smErr) {
+            console.error('[Zoho OAuth] Failed to query /sendmaildetails for account', accountId, smErr);
+          }
+        }
       }
     }
   } catch (err) {
