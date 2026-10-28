@@ -146,13 +146,25 @@ export async function fetchZohoUserInfo(accessToken: string): Promise<{
         }
 
         // Also extract sendMailAs / alias addresses if present in Zoho response
-        const sendAsList = acc.sendMailDetails || acc.fromAddressList || acc.aliases || [];
+        const sendAsList = [
+          ...(Array.isArray(acc.sendMailDetails) ? acc.sendMailDetails : []),
+          ...(Array.isArray(acc.emailAddress) ? acc.emailAddress : []),
+          ...(Array.isArray(acc.fromAddressList) ? acc.fromAddressList : []),
+          ...(Array.isArray(acc.aliases) ? acc.aliases : []),
+        ];
         for (const alias of sendAsList) {
-          const aliasEmail = alias.emailAddress || alias.email || alias;
-          const aliasName = alias.displayName || alias.fromName || acc.displayName;
-          if (typeof aliasEmail === 'string' && aliasEmail.includes('@')) {
-            const cleanAlias = aliasEmail.trim().toLowerCase();
-            if (!accounts.some(a => a.email === cleanAlias)) {
+          const rawEmail =
+            typeof alias === 'string'
+              ? alias
+              : alias?.fromAddress || alias?.emailAddress || alias?.mailId || alias?.email;
+          const aliasName =
+            typeof alias === 'string'
+              ? 'Team Alias'
+              : alias?.displayName || alias?.fromName || acc.displayName;
+
+          if (typeof rawEmail === 'string' && rawEmail.includes('@')) {
+            const cleanAlias = rawEmail.trim().toLowerCase();
+            if (!accounts.some((a) => a.email === cleanAlias)) {
               accounts.push({
                 email: cleanAlias,
                 displayName: aliasName || 'Team Alias',
