@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
-import { exchangeZohoCode, fetchZohoUserInfo, verifyOAuthState } from '@/lib/zoho-oauth';
+import { exchangeZohoCode, fetchZohoUserInfo, normalizeRedirectUri, verifyOAuthState } from '@/lib/zoho-oauth';
 import { encrypt } from '@/lib/encryption';
 import { revalidatePath } from 'next/cache';
 
@@ -28,10 +28,10 @@ export async function GET(req: NextRequest) {
     return NextResponse.redirect(`${settingsUrl}?error=invalid_or_expired_state`);
   }
 
-  const { tenantId, boardId, loginEmail } = stateData;
+  const { tenantId, boardId, loginEmail, redirectUri } = stateData;
 
   try {
-    const tokenResult = await exchangeZohoCode(code);
+    const tokenResult = await exchangeZohoCode(code, normalizeRedirectUri(redirectUri || ''));
 
     let userInfo: { primaryEmail: string; accountId?: string; accounts: Array<{ email: string; displayName?: string; accountId?: string; isPrimary?: boolean }> };
     try {

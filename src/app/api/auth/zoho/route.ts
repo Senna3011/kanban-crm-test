@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/server/auth';
-import { buildZohoAuthUrl, getZohoOAuthConfig, signOAuthState } from '@/lib/zoho-oauth';
+import { buildZohoAuthUrl, getZohoOAuthConfig, normalizeRedirectUri, signOAuthState } from '@/lib/zoho-oauth';
 
 export const dynamic = 'force-dynamic';
 
@@ -36,7 +36,7 @@ export async function GET(req: NextRequest) {
   const dynamicCallbackUrl = `${currentOrigin.replace(/\/$/, '')}/api/auth/zoho/callback`;
 
   // Prefer configured ZOHO_REDIRECT_URI if set, otherwise use current origin callback
-  const redirectUri = process.env.ZOHO_REDIRECT_URI || dynamicCallbackUrl;
+  const redirectUri = normalizeRedirectUri(process.env.ZOHO_REDIRECT_URI || dynamicCallbackUrl);
 
   const state = signOAuthState({
     tenantId,

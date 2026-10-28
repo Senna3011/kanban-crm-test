@@ -10,6 +10,15 @@ export interface ZohoOAuthState {
   timestamp: number;
 }
 
+export function normalizeRedirectUri(rawUri: string): string {
+  if (!rawUri) return '';
+  let cleaned = rawUri.trim().replace(/([^:])\/{2,}/g, '$1/');
+  if (!cleaned.includes('/api/auth/zoho/callback')) {
+    cleaned = `${cleaned.replace(/\/$/, '')}/api/auth/zoho/callback`;
+  }
+  return cleaned.replace(/([^:])\/{2,}/g, '$1/');
+}
+
 function getOAuthSecret(): string {
   return process.env.ENCRYPTION_KEY || process.env.NEXTAUTH_SECRET || 'kanban-crm-oauth-secret-signing-key';
 }
@@ -44,7 +53,7 @@ export function verifyOAuthState(state: string): ZohoOAuthState | null {
 export function getZohoOAuthConfig() {
   const clientId = process.env.ZOHO_CLIENT_ID || '';
   const clientSecret = process.env.ZOHO_CLIENT_SECRET || '';
-  const redirectUri = process.env.ZOHO_REDIRECT_URI || '';
+  const redirectUri = normalizeRedirectUri(process.env.ZOHO_REDIRECT_URI || '');
   const accountsUrl = process.env.ZOHO_ACCOUNTS_URL || 'https://accounts.zoho.com';
   const mailApiUrl = process.env.ZOHO_MAIL_API_URL || 'https://mail.zoho.com';
 
@@ -53,7 +62,7 @@ export function getZohoOAuthConfig() {
 
 export function buildZohoAuthUrl(state: string, customRedirectUri?: string): string {
   const { clientId, redirectUri, accountsUrl } = getZohoOAuthConfig();
-  const effectiveRedirectUri = customRedirectUri || redirectUri;
+  const effectiveRedirectUri = normalizeRedirectUri(customRedirectUri || redirectUri);
   const params = new URLSearchParams({
     scope: 'ZohoMail.messages.ALL,ZohoMail.accounts.READ,email',
     client_id: clientId,
@@ -72,7 +81,7 @@ export async function exchangeZohoCode(code: string, customRedirectUri?: string)
   expiresIn: number;
 }> {
   const { clientId, clientSecret, redirectUri, accountsUrl } = getZohoOAuthConfig();
-  const effectiveRedirectUri = customRedirectUri || redirectUri;
+  const effectiveRedirectUri = normalizeRedirectUri(customRedirectUri || redirectUri);
   const url = `${accountsUrl.replace(/\/$/, '')}/oauth/v2/token`;
 
   const params = new URLSearchParams({
