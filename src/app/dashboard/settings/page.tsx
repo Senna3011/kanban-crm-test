@@ -4,17 +4,23 @@ import { getEmailConfigs } from '@/server/actions/email-config';
 import CompanyInfoForm from '@/components/setup/CompanyInfoForm';
 import EmailConfigForm from '@/components/setup/EmailConfigForm';
 import BoardSenderManager from '@/components/setup/BoardSenderManager';
+import ZohoConnectCard from '@/components/setup/ZohoConnectCard';
 import Link from 'next/link';
 import AiStatusBanner from '@/components/AiStatusBanner';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 
-export default async function SettingsPage() {
+export default async function SettingsPage({
+  searchParams,
+}: {
+  searchParams?: Promise<{ status?: string; email?: string; aliases?: string; error?: string }>;
+}) {
   const session = await getServerSession(authOptions);
   const userRole = (session?.user as any)?.role || 'member';
   const isAdmin = userRole === 'admin';
 
+  const resolvedParams = searchParams ? await searchParams : {};
   const data = await getEmailConfigs();
 
   return (
@@ -28,6 +34,33 @@ export default async function SettingsPage() {
       </div>
 
       <AiStatusBanner />
+
+      {/* OAuth Callback Feedback Banners */}
+      {resolvedParams.status === 'zoho_connected' && (
+        <div className="p-4 bg-emerald-50 border border-emerald-200 rounded-2xl text-xs text-emerald-900 flex items-center justify-between shadow-2xs">
+          <div className="flex items-center gap-2">
+            <span className="text-lg">✅</span>
+            <div>
+              <p className="font-bold text-emerald-950">
+                Zoho Mail Successfully Connected! ({resolvedParams.email})
+              </p>
+              <p className="text-emerald-700 text-[11px] mt-0.5">
+                Automatically detected and imported {resolvedParams.aliases || '1'} address(es) including Send-Mail-As team aliases.
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {resolvedParams.error && (
+        <div className="p-4 bg-rose-50 border border-rose-200 rounded-2xl text-xs text-rose-900 flex items-center gap-2 shadow-2xs">
+          <span className="text-lg">⚠️</span>
+          <div>
+            <p className="font-bold text-rose-950">Connection Error</p>
+            <p className="text-rose-700 text-[11px] mt-0.5">{resolvedParams.error}</p>
+          </div>
+        </div>
+      )}
 
       {/* Quick Navigation / Category Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
@@ -145,6 +178,9 @@ export default async function SettingsPage() {
             {data.configs.length} configured
           </span>
         </div>
+
+        {/* 1-Click Zoho OAuth Connect Card */}
+        {isAdmin && <ZohoConnectCard boards={data.boards} />}
 
         {data.configs.length === 0 ? (
           <div className="text-center py-8 text-gray-500">

@@ -11,67 +11,67 @@ export default function ZohoConnectCard({ boards }: { boards: BoardItem[] }) {
   const [connecting, setConnecting] = useState(false);
 
   function handleConnect() {
-    if (!zohoEmail.trim() || !zohoEmail.includes('@')) {
-      alert('Please enter your valid Zoho email address.');
-      return;
-    }
     setConnecting(true);
     const params = new URLSearchParams();
     if (selectedBoardId) params.set('boardId', selectedBoardId);
-    params.set('loginEmail', zohoEmail.trim());
+    if (zohoEmail.trim()) params.set('loginEmail', zohoEmail.trim());
     window.location.href = `/api/auth/zoho?${params.toString()}`;
   }
 
   return (
-    <section className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-xl border border-blue-200 p-6">
-      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-        <div className="space-y-1">
+    <div className="bg-gradient-to-br from-indigo-50/80 via-blue-50/50 to-white rounded-2xl border border-indigo-200/90 p-5 shadow-2xs space-y-4">
+      <div className="flex flex-col md:flex-row md:items-start justify-between gap-4">
+        <div className="space-y-1.5 max-w-xl">
           <div className="flex items-center gap-2">
             <span className="text-xl">📫</span>
-            <h2 className="text-lg font-semibold text-gray-900">Connect with Zoho Mail (One-Click)</h2>
+            <h3 className="text-sm font-bold text-slate-900">
+              1-Click Connect Zoho Mail (OAuth 2.0)
+            </h3>
+            <span className="text-[10px] font-bold px-2 py-0.5 bg-indigo-100 text-indigo-700 rounded-full">
+              Auto-Discover Aliases
+            </span>
           </div>
-          <p className="text-sm text-gray-600">
-            Log in directly through official Zoho OAuth. No need to share your password or configure IMAP/SMTP ports manually.
+          <p className="text-xs text-slate-600 leading-relaxed">
+            Connect directly through official Zoho OAuth. The system automatically detects and imports <strong>all Send-Mail-As alias addresses</strong> (e.g. <code>info@</code>, <code>jdp-elite-team@</code>, <code>grow@</code>, etc.) into the selected board without typing passwords or manual alias lists.
           </p>
         </div>
 
-        <div className="flex flex-col gap-3">
-          <div className="flex items-center gap-2">
-            <label className="text-xs font-medium text-gray-700 whitespace-nowrap">Your Zoho Email:</label>
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-end gap-2.5">
+          <div className="space-y-1">
+            <label className="block text-[11px] font-bold text-slate-700">Link to Board:</label>
+            <select
+              className="w-full sm:w-auto px-3 py-2 border border-slate-300 rounded-xl text-xs bg-white text-slate-800 font-medium focus:outline-none focus:ring-2 focus:ring-primary-500"
+              value={selectedBoardId}
+              onChange={(e) => setSelectedBoardId(e.target.value)}
+            >
+              {boards.map((b) => (
+                <option key={b.id} value={b.id}>
+                  {b.title}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div className="space-y-1">
+            <label className="block text-[11px] font-bold text-slate-700">Zoho Email (Optional):</label>
             <input
               type="email"
-              placeholder="you@zoho.com"
-              className="px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-primary-500 flex-1 max-w-xs"
+              placeholder="e.g. n3ll3ll@aol.com"
+              className="w-full sm:w-44 px-3 py-2 border border-slate-300 rounded-xl text-xs bg-white text-slate-800 focus:outline-none focus:ring-2 focus:ring-primary-500"
               value={zohoEmail}
               onChange={(e) => setZohoEmail(e.target.value)}
-              required
             />
           </div>
 
-          <div className="flex items-center gap-3">
-            {boards.length > 0 && (
-              <div className="flex items-center gap-2">
-                <label className="text-xs font-medium text-gray-700 whitespace-nowrap">Link to Board:</label>
-                <select
-                  className="px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-primary-500"
-                  value={selectedBoardId}
-                  onChange={(e) => setSelectedBoardId(e.target.value)}
-                >
-                  {boards.map((b) => (
-                    <option key={b.id} value={b.id}>
-                      {b.title}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            )}
-
-            <Button onClick={handleConnect} loading={connecting} className="bg-blue-600 hover:bg-blue-700 text-white whitespace-nowrap">
-              Login with Zoho
-            </Button>
-          </div>
+          <Button
+            onClick={handleConnect}
+            loading={connecting}
+            className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs rounded-xl shadow-xs whitespace-nowrap"
+          >
+            Connect Zoho Mail →
+          </Button>
         </div>
       </div>
-    </section>
+    </div>
   );
 }
