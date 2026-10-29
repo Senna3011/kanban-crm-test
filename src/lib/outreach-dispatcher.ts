@@ -1,5 +1,6 @@
 import nodemailer, { Transporter } from 'nodemailer';
 import { prisma } from './prisma';
+import { generateUnsubscribeSignature } from './outreach-signature';
 
 export async function waitWithJitter(baseMs = 3000, jitterMs = 6000): Promise<void> {
   const delay = baseMs + Math.floor(Math.random() * jitterMs);
@@ -223,8 +224,9 @@ export async function dispatchColdEmail(params: DispatchLeadEmailParams): Promis
     };
   }
 
-  // Compliant footer with unsubscribe option
-  const unsubscribeUrl = `${process.env.NEXTAUTH_URL || 'http://localhost:3099'}/api/outreach/unsubscribe?email=${encodeURIComponent(lead.email)}&t=${params.tenantId}`;
+  // Compliant footer with signed unsubscribe option
+  const unsubSig = generateUnsubscribeSignature(lead.email, params.tenantId);
+  const unsubscribeUrl = `${process.env.NEXTAUTH_URL || 'http://localhost:3099'}/api/outreach/unsubscribe?email=${encodeURIComponent(lead.email)}&t=${params.tenantId}&sig=${unsubSig}`;
   const emailBodyText = `${lead.aiDraftBody}\n\n---\nIf you prefer not to receive future messages, unsubscribe here: ${unsubscribeUrl}`;
   const emailBodyHtml = `<div style="font-family: Arial, sans-serif; font-size: 14px; line-height: 1.6; color: #1e293b;">
     ${lead.aiDraftBody.replace(/\n\n/g, '<br/><br/>').replace(/\n/g, '<br/>')}
@@ -273,6 +275,15 @@ export async function dispatchColdEmail(params: DispatchLeadEmailParams): Promis
     };
   } catch (error: any) {
     console.error(`[OUTREACH DISPATCH] Failed to send email to ${lead.email}:`, error);
+
+    // Rollback quota on selected account if transmission failed
+    if (selectedAccount?.id) {
+      await prisma.outreachAccountConfig.updateMany({
+        where: { id: selectedAccount.id, sentToday: { gt: 0 } },
+        data: { sentToday: { decrement: 1 } },
+      }).catch(() => {});
+    }
+
     await prisma.outreachLead.update({
       where: { id: lead.id },
       data: {
@@ -425,7 +436,8 @@ export async function dispatchDripFollowUp(params: {
     return { success: false, error: 'No active SMTP credentials configured' };
   }
 
-  const unsubscribeUrl = `${process.env.NEXTAUTH_URL || 'http://localhost:3099'}/api/outreach/unsubscribe?email=${encodeURIComponent(lead.email)}&t=${params.tenantId}`;
+  const unsubSig = generateUnsubscribeSignature(lead.email, params.tenantId);
+  const unsubscribeUrl = `${process.env.NEXTAUTH_URL || 'http://localhost:3099'}/api/outreach/unsubscribe?email=${encodeURIComponent(lead.email)}&t=${params.tenantId}&sig=${unsubSig}`;
   const emailBodyText = `${followUpBody}\n\n---\nIf you prefer not to receive future messages, unsubscribe here: ${unsubscribeUrl}`;
   const emailBodyHtml = `<div style="font-family: Arial, sans-serif; font-size: 14px; line-height: 1.6; color: #1e293b;">
     ${followUpBody.replace(/\n\n/g, '<br/><br/>').replace(/\n/g, '<br/>')}

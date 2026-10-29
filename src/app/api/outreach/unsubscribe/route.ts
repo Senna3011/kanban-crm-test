@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
+import { verifyUnsubscribeSignature } from '@/lib/outreach-signature';
 
 function escapeHtml(str: string): string {
   return str
@@ -14,9 +15,10 @@ export async function POST(req: NextRequest) {
   const { searchParams } = new URL(req.url);
   const email = searchParams.get('email');
   const tenantId = searchParams.get('t');
+  const signature = searchParams.get('sig');
 
-  if (!email || !tenantId) {
-    return NextResponse.json({ error: 'Invalid unsubscribe link parameters.' }, { status: 400 });
+  if (!email || !tenantId || !signature || !verifyUnsubscribeSignature(email, tenantId, signature)) {
+    return NextResponse.json({ error: 'Invalid or unauthorized unsubscribe link.' }, { status: 403 });
   }
 
   try {
@@ -47,9 +49,10 @@ export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
   const email = searchParams.get('email');
   const tenantId = searchParams.get('t');
+  const signature = searchParams.get('sig');
 
-  if (!email || !tenantId) {
-    return new NextResponse('Invalid unsubscribe link parameters.', { status: 400 });
+  if (!email || !tenantId || !signature || !verifyUnsubscribeSignature(email, tenantId, signature)) {
+    return new NextResponse('Invalid or unauthorized unsubscribe link.', { status: 403 });
   }
 
   try {

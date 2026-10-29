@@ -135,6 +135,12 @@ export async function PATCH(req: NextRequest) {
     updateData.status = body.status;
   }
   if (body.columnId && typeof body.columnId === 'string') {
+    const colExists = await prisma.column.findFirst({
+      where: { id: body.columnId, board: { tenantId } },
+    });
+    if (!colExists) {
+      return NextResponse.json({ error: 'Invalid columnId for this tenant' }, { status: 400 });
+    }
     updateData.columnId = body.columnId;
   }
 

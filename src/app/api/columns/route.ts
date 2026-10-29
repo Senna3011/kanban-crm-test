@@ -204,31 +204,41 @@ export async function PUT(req: NextRequest) {
     return NextResponse.json({ error: 'Forbidden: Hanya Admin yang dapat mengubah pengaturan kolom.' }, { status: 403 });
   }
 
+  const tenantId = (session.user as any).tenantId;
   const body = await req.json();
 
-  if (body.columns) {
+  if (Array.isArray(body.columns)) {
     for (const col of body.columns) {
-      await prisma.column.update({
-        where: { id: col.id },
-        data: { title: col.title, position: col.position, color: col.color },
+      if (!col.id) continue;
+      await prisma.column.updateMany({
+        where: { id: col.id, board: { tenantId } },
+        data: {
+          title: col.title,
+          position: col.position,
+          color: col.color,
+        },
       });
     }
   }
 
-  if (body.deleteIds) {
+  if (Array.isArray(body.deleteIds)) {
     for (const id of body.deleteIds) {
-      const col = await prisma.column.findUnique({ where: { id } });
+      const col = await prisma.column.findFirst({
+        where: { id, board: { tenantId } },
+      });
       if (col && !col.isSystem) {
         const general = await prisma.column.findFirst({
           where: { boardId: col.boardId, title: 'General' },
         });
         if (general && general.id !== id) {
           await prisma.card.updateMany({
-            where: { columnId: id },
+            where: { columnId: id, tenantId },
             data: { columnId: general.id },
           });
         }
-        await prisma.column.delete({ where: { id } });
+        await prisma.column.deleteMany({
+          where: { id, board: { tenantId } },
+        });
       }
     }
   }

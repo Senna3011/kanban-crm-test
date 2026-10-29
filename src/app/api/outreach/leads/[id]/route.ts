@@ -29,15 +29,32 @@ export async function PATCH(
 
   try {
     const body = await req.json();
-    const { aiDraftSubject, aiDraftBody, email, status } = body;
+    const {
+      aiDraftSubject,
+      aiDraftBody,
+      dripDraftSubject,
+      dripDraftBody,
+      email,
+      fullName,
+      jobTitle,
+      companyName,
+      status,
+      metadata,
+    } = body;
 
     const updated = await prisma.outreachLead.update({
       where: { id: leadId },
       data: {
         ...(aiDraftSubject !== undefined && { aiDraftSubject }),
         ...(aiDraftBody !== undefined && { aiDraftBody }),
+        ...(dripDraftSubject !== undefined && { dripDraftSubject }),
+        ...(dripDraftBody !== undefined && { dripDraftBody }),
         ...(email !== undefined && { email }),
+        ...(fullName !== undefined && { fullName }),
+        ...(jobTitle !== undefined && { jobTitle }),
+        ...(companyName !== undefined && { companyName }),
         ...(status !== undefined && { status }),
+        ...(metadata !== undefined && { metadata }),
       },
     });
 

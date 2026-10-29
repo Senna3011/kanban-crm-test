@@ -198,6 +198,21 @@ function buildTimelineMessages(
       if (c?.messageId) seenActivityKeys.add(`msg-${c.messageId}`);
     }
 
+    if (log.type === 'email_reply_received') {
+      const replyBody = c?.bodyText || c?.body || c?.text || (c?.subject ? `Reply: ${c.subject}` : 'Customer replied to this thread');
+      items.push({
+        id: `reply-${log.id}`,
+        type: 'received',
+        title: 'Customer Reply',
+        sender: c?.from || c?.fromEmail || currentCard.fromName || currentCard.fromEmail,
+        senderEmail: c?.fromEmail || c?.from,
+        subject: c?.subject || currentCard.subject || '(No Subject)',
+        body: replyBody,
+        timestamp: new Date(log.createdAt),
+      });
+      continue;
+    }
+
     const parsed = parseActivityPayload(log.type, log.content);
     const dedupeKey = `${log.type}-${parsed.summary}`;
     if (seenActivityKeys.has(dedupeKey)) continue;
@@ -1103,7 +1118,7 @@ export default function CardDetailPanel({ card, onClose }: Props) {
                     srcDoc={cardHtml}
                     className="w-full border-0"
                     style={{ minHeight: isMaximized ? 420 : 260, maxHeight: isMaximized ? 650 : 420 }}
-                    sandbox="allow-same-origin"
+                    sandbox="allow-popups"
                     title="Email HTML"
                   />
                 </div>

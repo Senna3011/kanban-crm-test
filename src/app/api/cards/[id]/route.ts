@@ -70,6 +70,15 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
     }
   }
 
+  if (body.assignedToId) {
+    const userExists = await prisma.user.findFirst({
+      where: { id: body.assignedToId, tenantId },
+    });
+    if (!userExists) {
+      return NextResponse.json({ error: 'Assigned user not found in this tenant' }, { status: 400 });
+    }
+  }
+
     const updateData: any = {
       status: body.status,
       highlighted: body.highlighted,

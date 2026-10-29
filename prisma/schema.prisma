@@ -118,7 +118,7 @@ model Card {
   fromName       String?
   bodyText       String?
   bodyHtml       String?
-  messageId      String?  @unique
+  messageId      String?
   inReplyTo      String?
   imapUid        Int?
   imapFolder     String?  @default("INBOX")
@@ -153,6 +153,7 @@ model Card {
   notifications Notification[]
   recoveredSpam SpamLog[]
 
+  @@unique([tenantId, messageId])
   @@index([tenantId, columnId])
   @@index([tenantId, status])
   @@index([imapFolder])

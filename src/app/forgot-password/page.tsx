@@ -8,22 +8,17 @@ export default function ForgotPasswordPage() {
   const [email, setEmail] = useState('');
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState('');
-  const [resetLink, setResetLink] = useState<string | null>(null);
   const [error, setError] = useState('');
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError('');
     setMessage('');
-    setResetLink(null);
     setLoading(true);
 
     try {
       const res = await requestPasswordReset(email);
       setMessage(res.message);
-      if (res.resetLink) {
-        setResetLink(res.resetLink);
-      }
     } catch (err: any) {
       setError(err?.message || 'Failed to process password reset.');
     } finally {
@@ -54,19 +49,8 @@ export default function ForgotPasswordPage() {
           )}
 
           {message && (
-            <div className="text-xs sm:text-sm text-emerald-800 bg-emerald-50 border border-emerald-200 rounded-xl p-3 space-y-2">
-              <p className="font-semibold text-center">{message}</p>
-              {resetLink && (
-                <div className="space-y-1.5 pt-1">
-                  <p className="text-slate-600 text-xs">Direct Reset Link (Click below to set new password):</p>
-                  <Link
-                    href={resetLink}
-                    className="block text-center py-2 px-3 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-lg text-xs shadow-2xs transition"
-                  >
-                    👉 Click to Set New Password
-                  </Link>
-                </div>
-              )}
+            <div className="text-xs sm:text-sm text-emerald-800 bg-emerald-50 border border-emerald-200 rounded-xl p-3 text-center font-medium">
+              {message}
             </div>
           )}
 

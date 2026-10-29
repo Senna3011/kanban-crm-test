@@ -33,8 +33,6 @@ export default function ConfirmDialog({
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape' && !isLoading) {
         onCancel();
-      } else if (e.key === 'Enter' && !isLoading) {
-        onConfirm();
       }
     };
 

@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { useRouter } from 'next/navigation';
 import Input from '@/components/ui/Input';
 import Button from '@/components/ui/Button';
 import ConfirmDialog, { type ConfirmDialogVariant } from '@/components/ui/ConfirmDialog';
@@ -76,6 +77,7 @@ const defaults: EmailValues = {
 };
 
 export default function EmailConfigForm({ initial, boards = [], isNew = false }: { initial?: Partial<EmailValues>; boards?: BoardItem[]; isNew?: boolean }) {
+  const router = useRouter();
   const [form, setForm] = useState<EmailValues>({
     ...defaults,
     ...initial,
@@ -237,7 +239,7 @@ export default function EmailConfigForm({ initial, boards = [], isNew = false }:
         smtpPass: form.smtpPass || form.imapPass,
       });
       toast.success('Email configuration saved successfully!');
-      window.location.reload();
+      router.refresh();
     } catch (error: any) {
       toast.error(error?.message || 'Failed to save email configuration.');
     } finally {
@@ -262,7 +264,7 @@ export default function EmailConfigForm({ initial, boards = [], isNew = false }:
         try {
           await deleteEmailConfig(form.id);
           toast.success('Email configuration deleted.');
-          window.location.reload();
+          router.refresh();
         } catch (error: any) {
           toast.error(error?.message || 'Failed to delete configuration.');
         } finally {

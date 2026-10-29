@@ -2,8 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/server/auth';
 import prisma from '@/lib/prisma';
-import { decrypt } from '@/lib/encryption';
-import { createTransport } from 'nodemailer';
+import { sendDraft } from '@/server/actions/draft';
 
 export async function POST(req: NextRequest) {
   const session = await getServerSession(authOptions);
@@ -13,7 +12,7 @@ export async function POST(req: NextRequest) {
 
   try {
     const body = await req.json().catch(() => ({}));
-    const { columnId, emailConfigId } = body;
+    const { columnId, fromAddress } = body;
 
     if (!columnId) {
       return NextResponse.json({ error: 'columnId is required' }, { status: 400 });
@@ -57,34 +56,6 @@ export async function POST(req: NextRequest) {
       });
     }
 
-    // Resolve Email Configuration
-    const configWhere = emailConfigId
-      ? { id: emailConfigId, tenantId, isActive: true }
-      : { tenantId, isActive: true };
-
-    const emailConfig = await prisma.emailConfig.findFirst({
-      where: configWhere,
-    });
-
-    if (!emailConfig || !emailConfig.smtpPass) {
-      return NextResponse.json({
-        error: 'No active email mailbox configuration found with valid SMTP credentials.',
-      }, { status: 400 });
-    }
-
-    const transporter = createTransport({
-      host: emailConfig.smtpHost,
-      port: emailConfig.smtpPort,
-      secure: emailConfig.smtpPort === 465,
-      auth: {
-        user: emailConfig.smtpUser,
-        pass: decrypt(emailConfig.smtpPass),
-      },
-      tls: {
-        rejectUnauthorized: false,
-      },
-    });
-
     let sentCount = 0;
     let failedCount = 0;
 
@@ -93,43 +64,13 @@ export async function POST(req: NextRequest) {
       if (!draft || !card.fromEmail) continue;
 
       try {
-        await transporter.sendMail({
-          from: `"${emailConfig.name || 'Sales Team'}" <${emailConfig.smtpUser}>`,
-          to: card.fromEmail,
-          subject: draft.subject || card.subject,
-          text: draft.body,
-        });
-
-        // Mark draft as sent
-        await prisma.draftMessage.update({
-          where: { id: draft.id },
-          data: {
-            status: 'sent',
-            sentAt: new Date(),
-            fromAddress: emailConfig.smtpUser,
-          },
-        });
-
-        // Record activity log
-        await prisma.activityLog.create({
-          data: {
-            type: 'email_sent',
-            content: {
-              subject: draft.subject || card.subject,
-              to: card.fromEmail,
-              from: emailConfig.smtpUser,
-            },
-            cardId: card.id,
-            tenantId,
-          },
-        });
-
+        await sendDraft(draft.id, fromAddress);
         sentCount++;
 
         // 1.5s throttle between sends to maintain healthy deliverability
         await new Promise((res) => setTimeout(res, 1500));
       } catch (err: any) {
-        console.error(`[SEND COLUMN DRAFTS] Error sending card ${card.id}:`, err);
+        console.error(`[SEND COLUMN DRAFTS] Error sending card ${card.id}:`, err?.message || err);
         failedCount++;
       }
     }

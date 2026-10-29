@@ -97,7 +97,26 @@ export async function sendDraft(draftId: string, fromAddress?: string) {
   }
 
   // Send via SMTP
-  const authConfig: any = { user: emailConfig.smtpUser || emailConfig.senderEmail };
+  let authUser = emailConfig.smtpUser || emailConfig.senderEmail;
+  if (!isOutreachAccount && emailConfig.authType === 'oauth2') {
+    // For Zoho OAuth2, auth.user MUST be the primary Zoho account email,
+    // while From: header can be any authorized Send-Mail-As alias.
+    if (!emailConfig.name?.startsWith('Zoho (')) {
+      const primaryConfig = await prisma.emailConfig.findFirst({
+        where: {
+          tenantId,
+          authType: 'oauth2',
+          name: { startsWith: 'Zoho (' },
+        },
+        select: { smtpUser: true },
+      });
+      if (primaryConfig?.smtpUser) {
+        authUser = primaryConfig.smtpUser;
+      }
+    }
+  }
+
+  const authConfig: any = { user: authUser };
   if (!isOutreachAccount && emailConfig.authType === 'oauth2') {
     authConfig.type = 'OAuth2';
     authConfig.accessToken = await getValidZohoAccessToken(emailConfig.id);
@@ -113,7 +132,8 @@ export async function sendDraft(draftId: string, fromAddress?: string) {
     auth: authConfig,
   });
 
-  const sendFrom = fromAddress || emailConfig.senderEmail || emailConfig.smtpUser;
+  // Strictly enforce that the From header is an authorized address from emailConfig or outreachAccount
+  const sendFrom = emailConfig.senderEmail || emailConfig.smtpUser;
   const senderDisplayName = emailConfig.senderName || (session.user as any).name || 'Support Team';
   const fromHeader = `"${senderDisplayName}" <${sendFrom}>`;
 

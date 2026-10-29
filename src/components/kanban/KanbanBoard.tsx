@@ -1005,7 +1005,12 @@ export default function KanbanBoard() {
 
       {/* Column Settings Modal */}
       {showColumnSettings && (
-        <ColumnSettings columns={columns} onChange={setColumns} onClose={() => setShowColumnSettings(false)} />
+        <ColumnSettings
+          columns={columns}
+          boardId={activeBoardId}
+          onChange={() => fetchColumns()}
+          onClose={() => setShowColumnSettings(false)}
+        />
       )}
 
       {/* Outbound Compose Message Modal */}

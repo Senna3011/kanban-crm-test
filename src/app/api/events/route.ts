@@ -1,22 +1,32 @@
 import { NextRequest } from 'next/server';
+import { getServerSession } from 'next-auth';
+import { authOptions } from '@/server/auth';
 import { appEventBus, AppSSEEvent } from '@/lib/events';
 
 export const dynamic = 'force-dynamic';
 
 export async function GET(req: NextRequest) {
+  const session = await getServerSession(authOptions);
+  if (!session?.user) {
+    return new Response('Unauthorized', { status: 401 });
+  }
+
+  const sessionTenantId = (session.user as any).tenantId;
+  if (!sessionTenantId) {
+    return new Response('Forbidden: No tenant associated with session.', { status: 403 });
+  }
+
   const encoder = new TextEncoder();
-  const { searchParams } = new URL(req.url);
-  const tenantId = searchParams.get('tenantId');
 
   const stream = new ReadableStream({
     start(controller) {
       // Send initial connection event
       controller.enqueue(encoder.encode('event: connected\ndata: {"status":"ok"}\n\n'));
 
-      // Event listener
+      // Event listener scoped strictly to session tenantId
       const onEvent = (event: AppSSEEvent) => {
         try {
-          if (!event.tenantId || !tenantId || event.tenantId === tenantId) {
+          if (event.tenantId === sessionTenantId) {
             controller.enqueue(encoder.encode(`data: ${JSON.stringify(event)}\n\n`));
           }
         } catch {

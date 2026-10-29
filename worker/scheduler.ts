@@ -48,7 +48,13 @@ export function startSchedulers() {
     console.log('[Scheduler] Starting email poll for all tenants...');
     try {
       const configs = await prisma.emailConfig.findMany({
-        where: { isActive: true },
+        where: {
+          isActive: true,
+          OR: [
+            { authType: { not: 'oauth2' } },
+            { name: { startsWith: 'Zoho (' } },
+          ],
+        },
         select: { tenantId: true, id: true },
       });
 

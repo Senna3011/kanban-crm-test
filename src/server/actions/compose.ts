@@ -104,7 +104,22 @@ export async function composeAndSendEmail(data: {
     sendFrom = fromAddress || emailConfig.smtpUser;
     senderDisplayName = (session.user as any).name || emailConfig.name || 'Sales Team';
 
-    const authConfig: any = { user: emailConfig.smtpUser };
+    let authUser = emailConfig.smtpUser;
+    if (emailConfig.authType === 'oauth2' && !emailConfig.name?.startsWith('Zoho (')) {
+      const primaryConfig = await prisma.emailConfig.findFirst({
+        where: {
+          tenantId,
+          authType: 'oauth2',
+          name: { startsWith: 'Zoho (' },
+        },
+        select: { smtpUser: true },
+      });
+      if (primaryConfig?.smtpUser) {
+        authUser = primaryConfig.smtpUser;
+      }
+    }
+
+    const authConfig: any = { user: authUser };
     if (emailConfig.authType === 'oauth2') {
       authConfig.type = 'OAuth2';
       authConfig.accessToken = await getValidZohoAccessToken(emailConfig.id);

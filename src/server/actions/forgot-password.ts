@@ -76,13 +76,13 @@ export async function requestPasswordReset(emailInput: string) {
     console.error('[requestPasswordReset] SMTP sending error:', err?.message || err);
   }
 
+  if (process.env.NODE_ENV !== 'production') {
+    console.log('[requestPasswordReset dev] Reset link generated:', resetLink);
+  }
+
   return {
     success: true,
-    emailSent,
-    resetLink: !emailSent ? resetLink : undefined,
-    message: emailSent
-      ? 'Password reset link has been sent to your email.'
-      : 'Password reset link generated successfully.',
+    message: 'If an account exists with this email, password reset instructions have been sent.',
   };
 }
 

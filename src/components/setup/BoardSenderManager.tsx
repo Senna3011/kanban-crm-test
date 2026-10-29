@@ -1,6 +1,7 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import { updateBoardEmailSettings } from '@/server/actions/email-config';
 import toast from 'react-hot-toast';
 
@@ -29,18 +30,24 @@ export default function BoardSenderManager({
   initialBoardSettings?: Record<string, { allowAllOutreach?: boolean }>;
   readOnly?: boolean;
 }) {
+  const router = useRouter();
+  const [localConfigs, setLocalConfigs] = useState<ConfigItem[]>(configs);
   const [boardSettings, setBoardSettings] = useState<Record<string, { allowAllOutreach?: boolean }>>(
     initialBoardSettings || {}
   );
   const [savingBoardId, setSavingBoardId] = useState<string | null>(null);
 
+  useEffect(() => {
+    setLocalConfigs(configs);
+  }, [configs]);
+
   // Group email configs by boardId
   const getConfigsForBoard = (boardId: string) => {
-    return configs.filter((c) => c.boardId === boardId);
+    return localConfigs.filter((c) => c.boardId === boardId);
   };
 
   const getUnassignedConfigs = () => {
-    return configs.filter((c) => !c.boardId);
+    return localConfigs.filter((c) => !c.boardId);
   };
 
   async function handleToggleOutreach(boardId: string, currentVal: boolean) {
@@ -79,8 +86,11 @@ export default function BoardSenderManager({
         boardId,
         assignedConfigIds: newConfigIds,
       });
+      setLocalConfigs((prev) =>
+        prev.map((c) => (c.id === configId ? { ...c, boardId } : c))
+      );
       toast.success('Mailbox assigned to board.');
-      window.location.reload();
+      router.refresh();
     } catch (err: any) {
       toast.error(err.message || 'Failed to assign mailbox');
     } finally {
@@ -98,8 +108,11 @@ export default function BoardSenderManager({
         boardId,
         assignedConfigIds: newConfigIds,
       });
+      setLocalConfigs((prev) =>
+        prev.map((c) => (c.id === configId ? { ...c, boardId: undefined } : c))
+      );
       toast.success('Mailbox unassigned from board.');
-      window.location.reload();
+      router.refresh();
     } catch (err: any) {
       toast.error(err.message || 'Failed to unassign mailbox');
     } finally {

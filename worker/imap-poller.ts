@@ -191,7 +191,10 @@ async function pollFolder(imapConfig: Record<string, string>, folder: string, te
 
   for (const msg of messages) {
     try {
-      const existingCard = await prisma.card.findUnique({ where: { messageId: msg.messageId }, select: { id: true, status: true, imapUid: true } });
+      const existingCard = await prisma.card.findFirst({
+        where: { tenantId, messageId: msg.messageId },
+        select: { id: true, status: true, imapUid: true },
+      });
       if (existingCard) {
         // If card was deleted by user, never resurrect it
         if (existingCard.status === 'deleted') {
@@ -209,12 +212,29 @@ async function pollFolder(imapConfig: Record<string, string>, folder: string, te
         continue;
       }
 
-      // Skip outbound emails only if sender is the exact configured mailbox username (i.e. self-sent)
+      // Skip outbound emails if sender is the configured mailbox user or any active internal sender/alias
       const senderEmail = msg.fromEmail?.toLowerCase().trim() || '';
       const configUser = imapConfig.user?.toLowerCase().trim() || '';
       if (configUser && senderEmail === configUser) {
         console.log(`[IMAP Poller] Skipping outbound email: ${msg.subject} (from ${msg.fromEmail})`);
         continue;
+      }
+      if (senderEmail) {
+        const isInternalSender = await prisma.emailConfig.findFirst({
+          where: {
+            tenantId,
+            isActive: true,
+            OR: [
+              { imapUser: { equals: senderEmail, mode: 'insensitive' } },
+              { smtpUser: { equals: senderEmail, mode: 'insensitive' } },
+            ],
+          },
+          select: { id: true },
+        });
+        if (isInternalSender) {
+          console.log(`[IMAP Poller] Skipping internal/outbound message: ${msg.subject} (from ${senderEmail})`);
+          continue;
+        }
       }
 
       // 1. Check for Bounce / Delivery Status Notification (DSN / NDR)
@@ -245,22 +265,33 @@ async function pollFolder(imapConfig: Record<string, string>, folder: string, te
 
           console.log(`[IMAP Poller] Processed bounce for ${bouncedEmail}: ${updatedLeads.count} lead(s) marked BOUNCED & added to suppression.`);
 
-          // Increase consecutive bounces on active outreach accounts
-          const affectedAccounts = await prisma.outreachAccountConfig.findMany({
-            where: { tenantId, isActive: true },
+          // Increase consecutive bounces ONLY on the outreach account that dispatched to this lead
+          const bouncedLead = await prisma.outreachLead.findFirst({
+            where: {
+              campaign: { tenantId },
+              email: { equals: bouncedEmail, mode: 'insensitive' },
+            },
+            include: { campaign: { select: { accountId: true } } },
+            orderBy: { updatedAt: 'desc' },
           });
-          for (const acc of affectedAccounts) {
-            const nextBounces = acc.consecutiveBounces + 1;
-            const healthStatus = nextBounces >= 5 ? 'PAUSED_BOUNCE' : (nextBounces >= 3 ? 'WARNING' : acc.healthStatus);
-            await prisma.outreachAccountConfig.update({
-              where: { id: acc.id },
-              data: {
-                consecutiveBounces: nextBounces,
-                healthStatus,
-              },
+          const targetAccountId = bouncedLead?.campaign?.accountId;
+          if (targetAccountId) {
+            const acc = await prisma.outreachAccountConfig.findUnique({
+              where: { id: targetAccountId },
             });
-            if (healthStatus === 'PAUSED_BOUNCE') {
-              console.warn(`[IMAP Poller] Mailbox ${acc.senderEmail} PAUSED due to high bounce threshold (5)!`);
+            if (acc && acc.isActive) {
+              const nextBounces = acc.consecutiveBounces + 1;
+              const healthStatus = nextBounces >= 5 ? 'PAUSED_BOUNCE' : (nextBounces >= 3 ? 'WARNING' : acc.healthStatus);
+              await prisma.outreachAccountConfig.update({
+                where: { id: acc.id },
+                data: {
+                  consecutiveBounces: nextBounces,
+                  healthStatus,
+                },
+              });
+              if (healthStatus === 'PAUSED_BOUNCE') {
+                console.warn(`[IMAP Poller] Mailbox ${acc.senderEmail} PAUSED due to high bounce threshold (5)!`);
+              }
             }
           }
         }
@@ -323,9 +354,21 @@ async function pollFolder(imapConfig: Record<string, string>, folder: string, te
             // Mark parent card as replied (highlighted)
             await prisma.card.update({ where: { id: parentCard.id }, data: { highlighted: true, lastActivityAt: new Date() } });
             await prisma.activityLog.create({
-              data: { type: 'email_reply_received', content: { messageId: msg.messageId, subject: msg.subject, from: msg.fromEmail, replyTo: msg.inReplyTo }, cardId: parentCard.id, tenantId },
+              data: {
+                type: 'email_reply_received',
+                content: {
+                  messageId: msg.messageId,
+                  subject: msg.subject,
+                  from: msg.fromEmail,
+                  replyTo: msg.inReplyTo,
+                  bodyText: msg.bodyText,
+                  bodyHtml: msg.bodyHtml,
+                },
+                cardId: parentCard.id,
+                tenantId,
+              },
             });
-            console.log(`[IMAP Poller] Reply detected: "${msg.subject}" → parent card ${parentCard.id} marked as highlighted`);
+            console.log(`[IMAP Poller] Reply detected: "${msg.subject}" → parent card ${parentCard.id} marked as highlighted with message content`);
           }
           continue;
         }
@@ -336,8 +379,17 @@ async function pollFolder(imapConfig: Record<string, string>, folder: string, te
       const board = await resolveBoard(tenantId, emailConfigId, msg.toEmail, folder, msg.recipientEmails);
       if (!board) continue;
 
-      const general = await prisma.column.findFirst({ where: { boardId: board.id, title: 'General' } });
-      if (!general) continue;
+      let targetColumn = await prisma.column.findFirst({ where: { boardId: board.id, title: 'General' } });
+      if (!targetColumn) {
+        targetColumn = await prisma.column.findFirst({
+          where: { boardId: board.id },
+          orderBy: { position: 'asc' },
+        });
+      }
+      if (!targetColumn) {
+        console.warn(`[IMAP Poller] No column available on board ${board.id} to place inbound email`);
+        continue;
+      }
 
       try {
         const cardMetadata: any = {};
@@ -352,7 +404,7 @@ async function pollFolder(imapConfig: Record<string, string>, folder: string, te
             messageId: msg.messageId, inReplyTo: msg.inReplyTo || null,
             imapUid: msg.uid || null, imapFolder: folder,
             status: msg.isRead ? 'read' : 'unread',
-            channel: 'email', columnId: general.id, tenantId, emailConfigId: emailConfigId,
+            channel: 'email', columnId: targetColumn.id, tenantId, emailConfigId: emailConfigId,
             lastActivityAt: msg.receivedAt || new Date(),
             metadata: Object.keys(cardMetadata).length > 0 ? cardMetadata : undefined,
           },
@@ -369,7 +421,7 @@ async function pollFolder(imapConfig: Record<string, string>, folder: string, te
         // Handle race condition: another poller worker inserted this messageId concurrently
         if (createErr?.code === 'P2002') {
           console.log(`[IMAP Poller] Concurrent insert collision for message ${msg.messageId}, updating existing card.`);
-          const existing = await prisma.card.findUnique({ where: { messageId: msg.messageId } });
+          const existing = await prisma.card.findFirst({ where: { tenantId, messageId: msg.messageId } });
           if (existing && msg.uid && existing.imapUid !== msg.uid) {
             await prisma.card.update({ where: { id: existing.id }, data: { imapUid: msg.uid, imapFolder: folder } });
           }
@@ -400,6 +452,12 @@ export async function processEmailPoll(data: { tenantId: string; emailConfigId: 
   try {
     const config = await prisma.emailConfig.findUnique({ where: { id: emailConfigId } });
     if (!config || !config.isActive || config.tenantId !== tenantId) return 0;
+
+    // For Zoho OAuth2, only poll primary account mailbox (Send-Mail-As aliases are incoming-routed via the primary mailbox)
+    if (config.authType === 'oauth2' && !config.name?.startsWith('Zoho (')) {
+      console.log(`[IMAP Poller] Skipping separate IMAP poll for alias "${config.name}" (managed via primary Zoho mailbox).`);
+      return 0;
+    }
 
     let accessToken: string | undefined;
     let password = '';
