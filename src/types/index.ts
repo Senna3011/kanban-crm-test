@@ -34,6 +34,14 @@ export interface CardData {
   probability?: number | null;
   lostReason?: string | null;
   createdAt: string;
+  emailConfigId?: string | null;
+  emailConfig?: {
+    id: string;
+    name: string;
+    smtpUser: string;
+    imapUser?: string;
+  } | null;
+  targetAlias?: string | null;
   /** Number of distinct email cards in this conversation thread */
   threadCount?: number;
   /** Whether the card has a description/body */

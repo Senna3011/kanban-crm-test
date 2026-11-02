@@ -17,6 +17,8 @@ interface Props {
   onSelectColumn?: (cardIds: string[], select: boolean) => void;
   forcedSortMode?: 'default' | 'unreads' | 'date';
   onStartSendingAll?: (columnId: string, columnTitle: string) => void;
+  onSelectSubBoard?: (alias: string) => void;
+  activeSubBoard?: string;
 }
 
 export default function KanbanColumn({
@@ -30,6 +32,8 @@ export default function KanbanColumn({
   onSelectColumn,
   forcedSortMode,
   onStartSendingAll,
+  onSelectSubBoard,
+  activeSubBoard,
 }: Props) {
   const { setNodeRef, isOver } = useDroppable({ id: column.id });
   const [localSortMode, setLocalSortMode] = useState<'default' | 'unreads' | 'date'>('default');
@@ -183,6 +187,8 @@ export default function KanbanColumn({
               selectionMode={selectionMode}
               isSelected={selectedIds?.has(card.id)}
               onToggleSelect={onToggleSelect}
+              onSelectSubBoard={onSelectSubBoard}
+              activeSubBoard={activeSubBoard}
             />
           ))}
         </SortableContext>

@@ -118,6 +118,14 @@ export async function GET(req: NextRequest) {
           bodyText: true, status: true, channel: true, highlighted: true,
           columnId: true, assignedToId: true, lastActivityAt: true,
           nextFollowUpAt: true, metadata: true, createdAt: true,
+          dealValue: true, currency: true, contactRole: true, probability: true,
+          emailConfigId: true,
+          emailConfig: {
+            select: { id: true, name: true, smtpUser: true, imapUser: true },
+          },
+          assignedTo: {
+            select: { id: true, name: true, email: true, avatar: true },
+          },
         },
       },
     },
@@ -154,9 +162,19 @@ export async function GET(req: NextRequest) {
     ...col,
     cards: col.cards.map(card => {
       const cleanBody = sanitizeEmailBody(card.bodyText);
+      const meta = (card.metadata as any) || {};
+      const targetAlias =
+        card.emailConfig?.smtpUser ||
+        card.emailConfig?.imapUser ||
+        meta.toEmail ||
+        meta.deliveredTo ||
+        meta.fromEmail ||
+        null;
+
       return {
         ...card,
         bodyText: cleanBody,
+        targetAlias,
         threadCount: threadCountMap.get(card.id) || 1,
         descLen: cleanBody ? cleanBody.length : 0,
       };

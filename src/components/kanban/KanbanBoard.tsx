@@ -7,6 +7,7 @@ import KanbanColumn from './KanbanColumn';
 import KanbanCard from './KanbanCard';
 import CardDetailPanel from './CardDetailPanel';
 import ColumnSettings from './ColumnSettings';
+import SubBoardSelector, { SubBoardSender } from './SubBoardSelector';
 import ConfirmDialog, { type ConfirmDialogVariant } from '@/components/ui/ConfirmDialog';
 import { composeAndSendEmail } from '@/server/actions/compose';
 import toast, { Toaster } from 'react-hot-toast';
@@ -55,11 +56,41 @@ export default function KanbanBoard() {
   // New Outbound Compose Modal State
   const [showComposeModal, setShowComposeModal] = useState(false);
   const [composeFromList, setComposeFromList] = useState<string[]>([]);
+  const [rawSenderConfigs, setRawSenderConfigs] = useState<any[]>([]);
   const [composeFrom, setComposeFrom] = useState('');
   const [composeTo, setComposeTo] = useState('');
   const [composeSubject, setComposeSubject] = useState('');
   const [composeBody, setComposeBody] = useState('');
   const [sendingCompose, setSendingCompose] = useState(false);
+
+  // Sub-Board per Alias / Sender State
+  const [activeSubBoard, setActiveSubBoard] = useState<string>('all');
+
+  // Load active sub-board from URL query param if present
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      const sb = params.get('subBoard');
+      if (sb) setActiveSubBoard(sb);
+    }
+  }, []);
+
+  function handleSelectSubBoard(alias: string) {
+    setActiveSubBoard(alias);
+    if (typeof window !== 'undefined') {
+      const url = new URL(window.location.href);
+      if (alias === 'all') {
+        url.searchParams.delete('subBoard');
+      } else {
+        url.searchParams.set('subBoard', alias);
+      }
+      window.history.replaceState({}, '', url.toString());
+    }
+    // Auto-preselect Compose From address when switching to a sub-board
+    if (alias !== 'all' && composeFromList.some((s) => s.toLowerCase() === alias.toLowerCase())) {
+      setComposeFrom(alias);
+    }
+  }
 
   // Fetch available sender mailboxes strictly authorized for the active board
   const fetchBoardSenders = useCallback((boardId: string) => {
@@ -68,6 +99,7 @@ export default function KanbanBoard() {
       .then((r) => (r.ok ? r.json() : []))
       .then((configs: any[]) => {
         if (Array.isArray(configs)) {
+          setRawSenderConfigs(configs);
           const senders = configs.map((c) => c.smtpUser).filter(Boolean);
           const uniqueSenders = Array.from(new Set(senders)) as string[];
           setComposeFromList(uniqueSenders);
@@ -541,7 +573,70 @@ export default function KanbanBoard() {
     });
   }
 
-  // Calculate statistics
+  // Aggregate all senders & aliases for this board with micro-metrics
+  const subBoardSenders = useMemo<SubBoardSender[]>(() => {
+    const senderMap = new Map<string, SubBoardSender>();
+
+    // 1. Seed from rawSenderConfigs (registered mailboxes & SendMailAs aliases)
+    for (const cfg of rawSenderConfigs) {
+      const email = (cfg.smtpUser || cfg.senderEmail || cfg.imapUser || '').toLowerCase().trim();
+      if (!email) continue;
+      const name = cfg.name || cfg.senderName || email.split('@')[0];
+      const isTeamAlias = cfg.authType === 'oauth2' || Boolean(cfg.boardId);
+      senderMap.set(email, {
+        id: cfg.id || email,
+        email,
+        name,
+        totalCards: 0,
+        unreadCount: 0,
+        dealValue: 0,
+        isTeamAlias,
+      });
+    }
+
+    // 2. Tally from cards across all columns
+    for (const col of columns) {
+      for (const card of col.cards) {
+        const cardAlias = (
+          card.targetAlias ||
+          card.emailConfig?.smtpUser ||
+          card.emailConfig?.imapUser ||
+          (card.metadata as any)?.toEmail ||
+          (card.metadata as any)?.deliveredTo ||
+          (card.metadata as any)?.fromEmail ||
+          ''
+        ).toLowerCase().trim();
+
+        if (!cardAlias) continue;
+
+        if (!senderMap.has(cardAlias)) {
+          senderMap.set(cardAlias, {
+            id: cardAlias,
+            email: cardAlias,
+            name: card.emailConfig?.name || cardAlias.split('@')[0],
+            totalCards: 0,
+            unreadCount: 0,
+            dealValue: 0,
+            isTeamAlias: false,
+          });
+        }
+
+        const entry = senderMap.get(cardAlias)!;
+        entry.totalCards += 1;
+        if (card.status === 'unread') entry.unreadCount += 1;
+        if (card.dealValue) entry.dealValue += Number(card.dealValue);
+      }
+    }
+
+    return Array.from(senderMap.values()).sort((a, b) => b.totalCards - a.totalCards);
+  }, [rawSenderConfigs, columns]);
+
+  // Top 4 active senders for 1-click Quick Chips
+  const topQuickSenders = useMemo(() => {
+    return subBoardSenders.filter((s) => s.totalCards > 0).slice(0, 4);
+  }, [subBoardSenders]);
+
+  // Calculate statistics (filtered by active sub-board if set)
   const stats = useMemo(() => {
     let total = 0;
     let unread = 0;
@@ -551,6 +646,19 @@ export default function KanbanBoard() {
 
     columns.forEach((col) => {
       col.cards.forEach((card) => {
+        if (activeSubBoard !== 'all') {
+          const cardAlias = (
+            card.targetAlias ||
+            card.emailConfig?.smtpUser ||
+            card.emailConfig?.imapUser ||
+            (card.metadata as any)?.toEmail ||
+            (card.metadata as any)?.deliveredTo ||
+            (card.metadata as any)?.fromEmail ||
+            ''
+          ).toLowerCase().trim();
+          if (cardAlias !== activeSubBoard.toLowerCase().trim()) return;
+        }
+
         total++;
         if (card.status === 'unread') unread++;
         if (card.highlighted) replied++;
@@ -559,7 +667,7 @@ export default function KanbanBoard() {
     });
 
     return { total, unread, replied, overdue };
-  }, [columns]);
+  }, [columns, activeSubBoard]);
 
   // Client-side search and filtering
   const filteredColumns = useMemo(() => {
@@ -568,6 +676,21 @@ export default function KanbanBoard() {
 
     return columns.map((col) => {
       const cards = col.cards.filter((card) => {
+        // 1. Sub-Board alias filter
+        if (activeSubBoard !== 'all') {
+          const cardAlias = (
+            card.targetAlias ||
+            card.emailConfig?.smtpUser ||
+            card.emailConfig?.imapUser ||
+            (card.metadata as any)?.toEmail ||
+            (card.metadata as any)?.deliveredTo ||
+            (card.metadata as any)?.fromEmail ||
+            ''
+          ).toLowerCase().trim();
+          if (cardAlias !== activeSubBoard.toLowerCase().trim()) return false;
+        }
+
+        // 2. Search query filter
         if (q) {
           const matchSub = (card.subject || '').toLowerCase().includes(q);
           const matchSender =
@@ -586,7 +709,7 @@ export default function KanbanBoard() {
       });
       return { ...col, cards };
     });
-  }, [columns, searchQuery, filterMode]);
+  }, [columns, searchQuery, filterMode, activeSubBoard]);
 
   const totalFilteredCards = useMemo(() => {
     return filteredColumns.reduce((acc, col) => acc + col.cards.length, 0);
@@ -717,6 +840,19 @@ export default function KanbanBoard() {
               </div>
             ) : (
               <h1 className="text-lg sm:text-xl font-bold tracking-tight text-slate-900">{boardName}</h1>
+            )}
+
+            {/* Sub-Board Selector Component Right Next to Board Title */}
+            {subBoardSenders.length > 0 && (
+              <>
+                <span className="text-slate-300 font-normal text-lg hidden sm:inline">/</span>
+                <SubBoardSelector
+                  senders={subBoardSenders}
+                  activeSubBoard={activeSubBoard}
+                  onSelectSubBoard={handleSelectSubBoard}
+                  boardTitle={boardName}
+                />
+              </>
             )}
 
             {/* Quick Metrics Chips */}
@@ -852,6 +988,84 @@ export default function KanbanBoard() {
             </button>
           </div>
         </div>
+
+        {/* Dynamic Sub-Board Quick Chips Bar (Top Most Active Senders + All) */}
+        {subBoardSenders.length > 0 && (
+          <div className="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-none pt-0.5">
+            <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider shrink-0 mr-1 flex items-center gap-1">
+              <span>🏷️</span> Sub-Boards:
+            </span>
+            <button
+              type="button"
+              onClick={() => handleSelectSubBoard('all')}
+              className={`px-2.5 py-1 rounded-lg text-xs font-bold transition shrink-0 cursor-pointer ${
+                activeSubBoard === 'all'
+                  ? 'bg-slate-900 text-white shadow-2xs'
+                  : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-50'
+              }`}
+            >
+              All ({subBoardSenders.reduce((acc, s) => acc + s.totalCards, 0)})
+            </button>
+
+            {topQuickSenders.map((sender) => {
+              const isSelected = activeSubBoard.toLowerCase() === sender.email.toLowerCase();
+              return (
+                <button
+                  key={sender.email}
+                  type="button"
+                  onClick={() => handleSelectSubBoard(sender.email)}
+                  className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold transition shrink-0 cursor-pointer ${
+                    isSelected
+                      ? 'bg-indigo-600 text-white shadow-xs ring-2 ring-indigo-300'
+                      : 'bg-white text-slate-700 border border-slate-200 hover:bg-slate-50'
+                  }`}
+                  title={sender.email}
+                >
+                  <span className="text-[10px]">{sender.isTeamAlias ? '👥' : '✉️'}</span>
+                  <span className="max-w-[120px] truncate">{sender.name || sender.email.split('@')[0]}</span>
+                  <span
+                    className={`px-1.5 py-0.2 rounded-full text-[10px] font-bold ${
+                      isSelected ? 'bg-indigo-700 text-white' : 'bg-slate-100 text-slate-600'
+                    }`}
+                  >
+                    {sender.totalCards}
+                  </span>
+                </button>
+              );
+            })}
+
+            {subBoardSenders.length > topQuickSenders.length && (
+              <span className="text-[11px] font-medium text-slate-400 px-1 shrink-0">
+                +{subBoardSenders.length - topQuickSenders.length} more in selector above
+              </span>
+            )}
+          </div>
+        )}
+
+        {/* Active Sub-Board Filter Banner */}
+        {activeSubBoard !== 'all' && (
+          <div className="flex items-center justify-between px-3.5 py-2 bg-gradient-to-r from-indigo-50 to-blue-50 border border-indigo-200/80 rounded-xl text-xs text-indigo-950 shadow-2xs animate-in fade-in">
+            <div className="flex items-center gap-2">
+              <span className="text-base">🎯</span>
+              <div>
+                <span className="font-bold">Active Sub-Board Lens:</span>{' '}
+                <span className="font-mono font-bold bg-white px-2 py-0.5 rounded border border-indigo-200 text-indigo-900 shadow-2xs">
+                  {activeSubBoard}
+                </span>{' '}
+                <span className="text-indigo-600 font-medium ml-1">
+                  ({totalFilteredCards} cards isolated in this pipeline)
+                </span>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => handleSelectSubBoard('all')}
+              className="text-xs font-bold text-indigo-700 hover:text-indigo-900 hover:underline px-2 py-1 cursor-pointer"
+            >
+              ✕ Reset to All Senders
+            </button>
+          </div>
+        )}
 
         {/* Search Bar & Filter Chips Row */}
         <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2.5 pt-1">
@@ -992,11 +1206,13 @@ export default function KanbanBoard() {
               onSelectColumn={handleSelectColumn}
               forcedSortMode={globalSortMode}
               onStartSendingAll={handleStartSendingColumn}
+              onSelectSubBoard={handleSelectSubBoard}
+              activeSubBoard={activeSubBoard}
             />
           ))}
         </div>
         <DragOverlay>
-          {activeCard ? <KanbanCard card={activeCard} isDragging /> : null}
+          {activeCard ? <KanbanCard card={activeCard} isDragging activeSubBoard={activeSubBoard} /> : null}
         </DragOverlay>
       </DndContext>
 

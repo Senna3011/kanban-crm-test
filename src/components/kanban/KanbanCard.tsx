@@ -14,6 +14,8 @@ interface Props {
   selectionMode?: boolean;
   isSelected?: boolean;
   onToggleSelect?: (cardId: string) => void;
+  onSelectSubBoard?: (alias: string) => void;
+  activeSubBoard?: string;
 }
 
 function getAvatarColor(str: string) {
@@ -71,6 +73,8 @@ export default function KanbanCard({
   selectionMode,
   isSelected,
   onToggleSelect,
+  onSelectSubBoard,
+  activeSubBoard = 'all',
 }: Props) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging: isSortableDragging } = useSortable({
     id: card.id,
@@ -87,6 +91,15 @@ export default function KanbanCard({
   const senderDisplay = card.fromName || card.fromEmail.split('@')[0] || 'Unknown';
   const initial = senderDisplay.charAt(0).toUpperCase();
   const avatarGradient = getAvatarColor(card.fromEmail || senderDisplay);
+
+  const cardAlias =
+    card.targetAlias ||
+    card.emailConfig?.smtpUser ||
+    card.emailConfig?.imapUser ||
+    (card.metadata as any)?.toEmail ||
+    (card.metadata as any)?.deliveredTo ||
+    (card.metadata as any)?.fromEmail ||
+    '';
 
   const style = {
     transform: CSS.Transform.toString(transform),
@@ -142,7 +155,23 @@ export default function KanbanCard({
         </div>
 
         {/* Badges */}
-        <div className="flex items-center gap-1.5 flex-shrink-0">
+        <div className="flex items-center gap-1.5 flex-shrink-0 flex-wrap justify-end">
+          {cardAlias && activeSubBoard === 'all' && (
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                onSelectSubBoard?.(cardAlias);
+              }}
+              className="inline-flex items-center gap-1 text-[9px] font-semibold px-1.5 py-0.5 rounded-md bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200/80 transition-colors cursor-pointer"
+              title={`Sub-Board: ${cardAlias} (Click to isolate)`}
+            >
+              <span>🏷️</span>
+              <span className="truncate max-w-[80px]">
+                {card.emailConfig?.name || cardAlias.split('@')[0]}
+              </span>
+            </button>
+          )}
           {card.dealValue && (
             <span className="inline-flex items-center text-[10px] font-bold px-1.5 py-0.5 rounded-md bg-emerald-50 text-emerald-700 border border-emerald-200 shadow-2xs">
               {card.currency === 'IDR' ? `Rp ${Number(card.dealValue).toLocaleString('id-ID')}` : `${card.currency || '$'}${Number(card.dealValue).toLocaleString()}`}
