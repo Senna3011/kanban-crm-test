@@ -599,11 +599,11 @@ export default function KanbanBoard() {
       for (const card of col.cards) {
         const cardAlias = (
           card.targetAlias ||
+          (card.metadata as any)?.deliveredTo ||
+          (card.metadata as any)?.toEmail ||
+          (card.metadata as any)?.fromEmail ||
           card.emailConfig?.smtpUser ||
           card.emailConfig?.imapUser ||
-          (card.metadata as any)?.toEmail ||
-          (card.metadata as any)?.deliveredTo ||
-          (card.metadata as any)?.fromEmail ||
           ''
         ).toLowerCase().trim();
 
@@ -649,11 +649,11 @@ export default function KanbanBoard() {
         if (activeSubBoard !== 'all') {
           const cardAlias = (
             card.targetAlias ||
+            (card.metadata as any)?.deliveredTo ||
+            (card.metadata as any)?.toEmail ||
+            (card.metadata as any)?.fromEmail ||
             card.emailConfig?.smtpUser ||
             card.emailConfig?.imapUser ||
-            (card.metadata as any)?.toEmail ||
-            (card.metadata as any)?.deliveredTo ||
-            (card.metadata as any)?.fromEmail ||
             ''
           ).toLowerCase().trim();
           if (cardAlias !== activeSubBoard.toLowerCase().trim()) return;
@@ -680,11 +680,11 @@ export default function KanbanBoard() {
         if (activeSubBoard !== 'all') {
           const cardAlias = (
             card.targetAlias ||
+            (card.metadata as any)?.deliveredTo ||
+            (card.metadata as any)?.toEmail ||
+            (card.metadata as any)?.fromEmail ||
             card.emailConfig?.smtpUser ||
             card.emailConfig?.imapUser ||
-            (card.metadata as any)?.toEmail ||
-            (card.metadata as any)?.deliveredTo ||
-            (card.metadata as any)?.fromEmail ||
             ''
           ).toLowerCase().trim();
           if (cardAlias !== activeSubBoard.toLowerCase().trim()) return false;

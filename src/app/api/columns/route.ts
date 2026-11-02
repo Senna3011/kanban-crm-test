@@ -163,12 +163,14 @@ export async function GET(req: NextRequest) {
     cards: col.cards.map(card => {
       const cleanBody = sanitizeEmailBody(card.bodyText);
       const meta = (card.metadata as any) || {};
+      // Extract target recipient alias: prioritize deliveredTo / toEmail so aliases (e.g. grow@, success@)
+      // are accurately isolated instead of being masked by the physical IMAP connection user
       const targetAlias =
+        meta.deliveredTo ||
+        meta.toEmail ||
+        meta.fromEmail ||
         card.emailConfig?.smtpUser ||
         card.emailConfig?.imapUser ||
-        meta.toEmail ||
-        meta.deliveredTo ||
-        meta.fromEmail ||
         null;
 
       return {

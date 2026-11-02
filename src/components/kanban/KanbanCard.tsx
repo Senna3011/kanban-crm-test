@@ -94,11 +94,11 @@ export default function KanbanCard({
 
   const cardAlias =
     card.targetAlias ||
+    (card.metadata as any)?.deliveredTo ||
+    (card.metadata as any)?.toEmail ||
+    (card.metadata as any)?.fromEmail ||
     card.emailConfig?.smtpUser ||
     card.emailConfig?.imapUser ||
-    (card.metadata as any)?.toEmail ||
-    (card.metadata as any)?.deliveredTo ||
-    (card.metadata as any)?.fromEmail ||
     '';
 
   const style = {

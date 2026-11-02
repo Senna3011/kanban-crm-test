@@ -59,8 +59,18 @@ function extractRecipientEmails(parsed: any): { primaryTo?: string; deliveredTo?
   processAddressField(parsed.cc);
   processAddressField(parsed.bcc);
 
-  // Check header aliases (Delivered-To, X-Original-To, Envelope-To, etc.)
-  const headerKeys = ['delivered-to', 'x-original-to', 'x-delivered-to', 'envelope-to', 'x-forwarded-to', 'x-envelope-to'];
+  // Check header aliases (Delivered-To, Zoho Mail proprietary headers, X-Original-To, Envelope-To, etc.)
+  const headerKeys = [
+    'x-zoho-recipient',
+    'x-zoho-mail-delivered-to',
+    'x-received-for',
+    'delivered-to',
+    'x-delivered-to',
+    'x-original-to',
+    'envelope-to',
+    'x-forwarded-to',
+    'x-envelope-to',
+  ];
   let deliveredTo: string | undefined;
 
   if (parsed.headers && typeof parsed.headers.get === 'function') {
