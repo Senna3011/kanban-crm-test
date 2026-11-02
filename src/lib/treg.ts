@@ -49,8 +49,8 @@ function cleanDomain(rawDomain?: string): string | undefined {
 }
 
 /**
- * Searches B2B leads from On-Demand B2B Gateway (Treg.to Unified Gateway - Pay-As-You-Go)
- * Aggregates 121 enterprise data providers with sub-cent cost per verified contact.
+ * Searches B2B leads from On-Demand B2B Gateway (Treg.to Unified Gateway)
+ * Uses official gateway proxy path: https://treg.to/call/treg.people.search
  */
 export async function searchTregLeads(params: TregSearchParams): Promise<ApifyScrapedLead[]> {
   const apiKey = params.apiKey || process.env.TREG_API_KEY;
@@ -58,8 +58,8 @@ export async function searchTregLeads(params: TregSearchParams): Promise<ApifySc
     throw new Error('On-Demand B2B Gateway API Key (TREG_API_KEY) is not configured in server environment.');
   }
 
-  const targetLimit = Math.min(Math.max(params.limit || 10, 1), 100);
-  const fetchLimit = Math.min(targetLimit * 2, 100);
+  const targetLimit = Math.min(Math.max(params.limit || 10, 1), 50);
+  const fetchLimit = Math.min(targetLimit * 2, 50);
 
   const payload: Record<string, any> = {
     limit: fetchLimit,
@@ -67,34 +67,33 @@ export async function searchTregLeads(params: TregSearchParams): Promise<ApifySc
   };
 
   if (params.role) {
-    payload.titles = params.role.split(',').map((r) => r.trim()).filter(Boolean);
+    payload.title = params.role.split(',')[0].trim();
   }
 
   if (params.location) {
-    payload.locations = params.location.split(',').map((l) => l.trim()).filter(Boolean);
+    payload.location = params.location.trim();
   }
 
   if (params.industry) {
-    payload.industries = params.industry.split(',').map((i) => i.trim()).filter(Boolean);
+    payload.keywords = params.industry.split(',').map((i) => i.trim());
   }
 
   if (params.query) {
-    payload.keywords = params.query.trim();
     payload.q = params.query.trim();
   }
 
-  console.log('[On-Demand B2B Gateway] Dispatching search request to aggregator gateway...');
+  console.log('[On-Demand B2B Gateway] Dispatching request to https://treg.to/call/treg.people.search...');
 
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), 15000);
 
   try {
-    const res = await fetch('https://api.treg.to/v1/people/search', {
+    const res = await fetch('https://treg.to/call/treg.people.search', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
+        'X-Treg-Token': apiKey,
         Authorization: `Bearer ${apiKey}`,
-        'x-api-key': apiKey,
       },
       body: JSON.stringify(payload),
       signal: controller.signal,
@@ -107,19 +106,24 @@ export async function searchTregLeads(params: TregSearchParams): Promise<ApifySc
       let parsedErr = errText;
       try {
         const jsonErr = JSON.parse(errText);
-        parsedErr = jsonErr.message || jsonErr.error || errText;
+        parsedErr =
+          typeof jsonErr.error === 'object'
+            ? JSON.stringify(jsonErr.error)
+            : jsonErr.message || jsonErr.error || errText;
       } catch {}
       throw new Error(`On-Demand B2B Gateway Error (${res.status}): ${parsedErr}`);
     }
 
     const data = await res.json();
     const rawList: TregPersonRecord[] =
+      data.output?.people ||
+      data.output?.data ||
+      data.output ||
       data.data ||
-      data.results ||
       data.people ||
       (Array.isArray(data) ? data : []);
 
-    console.log(`[On-Demand B2B Gateway] Received ${rawList.length} raw records. Applying 8-point qualification...`);
+    console.log(`[On-Demand B2B Gateway] Received ${rawList.length} raw records from gateway. Served by: ${res.headers.get('x-treg-served-by') || 'multi-provider'}`);
 
     const qualifiedLeads: ApifyScrapedLead[] = [];
 
@@ -165,7 +169,7 @@ export async function searchTregLeads(params: TregSearchParams): Promise<ApifySc
         metadata: {
           source: 'on-demand-gateway',
           phone: item.phone || item.phone_number || undefined,
-          aggregatorProvider: item.source || 'unified-b2b',
+          aggregatorProvider: item.source || res.headers.get('x-treg-served-by') || 'unified-b2b',
           scrapedAt: new Date().toISOString(),
         },
       };
