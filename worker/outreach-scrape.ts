@@ -1,6 +1,8 @@
 import { prisma } from '../src/lib/prisma';
 import { scrapeApifyLeads, ApifyScrapedLead } from '../src/lib/apify';
 import { scrapeOutscraperLeads } from '../src/lib/outscraper';
+import { searchLeadOceanLeads } from '../src/lib/leadocean';
+import { searchTregLeads } from '../src/lib/treg';
 import { OutreachScrapeJob } from '../queue/jobs';
 
 export async function processOutreachScrape(job: OutreachScrapeJob) {
@@ -18,7 +20,41 @@ export async function processOutreachScrape(job: OutreachScrapeJob) {
   const token = job.apiToken || campaign.account?.apifyApiToken || process.env.APIFY_API_TOKEN;
   let scrapedLeads: ApifyScrapedLead[] = [];
 
-  if (job.provider === 'outscraper' || process.env.OUTSCRAPER_API_KEY) {
+  if (job.provider === 'leadocean' || (!job.provider && process.env.LEADOCEAN_API_KEY)) {
+    try {
+      scrapedLeads = await searchLeadOceanLeads({
+        query: job.query,
+        role: job.role,
+        location: job.location,
+        industry: job.industry,
+        limit: job.limit,
+      });
+    } catch (err: any) {
+      console.warn(`[Scrape Worker] Enterprise B2B Index error: ${err.message}. Falling back to Outscraper.`);
+      scrapedLeads = await scrapeOutscraperLeads({
+        query: job.query || job.role || job.industry || 'Business Executive',
+        location: job.location || 'United States',
+        limit: job.limit,
+      });
+    }
+  } else if (job.provider === 'treg' || (!job.provider && process.env.TREG_API_KEY)) {
+    try {
+      scrapedLeads = await searchTregLeads({
+        query: job.query,
+        role: job.role,
+        location: job.location,
+        industry: job.industry,
+        limit: job.limit,
+      });
+    } catch (err: any) {
+      console.warn(`[Scrape Worker] On-Demand Gateway error: ${err.message}. Falling back to Outscraper.`);
+      scrapedLeads = await scrapeOutscraperLeads({
+        query: job.query || job.role || job.industry || 'Business Executive',
+        location: job.location || 'United States',
+        limit: job.limit,
+      });
+    }
+  } else if (job.provider === 'outscraper' || process.env.OUTSCRAPER_API_KEY) {
     try {
       scrapedLeads = await scrapeOutscraperLeads({
         query: job.query || job.role || job.industry || 'Business Executive',
@@ -80,7 +116,8 @@ export async function processOutreachScrape(job: OutreachScrapeJob) {
       linkedinUrl: lead.linkedinUrl || null,
       location: lead.location || null,
       email: lead.email || null,
-      status: lead.email ? ('VERIFYING' as const) : ('SCRAPED' as const),
+      verifyStatus: 'UNVERIFIED',
+      status: 'SCRAPED' as const,
       metadata: lead.metadata || { source: 'lead-discovery-bulk' },
     }));
 

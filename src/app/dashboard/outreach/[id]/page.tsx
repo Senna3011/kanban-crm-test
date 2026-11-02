@@ -124,6 +124,7 @@ export default function CampaignWorkspacePage({
   const [rowLoading, setRowLoading] = useState<Record<string, boolean>>({});
   const [exportingCsv, setExportingCsv] = useState(false);
   const [sourceBatchSize, setSourceBatchSize] = useState(10);
+  const [sourceProvider, setSourceProvider] = useState<'leadocean' | 'treg' | 'outscraper' | 'apify'>('leadocean');
 
   // Selection state for Checkboxes
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
@@ -325,7 +326,7 @@ export default function CampaignWorkspacePage({
   async function handleSourceLeads(customLimit?: number, customProvider?: string) {
     setActionLoading('scrape');
     try {
-      const provider = customProvider || searchParams?.get('provider') || 'outscraper';
+      const provider = customProvider || sourceProvider || searchParams?.get('provider') || 'leadocean';
       const res = await fetch(`/api/outreach/campaigns/${campaignId}/scrape`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -1210,10 +1211,22 @@ export default function CampaignWorkspacePage({
               <span>➕</span>
               <span>Add Custom Lead</span>
             </button>
-            {/* Source More Leads with Batch Selector */}
+            {/* Source More Leads with Provider & Batch Selector */}
             <div className="inline-flex rounded-xl shadow-2xs border border-slate-200 bg-slate-100 overflow-hidden">
+              <select
+                value={sourceProvider}
+                onChange={(e) => setSourceProvider(e.target.value as any)}
+                disabled={Boolean(actionLoading) || loading || isPollingWorker || campaign.status === 'RUNNING'}
+                className="bg-white hover:bg-slate-50 px-2.5 py-2 text-xs font-bold text-slate-800 border-r border-slate-200 focus:outline-none cursor-pointer disabled:opacity-50"
+                title="Select Lead Discovery Mode"
+              >
+                <option value="leadocean">⚡ Enterprise B2B Index (Instant)</option>
+                <option value="treg">🎯 On-Demand Gateway (Pay-As-You-Go)</option>
+                <option value="outscraper">🔍 Live Executive Search</option>
+                <option value="apify">🌐 Deep Profile Crawler</option>
+              </select>
               <button
-                onClick={() => handleSourceLeads(sourceBatchSize)}
+                onClick={() => handleSourceLeads(sourceBatchSize, sourceProvider)}
                 disabled={Boolean(actionLoading) || loading || isPollingWorker || campaign.status === 'RUNNING'}
                 className="px-3 py-2 hover:bg-slate-200 text-slate-800 text-xs font-semibold transition-colors disabled:opacity-50 flex items-center gap-1.5"
               >
@@ -1224,7 +1237,6 @@ export default function CampaignWorkspacePage({
                   </>
                 ) : (
                   <>
-                    <span>🔍</span>
                     <span>Source Leads</span>
                   </>
                 )}

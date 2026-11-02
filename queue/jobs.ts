@@ -53,7 +53,7 @@ export interface OutreachScrapeJob {
   location?: string;
   industry?: string;
   limit: number;
-  provider?: 'apify' | 'outscraper';
+  provider?: 'apify' | 'outscraper' | 'leadocean' | 'treg';
   apiToken?: string;
 }
 

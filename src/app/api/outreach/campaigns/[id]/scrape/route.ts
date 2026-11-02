@@ -4,6 +4,8 @@ import { authOptions } from '@/server/auth';
 import prisma from '@/lib/prisma';
 import { scrapeApifyLeads } from '@/lib/apify';
 import { scrapeOutscraperLeads } from '@/lib/outscraper';
+import { searchLeadOceanLeads } from '@/lib/leadocean';
+import { searchTregLeads } from '@/lib/treg';
 import { outreachScrapeQueue } from '@/../queue';
 
 export async function POST(
@@ -35,7 +37,21 @@ export async function POST(
     const location = body.location || campaign.targetLocation || 'United States';
     const industry = body.industry || campaign.targetIndustry || undefined;
     const limit = Number(body.limit) || 10;
-    const provider = (body.provider === 'outscraper' ? 'outscraper' : 'apify') as 'apify' | 'outscraper';
+    const rawProvider = String(body.provider || '').toLowerCase();
+    const provider: 'leadocean' | 'treg' | 'outscraper' | 'apify' =
+      rawProvider === 'leadocean'
+        ? 'leadocean'
+        : rawProvider === 'treg'
+        ? 'treg'
+        : rawProvider === 'apify'
+        ? 'apify'
+        : rawProvider === 'outscraper'
+        ? 'outscraper'
+        : process.env.LEADOCEAN_API_KEY
+        ? 'leadocean'
+        : process.env.TREG_API_KEY
+        ? 'treg'
+        : 'outscraper';
     const linkedinUrls = Array.isArray(body.linkedinUrls) ? body.linkedinUrls : undefined;
 
     // For massive scale (> 30 leads or async requested), enqueue to BullMQ background worker
@@ -87,7 +103,45 @@ export async function POST(
     const apiToken = campaign.account?.apifyApiToken || process.env.APIFY_API_TOKEN || process.env.APIFY_API_KEY;
 
     let scrapedLeads = [];
-    if (provider === 'outscraper') {
+    if (provider === 'leadocean') {
+      try {
+        scrapedLeads = await searchLeadOceanLeads({
+          query,
+          role,
+          location,
+          industry,
+          limit,
+        });
+      } catch (err: any) {
+        console.warn(`[Scrape Route] Enterprise B2B Index error: ${err.message}. Falling back to Outscraper.`);
+        scrapedLeads = await scrapeOutscraperLeads({
+          query,
+          role,
+          location,
+          industry,
+          limit,
+        });
+      }
+    } else if (provider === 'treg') {
+      try {
+        scrapedLeads = await searchTregLeads({
+          query,
+          role,
+          location,
+          industry,
+          limit,
+        });
+      } catch (err: any) {
+        console.warn(`[Scrape Route] On-Demand Gateway error: ${err.message}. Falling back to Outscraper.`);
+        scrapedLeads = await scrapeOutscraperLeads({
+          query,
+          role,
+          location,
+          industry,
+          limit,
+        });
+      }
+    } else if (provider === 'outscraper') {
       scrapedLeads = await scrapeOutscraperLeads({
         query,
         role,
@@ -140,10 +194,17 @@ export async function POST(
         linkedinUrl: lead.linkedinUrl ? String(lead.linkedinUrl) : null,
         location: lead.location ? String(lead.location) : null,
         email: lead.email ? String(lead.email) : null,
+        verifyStatus: 'UNVERIFIED',
         status: 'SCRAPED' as const,
         metadata: {
           summary: lead.summary ? String(lead.summary) : undefined,
-          source: lead.metadata?.source || 'discovery-live',
+          source:
+            lead.metadata?.source ||
+            (provider === 'leadocean'
+              ? 'enterprise-b2b-index'
+              : provider === 'treg'
+              ? 'on-demand-gateway'
+              : 'discovery-live'),
           ...(lead.metadata || {}),
           scrapedAt: new Date().toISOString(),
         },

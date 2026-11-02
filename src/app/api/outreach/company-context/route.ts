@@ -25,12 +25,12 @@ export async function GET(req: NextRequest) {
     parsed = { knowledgeBase: tenant?.companyInfo };
   }
 
-  return NextResponse.json({
-    companyName: parsed.name || tenant?.name || 'JetDigitalPro',
-    productsOffer: parsed.products || 'Custom Enterprise Software Development, AI & LLM Automation Workflows, Omnichannel CRM Integration',
-    knowledgeBase: parsed.knowledgeBase || 'We partner with enterprises to build custom software, eliminate sales/support bottlenecks, and scale operations.',
-    customPrompt: parsed.customPrompt || 'Highlight JetDigitalPro capabilities in software architecture and automation with a complimentary 10-minute discovery call.',
-  });
+    return NextResponse.json({
+      companyName: parsed.name || tenant?.name || 'JetDigitalPro',
+      productsOffer: parsed.products || 'Custom Enterprise Software Development, AI & LLM Automation Workflows, Omnichannel CRM Integration',
+      knowledgeBase: parsed.knowledgeBase || 'We partner with enterprises to build custom software, eliminate sales/support bottlenecks, and scale operations.',
+      customPrompt: parsed.customPrompt || 'Highlight JetDigitalPro capabilities in software architecture and automation with a complimentary 10-minute discovery call.',
+    });
 }
 
 export async function POST(req: NextRequest) {

@@ -612,99 +612,99 @@ export default function OutreachSettingsPage() {
               </div>
 
               {/* Actions */}
-              <div className="flex items-center justify-end gap-3 pt-4 border-t border-slate-100">
+                  <div className="flex items-center justify-end gap-3 pt-4 border-t border-slate-100">
+                    <button
+                      type="submit"
+                      disabled={saving}
+                      className="px-6 py-2 bg-primary-600 hover:bg-primary-700 text-white text-xs font-bold rounded-xl shadow-xs transition-colors disabled:opacity-50"
+                    >
+                      {saving ? 'Saving...' : editingId ? 'Update Outreach Account' : 'Save Outreach Account'}
+                    </button>
+                  </div>
+                </form>
+              </div>
+            </div>
+          ) : (
+            /* Prompt & Company Context Configuration */
+            <form
+              onSubmit={handleSaveCompanyContext}
+              className="bg-white p-6 rounded-2xl border border-slate-200/80 shadow-xs space-y-6"
+            >
+              <div className="border-b border-slate-100 pb-3">
+                <h2 className="text-sm font-bold text-slate-900">
+                  JetDigitalPro Company Offer & AI Pitch Prompt
+                </h2>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  Atur bagaimana AI memahami bisnis JetDigitalPro dan solusi apa yang ditawarkan dalam cold email untuk memikat prospek eksekutif.
+                </p>
+              </div>
+
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">Company Brand Name</label>
+                  <input
+                    type="text"
+                    value={companyName}
+                    onChange={(e) => setCompanyName(e.target.value)}
+                    placeholder="JetDigitalPro"
+                    className="w-full px-3 py-2 border border-slate-300 rounded-xl text-xs focus:ring-2 focus:ring-primary-500 focus:outline-none font-semibold text-slate-800"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">
+                    Products, Services & Core Capabilities (Apa yang ditawarkan?)
+                  </label>
+                  <textarea
+                    rows={3}
+                    value={productsOffer}
+                    onChange={(e) => setProductsOffer(e.target.value)}
+                    placeholder="e.g. Custom Enterprise Software, AI Workflow Automation, Omnichannel CRM Integration, Cloud Architecture Audit"
+                    className="w-full px-3 py-2 border border-slate-300 rounded-xl text-xs focus:ring-2 focus:ring-primary-500 focus:outline-none text-slate-800"
+                  />
+                  <p className="text-[11px] text-slate-400 mt-1">
+                    AI akan menyebutkan produk/layanan di atas secara natural sesuai kebutuhan profil target lead.
+                  </p>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">
+                    Knowledge Base & Corporate Value Proposition
+                  </label>
+                  <textarea
+                    rows={4}
+                    value={knowledgeBase}
+                    onChange={(e) => setKnowledgeBase(e.target.value)}
+                    placeholder="Tuliskan latar belakang keahlian, studi kasus, atau keunggulan JetDigitalPro..."
+                    className="w-full px-3 py-2 border border-slate-300 rounded-xl text-xs focus:ring-2 focus:ring-primary-500 focus:outline-none text-slate-800"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">
+                    AI Cold Outreach Guidance & Call-to-Action (CTA Directive)
+                  </label>
+                  <textarea
+                    rows={3}
+                    value={customPrompt}
+                    onChange={(e) => setCustomPrompt(e.target.value)}
+                    placeholder="e.g. Offer a complimentary 10-minute discovery call and software architecture audit."
+                    className="w-full px-3 py-2 border border-slate-300 rounded-xl text-xs focus:ring-2 focus:ring-primary-500 focus:outline-none text-slate-800"
+                  />
+                </div>
+              </div>
+
+              <div className="flex items-center justify-end pt-4 border-t border-slate-100">
                 <button
                   type="submit"
-                  disabled={saving}
-                  className="px-6 py-2 bg-primary-600 hover:bg-primary-700 text-white text-xs font-bold rounded-xl shadow-xs transition-colors disabled:opacity-50"
+                  disabled={savingPrompt}
+                  className="px-6 py-2.5 bg-primary-600 hover:bg-primary-700 text-white text-xs font-bold rounded-xl shadow-xs transition-colors disabled:opacity-50"
                 >
-                  {saving ? 'Saving...' : editingId ? 'Update Outreach Account' : 'Save Outreach Account'}
+                  {savingPrompt ? 'Saving Prompt...' : 'Save Company Context & AI Prompt'}
                 </button>
               </div>
             </form>
-          </div>
-        </div>
-      ) : (
-        /* Prompt & Company Context Configuration */
-        <form
-          onSubmit={handleSaveCompanyContext}
-          className="bg-white p-6 rounded-2xl border border-slate-200/80 shadow-xs space-y-6"
-        >
-          <div className="border-b border-slate-100 pb-3">
-            <h2 className="text-sm font-bold text-slate-900">
-              JetDigitalPro Company Offer & AI Pitch Prompt
-            </h2>
-            <p className="text-xs text-slate-500 mt-0.5">
-              Atur bagaimana AI memahami bisnis JetDigitalPro dan solusi apa yang ditawarkan dalam cold email untuk memikat prospek eksekutif.
-            </p>
-          </div>
-
-          <div className="space-y-4">
-            <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1">Company Brand Name</label>
-              <input
-                type="text"
-                value={companyName}
-                onChange={(e) => setCompanyName(e.target.value)}
-                placeholder="JetDigitalPro"
-                className="w-full px-3 py-2 border border-slate-300 rounded-xl text-xs focus:ring-2 focus:ring-primary-500 focus:outline-none font-semibold text-slate-800"
-              />
-            </div>
-
-            <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1">
-                Products, Services & Core Capabilities (Apa yang ditawarkan?)
-              </label>
-              <textarea
-                rows={3}
-                value={productsOffer}
-                onChange={(e) => setProductsOffer(e.target.value)}
-                placeholder="e.g. Custom Enterprise Software, AI Workflow Automation, Omnichannel CRM Integration, Cloud Architecture Audit"
-                className="w-full px-3 py-2 border border-slate-300 rounded-xl text-xs focus:ring-2 focus:ring-primary-500 focus:outline-none text-slate-800"
-              />
-              <p className="text-[11px] text-slate-400 mt-1">
-                AI akan menyebutkan produk/layanan di atas secara natural sesuai kebutuhan profil target lead.
-              </p>
-            </div>
-
-            <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1">
-                Value Proposition & Knowledge Base (Mengapa mereka butuh solusi ini?)
-              </label>
-              <textarea
-                rows={3}
-                value={knowledgeBase}
-                onChange={(e) => setKnowledgeBase(e.target.value)}
-                placeholder="e.g. We help tech-forward leadership eliminate manual sales/support bottlenecks, automate email pipelines, and build bespoke AI-driven software to accelerate operational efficiency."
-                className="w-full px-3 py-2 border border-slate-300 rounded-xl text-xs focus:ring-2 focus:ring-primary-500 focus:outline-none text-slate-800"
-              />
-            </div>
-
-            <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1">
-                Default Call to Action & Copywriting Angle (Instruksi Call-To-Action)
-              </label>
-              <textarea
-                rows={3}
-                value={customPrompt}
-                onChange={(e) => setCustomPrompt(e.target.value)}
-                placeholder="e.g. Offer a complimentary 10-minute discovery call and software architecture audit."
-                className="w-full px-3 py-2 border border-slate-300 rounded-xl text-xs focus:ring-2 focus:ring-primary-500 focus:outline-none text-slate-800"
-              />
-            </div>
-          </div>
-
-          <div className="flex items-center justify-end pt-4 border-t border-slate-100">
-            <button
-              type="submit"
-              disabled={savingPrompt}
-              className="px-6 py-2.5 bg-primary-600 hover:bg-primary-700 text-white text-xs font-bold rounded-xl shadow-xs transition-colors disabled:opacity-50"
-            >
-              {savingPrompt ? 'Saving Prompt...' : 'Save Company Context & AI Prompt'}
-            </button>
-          </div>
-        </form>
-      )}
+          )}
 
       {/* Delete Confirmation Modal */}
       <ConfirmDialog

@@ -126,7 +126,7 @@ export default function GuidePage() {
                   Lead Discovery & Multi-Tier Email Verification
                 </h2>
                 <p className="text-xs text-slate-500">
-                  Pencarian pengambil keputusan B2B dan verifikasi 4-lapis dengan Reoon API.
+                  Pencarian pengambil keputusan B2B dan verifikasi multi-lapis deliverability engine.
                 </p>
               </div>
             </div>
@@ -137,10 +137,10 @@ export default function GuidePage() {
                   <strong>Buat Campaign Baru:</strong> Buka <Link href="/dashboard/outreach/new" className="text-indigo-600 underline font-semibold">Outreach &gt; Create Campaign</Link>. Tentukan Role (e.g. <em>CTO, Founder</em>), Lokasi (e.g. <em>United States, Singapore</em>), dan Industri target.
                 </li>
                 <li>
-                  <strong>Sourcing Prospek:</strong> Sistem mencari kontak profil LinkedIn & data perusahaan dari Google Maps/Outscraper.
+                  <strong>Sourcing Prospek:</strong> Sistem mencari kontak profil eksekutif & data perusahaan dari jaringan direktori bisnis terverifikasi.
                 </li>
                 <li>
-                  <strong>Verifikasi Deliverability:</strong> Klik tombol <em>Verify Mailboxes</em>. Sistem memvalidasi kotak surat via Reoon API:
+                  <strong>Verifikasi Deliverability:</strong> Klik tombol <em>Verify Mailboxes</em>. Sistem memvalidasi kotak surat via Multi-Layer Deliverability Engine:
                   <ul className="pl-6 pt-1 space-y-1 list-disc">
                     <li><span className="text-emerald-700 font-bold">SAFE:</span> Valid 100%, siap untuk pengiriman cold email.</li>
                     <li><span className="text-amber-700 font-bold">RISKY / CATCH-ALL:</span> Server menerima semua email, disarankan dicek manual.</li>

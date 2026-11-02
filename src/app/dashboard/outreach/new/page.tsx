@@ -38,7 +38,7 @@ export default function NewOutreachCampaignPage() {
   const [selectedAccountIds, setSelectedAccountIds] = useState<string[]>([]);
 
   // Step 2: Target Lead Parameters
-  const [leadProvider, setLeadProvider] = useState<'outscraper' | 'apify'>('outscraper');
+  const [leadProvider, setLeadProvider] = useState<'leadocean' | 'treg' | 'outscraper' | 'apify'>('leadocean');
   const [targetRole, setTargetRole] = useState('Chief Technology Officer');
   const [targetLocation, setTargetLocation] = useState('United States');
   const [targetIndustry, setTargetIndustry] = useState('Information Technology & Services');
@@ -644,6 +644,102 @@ export default function NewOutreachCampaignPage() {
                       + Add Niche
                     </button>
                   </div>
+                </div>
+              </div>
+
+              {/* Lead Discovery Engine Selector */}
+              <div className="sm:col-span-2">
+                <label className="block text-xs font-semibold text-slate-700 mb-1.5">
+                  Lead Sourcing Architecture & Discovery Mode
+                </label>
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5">
+                  <button
+                    type="button"
+                    onClick={() => setLeadProvider('leadocean')}
+                    className={`p-3 rounded-xl border text-left transition-all cursor-pointer ${
+                      leadProvider === 'leadocean'
+                        ? 'bg-indigo-50/90 border-indigo-400 text-indigo-950 ring-2 ring-indigo-200'
+                        : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="text-xs font-bold flex items-center gap-1.5">
+                        <span>⚡</span> Enterprise B2B Index
+                      </span>
+                      <span className="text-[10px] font-bold px-1.5 py-0.2 rounded-full bg-indigo-600 text-white">
+                        Instant
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-slate-500">
+                      690M+ global decision makers. Sub-second discovery with verified direct corporate emails.
+                    </p>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setLeadProvider('treg')}
+                    className={`p-3 rounded-xl border text-left transition-all cursor-pointer ${
+                      leadProvider === 'treg'
+                        ? 'bg-amber-50/90 border-amber-400 text-amber-950 ring-2 ring-amber-200'
+                        : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="text-xs font-bold flex items-center gap-1.5">
+                        <span>🎯</span> On-Demand Gateway
+                      </span>
+                      <span className="text-[10px] font-bold px-1.5 py-0.2 rounded-full bg-amber-600 text-white">
+                        Pay-As-You-Go
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-slate-500">
+                      Aggregated 120+ provider gateway. Lowest cost per lead with verified work emails.
+                    </p>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setLeadProvider('outscraper')}
+                    className={`p-3 rounded-xl border text-left transition-all cursor-pointer ${
+                      leadProvider === 'outscraper'
+                        ? 'bg-primary-50/90 border-primary-400 text-primary-950 ring-2 ring-primary-200'
+                        : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="text-xs font-bold flex items-center gap-1.5">
+                        <span>🔍</span> Live Executive Search
+                      </span>
+                      <span className="text-[10px] font-bold px-1.5 py-0.2 rounded-full bg-slate-100 text-slate-600">
+                        Targeted
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-slate-500">
+                      Real-time targeted discovery across executive networks and verified web directories.
+                    </p>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setLeadProvider('apify')}
+                    className={`p-3 rounded-xl border text-left transition-all cursor-pointer ${
+                      leadProvider === 'apify'
+                        ? 'bg-blue-50/90 border-blue-400 text-blue-950 ring-2 ring-blue-200'
+                        : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="text-xs font-bold flex items-center gap-1.5">
+                        <span>🌐</span> Deep Profile Crawler
+                      </span>
+                      <span className="text-[10px] font-bold px-1.5 py-0.2 rounded-full bg-slate-100 text-slate-600">
+                        Deep
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-slate-500">
+                      Multi-source crawler for in-depth professional background and corporate insights.
+                    </p>
+                  </button>
                 </div>
               </div>
 
