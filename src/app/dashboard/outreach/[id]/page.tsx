@@ -381,7 +381,7 @@ export default function CampaignWorkspacePage({
         body: JSON.stringify(ids ? { leadIds: ids } : {}),
       });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Failed to find candidate emails');
+      if (!res.ok) throw new Error(data.error || 'Failed to find lead emails');
       toast.success(`Discovered emails for ${data.emailsFound} leads.`);
       await fetchCampaign();
     } catch (err: any) {
@@ -1110,12 +1110,12 @@ export default function CampaignWorkspacePage({
     } else if (missingEmailCount > 0) {
       currentStepNumber = 2;
       nextActionPrompt = `Step 2: ${missingEmailCount} leads need email discovery. Click to extract business emails.`;
-      nextActionLabel = `Get Candidate Emails (${missingEmailCount})`;
+      nextActionLabel = `Get Lead Emails (${missingEmailCount})`;
       nextActionHandler = async () => { await handleFindEmails(); };
       nextActionColor = 'bg-indigo-600 hover:bg-indigo-700';
     } else if (unverifiedCount > 0) {
       currentStepNumber = 3;
-      nextActionPrompt = `Step 3: ${unverifiedCount} candidate emails need deliverability verification.`;
+      nextActionPrompt = `Step 3: ${unverifiedCount} lead emails need deliverability verification.`;
       nextActionLabel = `Verify Deliverability (${unverifiedCount})`;
       nextActionHandler = async () => { await handleVerifyEmails(); };
       nextActionColor = 'bg-emerald-600 hover:bg-emerald-700';

@@ -32,6 +32,7 @@ interface CampaignItem {
   createdAt: string;
   account?: {
     senderEmail: string;
+    name?: string;
   };
   metrics: CampaignMetrics;
 }
@@ -136,81 +137,105 @@ export default function OutreachDashboardPage() {
       {/* Live Time-Series Analytics Chart */}
       <OutreachTrendChart />
 
-      {/* 9 Campaign Performance Metrics (Point 17) */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
-        <div className="bg-white p-3.5 rounded-xl border border-slate-200/80 shadow-xs">
-          <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Prospects</p>
-          <p className="text-xl font-bold text-slate-900 mt-0.5">
-            {campaigns.reduce((acc, c) => acc + (c.metrics?.prospects ?? c.metrics?.totalLeads ?? 0), 0)}
-          </p>
-          <span className="text-[10px] text-slate-400">Total Leads</span>
+      {/* Overall Stats (Feedback 17 / Image 3) */}
+      <div className="bg-white rounded-2xl border border-slate-200/80 shadow-xs p-5">
+        <div className="mb-4">
+          <h2 className="text-base font-bold text-slate-900">Overall Stats</h2>
+          <p className="text-xs text-slate-500">The data is from the start of campaign until now</p>
         </div>
-        <div className="bg-white p-3.5 rounded-xl border border-slate-200/80 shadow-xs">
-          <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Sent</p>
-          <p className="text-xl font-bold text-indigo-600 mt-0.5">
-            {campaigns.reduce((acc, c) => acc + (c.metrics?.sent ?? c.metrics?.dispatched ?? 0), 0)}
-          </p>
-          <span className="text-[10px] text-indigo-500">Transmitted</span>
-        </div>
-        <div className="bg-white p-3.5 rounded-xl border border-slate-200/80 shadow-xs">
-          <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Reached</p>
-          <p className="text-xl font-bold text-blue-600 mt-0.5">
-            {campaigns.reduce((acc, c) => acc + (c.metrics?.reached ?? c.metrics?.dispatched ?? 0), 0)}
-          </p>
-          <span className="text-[10px] text-blue-500">In Inbox</span>
-        </div>
-        <div className="bg-white p-3.5 rounded-xl border border-slate-200/80 shadow-xs">
-          <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Opened</p>
-          <p className="text-xl font-bold text-cyan-600 mt-0.5">
-            {campaigns.reduce((acc, c) => acc + (c.metrics?.opened ?? 0), 0)}
-          </p>
-          <span className="text-[10px] text-cyan-500">Email Opens</span>
-        </div>
-        <div className="bg-white p-3.5 rounded-xl border border-slate-200/80 shadow-xs">
-          <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Clicked</p>
-          <p className="text-xl font-bold text-purple-600 mt-0.5">
-            {campaigns.reduce((acc, c) => acc + (c.metrics?.clicked ?? 0), 0)}
-          </p>
-          <span className="text-[10px] text-purple-500">Link Clicks</span>
-        </div>
-        <div className="bg-white p-3.5 rounded-xl border border-slate-200/80 shadow-xs">
-          <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Replied</p>
-          <p className="text-xl font-bold text-amber-600 mt-0.5">
-            {campaigns.reduce((acc, c) => acc + (c.metrics?.replied ?? 0), 0)}
-          </p>
-          <span className="text-[10px] text-amber-500">Direct Replies</span>
-        </div>
-        <div className="bg-white p-3.5 rounded-xl border border-slate-200/80 shadow-xs">
-          <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Interested</p>
-          <p className="text-xl font-bold text-emerald-600 mt-0.5">
-            {campaigns.reduce((acc, c) => acc + (c.metrics?.interested ?? c.metrics?.converted ?? 0), 0)}
-          </p>
-          <span className="text-[10px] text-emerald-500">In CRM</span>
-        </div>
-        <div className="bg-white p-3.5 rounded-xl border border-slate-200/80 shadow-xs">
-          <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Opportunities</p>
-          <p className="text-xl font-bold text-emerald-700 mt-0.5">
-            ${campaigns.reduce((acc, c) => acc + (c.metrics?.opportunities ?? ((c.metrics?.converted || 0) * 100)), 0).toLocaleString()}
-          </p>
-          <span className="text-[10px] text-emerald-600">Pipeline Value</span>
-        </div>
-        <div className="bg-white p-3.5 rounded-xl border border-slate-200/80 shadow-xs col-span-2 sm:col-span-1">
-          <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Bounced</p>
-          <p className="text-xl font-bold text-rose-600 mt-0.5">
-            {campaigns.reduce((acc, c) => acc + (c.metrics?.bounced ?? 0), 0)}
-          </p>
-          <span className="text-[10px] text-rose-500">Delivery Bounces</span>
-        </div>
+
+        {(() => {
+          const totalProspects = campaigns.reduce((acc, c) => acc + (c.metrics?.prospects ?? c.metrics?.totalLeads ?? 0), 0);
+          const totalSent = campaigns.reduce((acc, c) => acc + (c.metrics?.sent ?? c.metrics?.dispatched ?? 0), 0);
+          const totalReached = campaigns.reduce((acc, c) => acc + (c.metrics?.reached ?? c.metrics?.dispatched ?? 0), 0);
+          const totalOpened = campaigns.reduce((acc, c) => acc + (c.metrics?.opened ?? 0), 0);
+          const totalClicked = campaigns.reduce((acc, c) => acc + (c.metrics?.clicked ?? 0), 0);
+          const totalReplied = campaigns.reduce((acc, c) => acc + (c.metrics?.replied ?? 0), 0);
+          const totalInterested = campaigns.reduce((acc, c) => acc + (c.metrics?.interested ?? c.metrics?.converted ?? 0), 0);
+          const totalOpportunities = campaigns.reduce((acc, c) => acc + (c.metrics?.opportunities ?? ((c.metrics?.converted || 0) * 100)), 0);
+          const totalBounced = campaigns.reduce((acc, c) => acc + (c.metrics?.bounced ?? 0), 0);
+
+          const sentPct = totalProspects > 0 ? Math.round((totalSent / totalProspects) * 100) : 0;
+          const openedPct = totalReached > 0 ? Math.round((totalOpened / totalReached) * 100) : 0;
+          const repliedPct = totalSent > 0 ? Math.round((totalReplied / totalSent) * 100) : 0;
+
+          return (
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-9 gap-3">
+              {/* 1. Prospects */}
+              <div className="bg-slate-50/70 p-3 rounded-xl border border-slate-100 flex flex-col justify-between">
+                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Prospects</p>
+                <p className="text-xl font-bold text-slate-900 mt-1">{totalProspects}</p>
+              </div>
+
+              {/* 2. Sent */}
+              <div className="bg-slate-50/70 p-3 rounded-xl border border-slate-100 flex flex-col justify-between">
+                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Sent</p>
+                <div className="flex items-baseline gap-1 mt-1">
+                  <span className="text-xl font-bold text-indigo-600">{totalSent}</span>
+                  <span className="text-[10px] font-bold text-indigo-500">({sentPct}%)</span>
+                </div>
+              </div>
+
+              {/* 3. Reached */}
+              <div className="bg-slate-50/70 p-3 rounded-xl border border-slate-100 flex flex-col justify-between">
+                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Reached</p>
+                <p className="text-xl font-bold text-blue-600 mt-1">{totalReached}</p>
+              </div>
+
+              {/* 4. Opened */}
+              <div className="bg-slate-50/70 p-3 rounded-xl border border-slate-100 flex flex-col justify-between">
+                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Opened</p>
+                <div className="flex items-baseline gap-1 mt-1">
+                  <span className="text-xl font-bold text-cyan-600">{totalOpened}</span>
+                  <span className="text-[10px] font-bold text-cyan-500">({openedPct}%)</span>
+                </div>
+              </div>
+
+              {/* 5. Clicked */}
+              <div className="bg-slate-50/70 p-3 rounded-xl border border-slate-100 flex flex-col justify-between">
+                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Clicked</p>
+                <p className="text-xl font-bold text-purple-600 mt-1">{totalClicked}</p>
+              </div>
+
+              {/* 6. Replied */}
+              <div className="bg-slate-50/70 p-3 rounded-xl border border-slate-100 flex flex-col justify-between">
+                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Replied</p>
+                <div className="flex items-baseline gap-1 mt-1">
+                  <span className="text-xl font-bold text-amber-600">{totalReplied}</span>
+                  <span className="text-[10px] font-bold text-amber-500">({repliedPct}%)</span>
+                </div>
+              </div>
+
+              {/* 7. Interested */}
+              <div className="bg-slate-50/70 p-3 rounded-xl border border-slate-100 flex flex-col justify-between">
+                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Interested</p>
+                <p className="text-xl font-bold text-emerald-600 mt-1">{totalInterested}</p>
+              </div>
+
+              {/* 8. Opportunities */}
+              <div className="bg-slate-50/70 p-3 rounded-xl border border-slate-100 flex flex-col justify-between">
+                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Opportunities</p>
+                <p className="text-xl font-bold text-emerald-700 mt-1">${totalOpportunities.toLocaleString()}</p>
+              </div>
+
+              {/* 9. Bounced */}
+              <div className="bg-slate-50/70 p-3 rounded-xl border border-slate-100 flex flex-col justify-between col-span-2 sm:col-span-1">
+                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Bounced</p>
+                <p className="text-xl font-bold text-rose-600 mt-1">{totalBounced}</p>
+              </div>
+            </div>
+          );
+        })()}
       </div>
 
-      {/* Campaign List Table */}
+      {/* Campaign List Table (Feedback 17 / Image 2) */}
       <div className="bg-white rounded-2xl border border-slate-200/80 shadow-xs overflow-hidden">
         <div className="p-4 border-b border-slate-100 flex items-center justify-between">
-          <h2 className="text-sm font-bold text-slate-900">Active Campaigns</h2>
+          <h2 className="text-sm font-bold text-slate-900">Active campaigns</h2>
           <button
             onClick={fetchCampaigns}
             disabled={loading}
-            className="text-xs text-slate-500 hover:text-slate-800 transition-colors flex items-center gap-1.5 disabled:opacity-50"
+            className="text-xs font-semibold text-slate-600 hover:text-slate-900 transition-colors flex items-center gap-1.5 disabled:opacity-50 px-2.5 py-1 rounded-lg border border-slate-200 hover:bg-slate-50 shadow-2xs"
           >
             <span className={loading ? 'animate-spin' : ''}>🔄</span>
             <span>{loading ? 'Refreshing...' : 'Refresh'}</span>
@@ -251,38 +276,28 @@ export default function OutreachDashboardPage() {
             <table className="w-full text-left text-xs text-slate-600">
               <thead className="bg-slate-50/80 text-[11px] font-bold text-slate-400 uppercase tracking-wider border-b border-slate-100">
                 <tr>
-                  <th className="px-4 py-3">Campaign</th>
-                  <th className="px-3 py-3 text-center">Prospects</th>
-                  <th className="px-3 py-3 text-center">Sent</th>
-                  <th className="px-3 py-3 text-center">Reached</th>
-                  <th className="px-3 py-3 text-center">Opened</th>
-                  <th className="px-3 py-3 text-center">Clicked</th>
-                  <th className="px-3 py-3 text-center">Replied</th>
-                  <th className="px-3 py-3 text-center">Interested</th>
-                  <th className="px-3 py-3 text-center">Opportunities</th>
-                  <th className="px-3 py-3 text-center">Bounced</th>
-                  <th className="px-4 py-3 text-right">Actions</th>
+                  <th className="px-4 py-3">CAMPAIGN NAME</th>
+                  <th className="px-4 py-3">TARGET PROFILE</th>
+                  <th className="px-4 py-3">SENDER ACCOUNT</th>
+                  <th className="px-3 py-3 text-center">LEADS</th>
+                  <th className="px-3 py-3 text-center">SAFE</th>
+                  <th className="px-3 py-3 text-center">DISPATCHED</th>
+                  <th className="px-3 py-3 text-center">CONVERTED</th>
+                  <th className="px-4 py-3 text-right">ACTIONS</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
                 {campaigns.map((camp) => {
-                  const prospects = camp.metrics.prospects ?? camp.metrics.totalLeads ?? 0;
-                  const sent = camp.metrics.sent ?? camp.metrics.dispatched ?? 0;
-                  const reached = camp.metrics.reached ?? camp.metrics.dispatched ?? 0;
-                  const opened = camp.metrics.opened ?? 0;
-                  const clicked = camp.metrics.clicked ?? 0;
-                  const replied = camp.metrics.replied ?? 0;
-                  const interested = camp.metrics.interested ?? camp.metrics.converted ?? 0;
-                  const opportunities = camp.metrics.opportunities ?? (interested * 100);
-                  const bounced = camp.metrics.bounced ?? 0;
-
-                  const sentPct = prospects > 0 ? Math.round((sent / prospects) * 100) : 0;
-                  const reachedPct = sent > 0 ? Math.round((reached / sent) * 100) : 0;
-                  const openedPct = reached > 0 ? Math.round((opened / reached) * 100) : 0;
-                  const clickedPct = opened > 0 ? Math.round((clicked / opened) * 100) : 0;
-                  const repliedPct = sent > 0 ? Math.round((replied / sent) * 100) : 0;
-                  const interestedPct = replied > 0 ? Math.round((interested / replied) * 100) : (interested > 0 ? 100 : 0);
-                  const bouncedPct = sent > 0 ? Math.round((bounced / sent) * 100) : 0;
+                  const leads = camp.metrics.totalLeads ?? camp.metrics.prospects ?? 0;
+                  const safe = camp.metrics.verifiedSafe ?? 0;
+                  const dispatched = camp.metrics.dispatched ?? camp.metrics.sent ?? 0;
+                  const converted = camp.metrics.converted ?? camp.metrics.interested ?? 0;
+                  const senderDisplay = camp.account?.name || camp.account?.senderEmail || 'Default Mailer';
+                  const createdDate = new Date(camp.createdAt).toLocaleDateString('en-US', {
+                    month: 'short',
+                    day: 'numeric',
+                    year: 'numeric',
+                  });
 
                   return (
                     <tr key={camp.id} className="hover:bg-slate-50/60 transition-colors">
@@ -293,79 +308,60 @@ export default function OutreachDashboardPage() {
                         >
                           {camp.name}
                         </Link>
-                        <div className="flex items-center gap-1.5 flex-wrap mt-0.5">
-                          <span className="text-[10px] text-slate-500 font-medium">
-                            {camp.targetRole || 'Executives'}
-                          </span>
-                          {camp.targetLocation && (
-                            <span className="text-[10px] text-slate-400">📍 {camp.targetLocation}</span>
-                          )}
-                        </div>
+                        <p className="text-[10px] text-slate-400 mt-0.5">created {createdDate}</p>
                       </td>
 
-                      <td className="px-3 py-3.5 text-center font-bold text-slate-900">
-                        {prospects}
+                      <td className="px-4 py-3.5">
+                        <p className="font-semibold text-slate-800 line-clamp-1">
+                          {camp.targetRole || 'Executives'}
+                        </p>
+                        <p className="text-[10px] text-slate-400">
+                          {camp.targetLocation || 'Worldwide'}
+                        </p>
                       </td>
 
-                      <td className="px-3 py-3.5 text-center">
-                        <span className="font-semibold text-indigo-700">{sent}</span>
-                        <span className="text-[10px] text-slate-400 block">{sentPct}%</span>
+                      <td className="px-4 py-3.5">
+                        <span className="font-medium text-slate-700 bg-slate-100 px-2 py-0.5 rounded text-[11px]">
+                          {senderDisplay}
+                        </span>
                       </td>
 
-                      <td className="px-3 py-3.5 text-center">
-                        <span className="font-semibold text-blue-700">{reached}</span>
-                        <span className="text-[10px] text-slate-400 block">{reachedPct}%</span>
-                      </td>
-
-                      <td className="px-3 py-3.5 text-center">
-                        <span className="font-semibold text-cyan-700">{opened}</span>
-                        <span className="text-[10px] text-slate-400 block">{openedPct}%</span>
+                      <td className="px-3 py-3.5 text-center font-bold text-slate-900 text-sm">
+                        {leads}
                       </td>
 
                       <td className="px-3 py-3.5 text-center">
-                        <span className="font-semibold text-purple-700">{clicked}</span>
-                        <span className="text-[10px] text-slate-400 block">{clickedPct}%</span>
+                        <span className="inline-flex items-center gap-1 font-bold text-emerald-700 bg-emerald-50 border border-emerald-200/80 px-2 py-0.5 rounded-full text-xs">
+                          <span>✓</span>
+                          <span>{safe}</span>
+                        </span>
                       </td>
 
-                      <td className="px-3 py-3.5 text-center">
-                        <span className="font-semibold text-amber-700">{replied}</span>
-                        <span className="text-[10px] text-slate-400 block">{repliedPct}%</span>
+                      <td className="px-3 py-3.5 text-center font-bold text-indigo-700 text-sm">
+                        {dispatched}
                       </td>
 
-                      <td className="px-3 py-3.5 text-center">
-                        <span className="font-bold text-emerald-700">{interested}</span>
-                        <span className="text-[10px] text-emerald-600 block">{interestedPct}%</span>
-                      </td>
-
-                      <td className="px-3 py-3.5 text-center font-bold text-emerald-800">
-                        ${opportunities.toLocaleString()}
-                      </td>
-
-                      <td className="px-3 py-3.5 text-center">
-                        <span className="font-semibold text-rose-600">{bounced}</span>
-                        <span className="text-[10px] text-slate-400 block">{bouncedPct}%</span>
+                      <td className="px-3 py-3.5 text-center font-bold text-emerald-800 text-sm">
+                        {converted}
                       </td>
 
                       <td className="px-4 py-3.5 text-right space-x-2 whitespace-nowrap">
                         <Link
                           href={`/dashboard/outreach/${camp.id}`}
-                          className="inline-flex items-center px-2.5 py-1 bg-slate-100 hover:bg-primary-50 hover:text-primary-700 text-slate-700 text-xs font-semibold rounded-lg transition-colors"
+                          className="inline-flex items-center px-3 py-1 bg-primary-50 hover:bg-primary-100 text-primary-700 border border-primary-200 text-xs font-semibold rounded-lg transition-colors"
                         >
-                          Open →
+                          Open
                         </Link>
                         <button
                           onClick={() => handleDeleteCampaign(camp.id, camp.name)}
                           disabled={deletingId === camp.id}
-                          className="inline-flex items-center px-2 py-1 text-red-600 hover:bg-red-50 text-xs font-semibold rounded-lg transition-colors disabled:opacity-50"
+                          className="inline-flex items-center px-2 py-1 text-slate-400 hover:text-red-600 hover:bg-red-50 text-xs font-semibold rounded-lg transition-colors disabled:opacity-50"
                           title="Delete Campaign"
                         >
                           {deletingId === camp.id ? (
-                            <>
-                              <span className="w-2.5 h-2.5 border-2 border-red-600 border-t-transparent rounded-full animate-spin mr-1" />
-                              <span>Deleting...</span>
-                            </>
+                            <span className="w-3 h-3 border-2 border-red-600 border-t-transparent rounded-full animate-spin" />
                           ) : (
-                            <span>🗑️ Delete</span>
+                            <span>Delete</span>
                           )}
                         </button>
                       </td>
