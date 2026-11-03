@@ -84,14 +84,33 @@ mkdir -p "$BACKUP_DIR"
 echo "$LOG_PREFIX Starting database backup at $(date)"
 
 # --- Execute pg_dump ---
+DUMP_ERR=$(mktemp)
 if [ -n "$DATABASE_URL" ]; then
   echo "$LOG_PREFIX Connecting via DATABASE_URL from application config..."
-  pg_dump \
-    --dbname="$DATABASE_URL" \
-    --format=plain \
-    --no-owner \
-    --no-privileges \
-    | gzip > "$BACKUP_FILE"
+  if ! pg_dump --dbname="$DATABASE_URL" --format=plain --no-owner --no-privileges 2>"$DUMP_ERR" | gzip > "$BACKUP_FILE"; then
+    ERR_TEXT=$(cat "$DUMP_ERR" 2>/dev/null || true)
+    rm -f "$DUMP_ERR"
+    if echo "$ERR_TEXT" | grep -qi "server version mismatch"; then
+      echo "$LOG_PREFIX Version mismatch detected: Supabase menggunakan PostgreSQL 17, sedangkan pg_dump lokal versi 16."
+      if command -v docker >/dev/null 2>&1 && docker info >/dev/null 2>&1; then
+        echo "$LOG_PREFIX Mencoba backup otomatis via container Docker postgres:17..."
+        docker run --rm -i postgres:17 pg_dump --dbname="$DATABASE_URL" --format=plain --no-owner --no-privileges | gzip > "$BACKUP_FILE"
+      else
+        echo "$LOG_PREFIX SOLUSI: Jalankan perintah ini di VPS untuk mengupgrade pg_dump ke versi 17:"
+        echo "  sudo install -d /etc/apt/keyrings"
+        echo "  curl -fsSL https://www.postgresql.org/media/keys/ACCC4CF8.asc | sudo gpg --dearmor -o /etc/apt/keyrings/postgresql.gpg"
+        echo "  echo \"deb [signed-by=/etc/apt/keyrings/postgresql.gpg] http://apt.postgresql.org/pub/repos/apt \$(lsb_release -cs)-pgdg main\" | sudo tee /etc/apt/sources.list.d/pgdg.list"
+        echo "  sudo apt update && sudo apt install -y postgresql-client-17"
+        rm -f "$BACKUP_FILE"
+        exit 1
+      fi
+    else
+      echo "$LOG_PREFIX ERROR running pg_dump: $ERR_TEXT"
+      rm -f "$BACKUP_FILE"
+      exit 1
+    fi
+  fi
+  rm -f "$DUMP_ERR"
 else
   DB_NAME="${POSTGRES_DB:-kanban-crm}"
   DB_USER="${POSTGRES_USER:-kanban}"
