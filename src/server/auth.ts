@@ -83,7 +83,12 @@ export const authOptions: NextAuthOptions = {
       try {
         const parsedUrl = new URL(url);
         const parsedBase = new URL(baseUrl);
-        if (parsedUrl.origin === parsedBase.origin) {
+        const nextAuthEnv = process.env.NEXTAUTH_URL ? new URL(process.env.NEXTAUTH_URL) : null;
+        if (
+          parsedUrl.origin === parsedBase.origin ||
+          (nextAuthEnv && parsedUrl.origin === nextAuthEnv.origin) ||
+          parsedUrl.host === 'violation-james-difficulties-tomato.trycloudflare.com'
+        ) {
           return url;
         }
       } catch {
