@@ -12,26 +12,42 @@ export interface TregSearchParams {
 
 export interface TregPersonRecord {
   id?: string;
+  name?: string;
   first_name?: string;
   last_name?: string;
-  name?: string;
   title?: string;
   job_title?: string;
-  company?: string;
+  company?: {
+    name?: string;
+    domain?: string;
+    city?: string;
+    country?: string;
+    industry?: string;
+  } | string;
   company_name?: string;
   domain?: string;
   company_domain?: string;
+  email?: {
+    value?: string;
+    status?: string;
+    kind?: string;
+  } | string;
+  work_email?: string;
   linkedin?: string;
   linkedin_url?: string;
   location?: string;
   city?: string;
   state?: string;
   country?: string;
-  email?: string;
-  work_email?: string;
   phone?: string;
   phone_number?: string;
-  source?: string;
+  source_url?: string;
+  insight?: {
+    summary?: string;
+    decision_role?: string;
+    seniority?: string;
+    department?: string;
+  };
 }
 
 /**
@@ -49,8 +65,23 @@ function cleanDomain(rawDomain?: string): string | undefined {
 }
 
 /**
- * Searches B2B leads from On-Demand B2B Gateway (Treg.to Unified Gateway)
- * Uses official gateway proxy path: https://treg.to/call/treg.people.search
+ * Resolves standard 2-letter ISO country code from location string
+ */
+function resolveCountry(loc?: string): string {
+  if (!loc) return 'US';
+  const clean = loc.toLowerCase().trim();
+  if (clean.includes('indonesia') || clean === 'id') return 'ID';
+  if (clean.includes('singapore') || clean === 'sg') return 'SG';
+  if (clean.includes('united kingdom') || clean === 'uk' || clean === 'gb') return 'GB';
+  if (clean.includes('australia') || clean === 'au') return 'AU';
+  if (clean.includes('canada') || clean === 'ca') return 'CA';
+  if (clean.includes('germany') || clean === 'de') return 'DE';
+  return 'US';
+}
+
+/**
+ * Searches B2B leads from On-Demand B2B Gateway (Treg.to / Crawl4AI gateway)
+ * Uses official nested "where" schema: POST https://treg.to/call/crawl4ai.people.search
  */
 export async function searchTregLeads(params: TregSearchParams): Promise<ApifyScrapedLead[]> {
   const apiKey = params.apiKey || process.env.TREG_API_KEY;
@@ -61,41 +92,46 @@ export async function searchTregLeads(params: TregSearchParams): Promise<ApifySc
   const targetLimit = Math.min(Math.max(params.limit || 10, 1), 50);
   const fetchLimit = Math.min(targetLimit * 2, 50);
 
-  const payload: Record<string, any> = {
-    limit: fetchLimit,
-    has_email: true,
+  // Build the nested where query required by Treg.to / crawl4ai.people.search
+  const personWhere: Record<string, any> = {};
+  if (params.role) {
+    personWhere.title = params.role.split(',')[0].trim();
+  } else if (params.query) {
+    personWhere.title = params.query.trim();
+  } else {
+    personWhere.title = 'Founder';
+  }
+
+  const companyWhere: Record<string, any> = {
+    country: resolveCountry(params.location),
   };
 
-  if (params.role) {
-    payload.title = params.role.split(',')[0].trim();
-  }
-
-  if (params.location) {
-    payload.location = params.location.trim();
-  }
-
   if (params.industry) {
-    payload.keywords = params.industry.split(',').map((i) => i.trim());
+    companyWhere.industry = params.industry.split(',')[0].trim();
   }
 
-  if (params.query) {
-    payload.q = params.query.trim();
-  }
+  const requestBody = {
+    where: {
+      person: personWhere,
+      company: companyWhere,
+    },
+    limit: fetchLimit,
+  };
 
-  console.log('[On-Demand B2B Gateway] Dispatching request to https://treg.to/call/treg.people.search...');
+  console.log('[On-Demand B2B Gateway] Sending search request to Treg.to with payload:', JSON.stringify(requestBody));
 
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), 15000);
 
   try {
-    const res = await fetch('https://treg.to/call/treg.people.search', {
+    const res = await fetch('https://treg.to/call/crawl4ai.people.search', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         'X-Treg-Token': apiKey,
         Authorization: `Bearer ${apiKey}`,
       },
-      body: JSON.stringify(payload),
+      body: JSON.stringify(requestBody),
       signal: controller.signal,
     });
 
@@ -109,21 +145,21 @@ export async function searchTregLeads(params: TregSearchParams): Promise<ApifySc
         parsedErr =
           typeof jsonErr.error === 'object'
             ? JSON.stringify(jsonErr.error)
-            : jsonErr.message || jsonErr.error || errText;
+            : jsonErr.message || jsonErr.error || jsonErr.detail || errText;
       } catch {}
       throw new Error(`On-Demand B2B Gateway Error (${res.status}): ${parsedErr}`);
     }
 
-    const data = await res.json();
+    const resData = await res.json();
     const rawList: TregPersonRecord[] =
-      data.output?.people ||
-      data.output?.data ||
-      data.output ||
-      data.data ||
-      data.people ||
-      (Array.isArray(data) ? data : []);
+      resData.data ||
+      resData.output?.people ||
+      resData.output?.data ||
+      resData.results ||
+      resData.people ||
+      (Array.isArray(resData) ? resData : []);
 
-    console.log(`[On-Demand B2B Gateway] Received ${rawList.length} raw records from gateway. Served by: ${res.headers.get('x-treg-served-by') || 'multi-provider'}`);
+    console.log(`[On-Demand B2B Gateway] Successfully received ${rawList.length} raw records from Treg.to.`);
 
     const qualifiedLeads: ApifyScrapedLead[] = [];
 
@@ -144,17 +180,60 @@ export async function searchTregLeads(params: TregSearchParams): Promise<ApifySc
         (fullName.includes(' ') ? fullName.split(' ').slice(1).join(' ') : undefined);
 
       const jobTitle = item.title || item.job_title || params.role || 'Executive';
-      const companyName = item.company || item.company_name || undefined;
-      const companyDomain = cleanDomain(item.domain || item.company_domain);
-      let linkedinUrl = item.linkedin || item.linkedin_url || undefined;
-      if (linkedinUrl && !linkedinUrl.startsWith('http')) {
-        linkedinUrl = `https://${linkedinUrl}`;
+
+      // Parse nested company object: { name, domain, city, country, industry }
+      let companyName: string | undefined;
+      let rawDomain: string | undefined;
+      let cityStr: string | undefined;
+      let countryStr: string | undefined;
+
+      if (item.company && typeof item.company === 'object') {
+        companyName = item.company.name;
+        rawDomain = item.company.domain;
+        cityStr = item.company.city;
+        countryStr = item.company.country;
+      } else if (typeof item.company === 'string') {
+        companyName = item.company;
       }
 
-      const locParts = [item.city, item.state, item.country].filter(Boolean);
-      const location = item.location || (locParts.length > 0 ? locParts.join(', ') : params.location);
+      if (!companyName && item.company_name) {
+        companyName = item.company_name;
+      }
+      if (!rawDomain && (item.domain || item.company_domain)) {
+        rawDomain = item.domain || item.company_domain;
+      }
 
-      const email = (item.work_email || item.email || '').toLowerCase().trim() || undefined;
+      const companyDomain = cleanDomain(rawDomain);
+
+      // Parse LinkedIn handle or full URL
+      let linkedinUrl = item.linkedin || item.linkedin_url || undefined;
+      if (linkedinUrl) {
+        if (!linkedinUrl.startsWith('http')) {
+          if (linkedinUrl.includes('linkedin.com')) {
+            linkedinUrl = `https://${linkedinUrl}`;
+          } else {
+            // Slug handle provided (e.g. "niclas-tollgard-50a62")
+            linkedinUrl = `https://www.linkedin.com/in/${linkedinUrl}`;
+          }
+        }
+      }
+
+      // Location resolution
+      const locParts = [cityStr, countryStr, item.city, item.state, item.country].filter(Boolean);
+      const location = locParts.length > 0 ? Array.from(new Set(locParts)).join(', ') : (item.location || params.location);
+
+      // Parse nested email object: { value, status, kind } or direct string
+      let email: string | undefined;
+      if (item.email) {
+        if (typeof item.email === 'object' && item.email.value) {
+          email = item.email.value.toLowerCase().trim();
+        } else if (typeof item.email === 'string') {
+          email = item.email.toLowerCase().trim();
+        }
+      }
+      if (!email && item.work_email) {
+        email = typeof item.work_email === 'string' ? item.work_email.toLowerCase().trim() : undefined;
+      }
 
       const candidate: ApifyScrapedLead = {
         fullName,
@@ -166,10 +245,11 @@ export async function searchTregLeads(params: TregSearchParams): Promise<ApifySc
         linkedinUrl,
         location,
         email,
+        summary: item.insight?.summary || undefined,
         metadata: {
           source: 'on-demand-gateway',
-          phone: item.phone || item.phone_number || undefined,
-          aggregatorProvider: item.source || res.headers.get('x-treg-served-by') || 'unified-b2b',
+          personId: item.id || undefined,
+          sourceUrl: item.source_url || undefined,
           scrapedAt: new Date().toISOString(),
         },
       };
@@ -182,7 +262,7 @@ export async function searchTregLeads(params: TregSearchParams): Promise<ApifySc
       }
     }
 
-    console.log(`[On-Demand B2B Gateway] Qualified ${qualifiedLeads.length} leads successfully.`);
+    console.log(`[On-Demand B2B Gateway] Filtered and qualified ${qualifiedLeads.length} valid decision makers from Treg.to.`);
     return qualifiedLeads;
   } catch (err: any) {
     clearTimeout(timeoutId);
