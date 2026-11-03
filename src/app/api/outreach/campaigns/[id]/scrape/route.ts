@@ -120,14 +120,29 @@ export async function POST(
         if (rawProvider === 'leadocean') {
           throw err;
         }
-        console.warn(`[Scrape Route] Enterprise B2B Index error: ${err.message}. Falling back to Outscraper.`);
-        scrapedLeads = await scrapeOutscraperLeads({
-          query,
-          role,
-          location,
-          industry,
-          limit,
-        });
+        console.warn(`[Scrape Route] Enterprise B2B Index error: ${err.message}. Trying Treg.to cross-fallback.`);
+        try {
+          if (process.env.TREG_API_KEY) {
+            scrapedLeads = await searchTregLeads({
+              query,
+              role,
+              location,
+              industry,
+              limit,
+            });
+          } else {
+            throw new Error('TREG_API_KEY not configured');
+          }
+        } catch (tregErr: any) {
+          console.warn(`[Scrape Route] Treg cross-fallback failed (${tregErr.message}). Falling back to Outscraper.`);
+          scrapedLeads = await scrapeOutscraperLeads({
+            query,
+            role,
+            location,
+            industry,
+            limit,
+          });
+        }
       }
     } else if (provider === 'treg') {
       try {
@@ -142,14 +157,29 @@ export async function POST(
         if (rawProvider === 'treg') {
           throw err;
         }
-        console.warn(`[Scrape Route] On-Demand Gateway error: ${err.message}. Falling back to Outscraper.`);
-        scrapedLeads = await scrapeOutscraperLeads({
-          query,
-          role,
-          location,
-          industry,
-          limit,
-        });
+        console.warn(`[Scrape Route] On-Demand Gateway error: ${err.message}. Trying LeadOcean cross-fallback.`);
+        try {
+          if (process.env.LEADOCEAN_API_KEY) {
+            scrapedLeads = await searchLeadOceanLeads({
+              query,
+              role,
+              location,
+              industry,
+              limit,
+            });
+          } else {
+            throw new Error('LEADOCEAN_API_KEY not configured');
+          }
+        } catch (loErr: any) {
+          console.warn(`[Scrape Route] LeadOcean cross-fallback failed (${loErr.message}). Falling back to Outscraper.`);
+          scrapedLeads = await scrapeOutscraperLeads({
+            query,
+            role,
+            location,
+            industry,
+            limit,
+          });
+        }
       }
     } else if (provider === 'outscraper') {
       scrapedLeads = await scrapeOutscraperLeads({

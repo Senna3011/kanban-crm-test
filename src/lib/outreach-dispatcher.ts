@@ -2,6 +2,15 @@ import nodemailer, { Transporter } from 'nodemailer';
 import { prisma } from './prisma';
 import { generateUnsubscribeSignature } from './outreach-signature';
 
+function escapeHtml(str: string): string {
+  return str
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
+}
+
 export async function waitWithJitter(baseMs = 3000, jitterMs = 6000): Promise<void> {
   const delay = baseMs + Math.floor(Math.random() * jitterMs);
   await new Promise((resolve) => setTimeout(resolve, delay));
@@ -228,8 +237,9 @@ export async function dispatchColdEmail(params: DispatchLeadEmailParams): Promis
   const unsubSig = generateUnsubscribeSignature(lead.email, params.tenantId);
   const unsubscribeUrl = `${process.env.NEXTAUTH_URL || 'http://localhost:3099'}/api/outreach/unsubscribe?email=${encodeURIComponent(lead.email)}&t=${params.tenantId}&sig=${unsubSig}`;
   const emailBodyText = `${lead.aiDraftBody}\n\n---\nIf you prefer not to receive future messages, unsubscribe here: ${unsubscribeUrl}`;
+  const safeBodyHtml = escapeHtml(lead.aiDraftBody).replace(/\n\n/g, '<br/><br/>').replace(/\n/g, '<br/>');
   const emailBodyHtml = `<div style="font-family: Arial, sans-serif; font-size: 14px; line-height: 1.6; color: #1e293b;">
-    ${lead.aiDraftBody.replace(/\n\n/g, '<br/><br/>').replace(/\n/g, '<br/>')}
+    ${safeBodyHtml}
     <br/><br/>
     <hr style="border: none; border-top: 1px solid #e2e8f0; margin: 20px 0;" />
     <p style="font-size: 11px; color: #64748b; margin: 0;">
@@ -439,8 +449,9 @@ export async function dispatchDripFollowUp(params: {
   const unsubSig = generateUnsubscribeSignature(lead.email, params.tenantId);
   const unsubscribeUrl = `${process.env.NEXTAUTH_URL || 'http://localhost:3099'}/api/outreach/unsubscribe?email=${encodeURIComponent(lead.email)}&t=${params.tenantId}&sig=${unsubSig}`;
   const emailBodyText = `${followUpBody}\n\n---\nIf you prefer not to receive future messages, unsubscribe here: ${unsubscribeUrl}`;
+  const safeFollowUpHtml = escapeHtml(followUpBody).replace(/\n\n/g, '<br/><br/>').replace(/\n/g, '<br/>');
   const emailBodyHtml = `<div style="font-family: Arial, sans-serif; font-size: 14px; line-height: 1.6; color: #1e293b;">
-    ${followUpBody.replace(/\n\n/g, '<br/><br/>').replace(/\n/g, '<br/>')}
+    ${safeFollowUpHtml}
     <br/><br/>
     <hr style="border: none; border-top: 1px solid #e2e8f0; margin: 20px 0;" />
     <p style="font-size: 11px; color: #64748b; margin: 0;">

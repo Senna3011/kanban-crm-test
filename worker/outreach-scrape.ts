@@ -35,12 +35,27 @@ export async function processOutreachScrape(job: OutreachScrapeJob) {
       if (job.provider === 'leadocean') {
         throw err;
       }
-      console.warn(`[Scrape Worker] Enterprise B2B Index error: ${err.message}. Falling back to Outscraper.`);
-      scrapedLeads = await scrapeOutscraperLeads({
-        query: job.query || job.role || job.industry || 'Business Executive',
-        location: job.location || 'United States',
-        limit: job.limit,
-      });
+      console.warn(`[Scrape Worker] Enterprise B2B Index error: ${err.message}. Trying Treg.to cross-fallback.`);
+      try {
+        if (process.env.TREG_API_KEY) {
+          scrapedLeads = await searchTregLeads({
+            query: job.query,
+            role: job.role,
+            location: job.location,
+            industry: job.industry,
+            limit: job.limit,
+          });
+        } else {
+          throw new Error('TREG_API_KEY not configured');
+        }
+      } catch (tregErr: any) {
+        console.warn(`[Scrape Worker] Treg cross-fallback failed (${tregErr.message}). Falling back to Outscraper.`);
+        scrapedLeads = await scrapeOutscraperLeads({
+          query: job.query || job.role || job.industry || 'Business Executive',
+          location: job.location || 'United States',
+          limit: job.limit,
+        });
+      }
     }
   } else if (job.provider === 'treg' || (!job.provider && process.env.TREG_API_KEY)) {
     try {
@@ -55,12 +70,27 @@ export async function processOutreachScrape(job: OutreachScrapeJob) {
       if (job.provider === 'treg') {
         throw err;
       }
-      console.warn(`[Scrape Worker] On-Demand Gateway error: ${err.message}. Falling back to Outscraper.`);
-      scrapedLeads = await scrapeOutscraperLeads({
-        query: job.query || job.role || job.industry || 'Business Executive',
-        location: job.location || 'United States',
-        limit: job.limit,
-      });
+      console.warn(`[Scrape Worker] On-Demand Gateway error: ${err.message}. Trying LeadOcean cross-fallback.`);
+      try {
+        if (process.env.LEADOCEAN_API_KEY) {
+          scrapedLeads = await searchLeadOceanLeads({
+            query: job.query,
+            role: job.role,
+            location: job.location,
+            industry: job.industry,
+            limit: job.limit,
+          });
+        } else {
+          throw new Error('LEADOCEAN_API_KEY not configured');
+        }
+      } catch (loErr: any) {
+        console.warn(`[Scrape Worker] LeadOcean cross-fallback failed (${loErr.message}). Falling back to Outscraper.`);
+        scrapedLeads = await scrapeOutscraperLeads({
+          query: job.query || job.role || job.industry || 'Business Executive',
+          location: job.location || 'United States',
+          limit: job.limit,
+        });
+      }
     }
   } else if (job.provider === 'outscraper' || process.env.OUTSCRAPER_API_KEY) {
     try {

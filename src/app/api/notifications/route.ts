@@ -31,8 +31,8 @@ export async function PUT(req: NextRequest) {
       data: { isRead: true },
     });
   } else if (body.id) {
-    await prisma.notification.update({
-      where: { id: body.id },
+    await prisma.notification.updateMany({
+      where: { id: body.id, userId },
       data: { isRead: true },
     });
   }

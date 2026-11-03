@@ -14,6 +14,7 @@ export async function processOutreachDispatch(job: OutreachDispatchJob) {
 
     if (!result.success) {
       console.warn(`[Outreach Worker] Dispatch result failed for lead ${job.leadId}: ${result.error}`);
+      throw new Error(`Dispatch failed for lead ${job.leadId}: ${result.error}`);
     } else {
       console.log(`[Outreach Worker] Successfully sent email to lead ${job.leadId} (MessageId: ${result.messageId})`);
     }

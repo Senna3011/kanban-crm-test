@@ -83,7 +83,7 @@ export const authOptions: NextAuthOptions = {
       try {
         const parsedUrl = new URL(url);
         const parsedBase = new URL(baseUrl);
-        if (parsedUrl.origin === parsedBase.origin || parsedUrl.host.endsWith('trycloudflare.com')) {
+        if (parsedUrl.origin === parsedBase.origin) {
           return url;
         }
       } catch {

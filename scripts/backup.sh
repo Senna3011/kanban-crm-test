@@ -13,12 +13,24 @@
 
 set -euo pipefail
 
-# --- Configuration ---
-DB_NAME="kanban-crm"
-DB_USER="postgres"
-DB_HOST="localhost"
-DB_PORT="5432"
-BACKUP_DIR="/opt/kanban-crm/backups"
+# --- Load .env if exists in parent directory ---
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+ENV_FILE="${SCRIPT_DIR}/../.env"
+if [ -f "$ENV_FILE" ]; then
+  # Load DB vars from .env if present
+  set +u
+  export $(grep -E '^(DATABASE_URL|POSTGRES_USER|POSTGRES_PASSWORD|POSTGRES_DB|DB_USER|DB_PASS|DB_NAME|DB_PORT)=' "$ENV_FILE" 2>/dev/null | xargs -0 2>/dev/null || true)
+  set -u
+fi
+
+# --- Configuration (sync with docker-compose.yml with env overrides) ---
+DB_NAME="${POSTGRES_DB:-${DB_NAME:-kanban-crm}}"
+DB_USER="${POSTGRES_USER:-${DB_USER:-kanban}}"
+DB_HOST="${DB_HOST:-localhost}"
+DB_PORT="${DB_PORT:-5433}"
+PGPASSWORD="${POSTGRES_PASSWORD:-${PGPASSWORD:-kanban123}}"
+export PGPASSWORD
+BACKUP_DIR="${BACKUP_DIR:-${SCRIPT_DIR}/../backups}"
 RETENTION_DAYS=7
 DATE=$(date +%Y-%m-%d_%H%M%S)
 BACKUP_FILE="${BACKUP_DIR}/${DB_NAME}_${DATE}.sql.gz"

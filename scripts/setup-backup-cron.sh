@@ -8,16 +8,17 @@
 
 set -euo pipefail
 
-SCRIPT_DIR="/opt/kanban-crm/scripts"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 BACKUP_SCRIPT="$SCRIPT_DIR/backup.sh"
+BACKUP_DIR="$(cd "$SCRIPT_DIR/.." && pwd)/backups"
 CRON_SCHEDULE="0 2 * * *"
-CRON_JOB="$CRON_SCHEDULE $BACKUP_SCRIPT >> /opt/kanban-crm/backups/backup.log 2>&1"
+CRON_JOB="$CRON_SCHEDULE $BACKUP_SCRIPT >> $BACKUP_DIR/backup.log 2>&1"
 
 # Ensure backup script is executable
 chmod +x "$BACKUP_SCRIPT"
 
 # Create backups directory
-mkdir -p /opt/kanban-crm/backups
+mkdir -p "$BACKUP_DIR"
 
 # Add cron job if not already present
 if crontab -l 2>/dev/null | grep -qF "$BACKUP_SCRIPT"; then

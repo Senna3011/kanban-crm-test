@@ -3,6 +3,16 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/server/auth';
 import prisma from '@/lib/prisma';
 import nodemailer from 'nodemailer';
+import { generateUnsubscribeSignature } from '@/lib/outreach-signature';
+
+function escapeHtml(str: string): string {
+  return str
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
+}
 
 export async function POST(
   req: NextRequest,
@@ -30,7 +40,7 @@ export async function POST(
     const body = await req.json();
     const { targetEmail, subject, content, leadId } = body;
 
-    const recipient = targetEmail || (leadId ? (await prisma.outreachLead.findUnique({ where: { id: leadId } }))?.email : null);
+    const recipient = targetEmail || (leadId ? (await prisma.outreachLead.findFirst({ where: { id: leadId, campaign: { tenantId } } }))?.email : null);
 
     if (!recipient) {
       return NextResponse.json({ error: 'Recipient target email is required' }, { status: 400 });
@@ -79,9 +89,11 @@ export async function POST(
     const emailSubject = subject || `[Test Outreach] Exploring opportunities with ${campaign.name}`;
     const emailBody = content || `Hello,\n\nThis is a test outreach email from ${senderName} dispatched directly to ${recipient}.\n\nCampaign: ${campaign.name}\n\nBest regards,\n${senderName}`;
 
-    const unsubscribeUrl = `${process.env.NEXTAUTH_URL || 'http://localhost:3099'}/api/outreach/unsubscribe?email=${encodeURIComponent(recipient)}&t=${tenantId}`;
+    const sig = generateUnsubscribeSignature(recipient, tenantId);
+    const unsubscribeUrl = `${process.env.NEXTAUTH_URL || 'http://localhost:3099'}/api/outreach/unsubscribe?email=${encodeURIComponent(recipient)}&t=${tenantId}&sig=${sig}`;
+    const safeBodyHtml = escapeHtml(emailBody).replace(/\n\n/g, '<br/><br/>').replace(/\n/g, '<br/>');
     const emailHtml = `<div style="font-family: Arial, sans-serif; font-size: 14px; line-height: 1.6; color: #1e293b;">
-      ${emailBody.replace(/\n\n/g, '<br/><br/>').replace(/\n/g, '<br/>')}
+      ${safeBodyHtml}
       <br/><br/>
       <hr style="border: none; border-top: 1px solid #e2e8f0; margin: 20px 0;" />
       <p style="font-size: 11px; color: #64748b; margin: 0;">
