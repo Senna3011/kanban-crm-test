@@ -1,56 +1,116 @@
 #!/bin/bash
 #
 # PostgreSQL Backup Script for Kanban CRM
-# Location on production server: /opt/kanban-crm/scripts/backup.sh
+# Supports direct connection via DATABASE_URL (Supabase/Cloud) or local PostgreSQL/Docker
 #
 # Usage:
-#   chmod +x /opt/kanban-crm/scripts/backup.sh
-#   ./backup.sh
+#   chmod +x scripts/backup.sh
+#   ./scripts/backup.sh
 #
 # Cron job (daily at 2 AM):
-#   0 2 * * * /opt/kanban-crm/scripts/backup.sh >> /opt/kanban-crm/backups/backup.log 2>&1
+#   0 2 * * * /path/to/kanban-crm/scripts/backup.sh >> /path/to/kanban-crm/backups/backup.log 2>&1
 #
 
 set -euo pipefail
 
-# --- Load .env if exists in parent directory ---
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-ENV_FILE="${SCRIPT_DIR}/../.env"
-if [ -f "$ENV_FILE" ]; then
-  # Load DB vars from .env if present
-  set +u
-  export $(grep -E '^(DATABASE_URL|POSTGRES_USER|POSTGRES_PASSWORD|POSTGRES_DB|DB_USER|DB_PASS|DB_NAME|DB_PORT)=' "$ENV_FILE" 2>/dev/null | xargs -0 2>/dev/null || true)
-  set -u
-fi
-
-# --- Configuration (sync with docker-compose.yml with env overrides) ---
-DB_NAME="${POSTGRES_DB:-${DB_NAME:-kanban-crm}}"
-DB_USER="${POSTGRES_USER:-${DB_USER:-kanban}}"
-DB_HOST="${DB_HOST:-localhost}"
-DB_PORT="${DB_PORT:-5433}"
-PGPASSWORD="${POSTGRES_PASSWORD:-${PGPASSWORD:-kanban123}}"
-export PGPASSWORD
-BACKUP_DIR="${BACKUP_DIR:-${SCRIPT_DIR}/../backups}"
-RETENTION_DAYS=7
-DATE=$(date +%Y-%m-%d_%H%M%S)
-BACKUP_FILE="${BACKUP_DIR}/${DB_NAME}_${DATE}.sql.gz"
+ROOT_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
 LOG_PREFIX="[kanban-crm-backup]"
 
-# --- Ensure backup directory exists ---
+# --- Check required tools ---
+if ! command -v pg_dump >/dev/null 2>&1; then
+  echo "$LOG_PREFIX ERROR: 'pg_dump' is not installed or not in PATH."
+  echo "$LOG_PREFIX Install postgresql client on Linux: 'sudo apt update && sudo apt install -y postgresql-client'"
+  exit 1
+fi
+
+if ! command -v gzip >/dev/null 2>&1; then
+  echo "$LOG_PREFIX ERROR: 'gzip' is not installed or not in PATH."
+  exit 1
+fi
+
+# --- Load DATABASE_URL from .env or .env.local if not already in environment ---
+DATABASE_URL="${DATABASE_URL:-}"
+
+if [ -z "$DATABASE_URL" ] && command -v node >/dev/null 2>&1; then
+  DATABASE_URL=$(node -e '
+    const fs = require("fs");
+    const path = require("path");
+    const root = process.argv[1];
+    for (const f of [".env", ".env.local"]) {
+      const p = path.join(root, f);
+      if (fs.existsSync(p)) {
+        const lines = fs.readFileSync(p, "utf8").split("\n");
+        for (const line of lines) {
+          if (line.trim().startsWith("DATABASE_URL=")) {
+            let val = line.trim().substring("DATABASE_URL=".length).trim();
+            if ((val.startsWith("\"") && val.endsWith("\"")) || (val.startsWith("\x27") && val.endsWith("\x27"))) {
+              val = val.substring(1, val.length - 1);
+            }
+            console.log(val);
+            process.exit(0);
+          }
+        }
+      }
+    }
+  ' "$ROOT_DIR" 2>/dev/null || true)
+fi
+
+# Fallback basic grep if node unavailable
+if [ -z "$DATABASE_URL" ]; then
+  for f in "${ROOT_DIR}/.env" "${ROOT_DIR}/.env.local"; do
+    if [ -f "$f" ]; then
+      val=$(grep -E '^DATABASE_URL=' "$f" | head -n 1 | sed -E 's/^DATABASE_URL=["'"'"']?([^"'"'"']+)["'"'"']?/\1/' | tr -d '\r')
+      if [ -n "$val" ]; then
+        DATABASE_URL="$val"
+        break
+      fi
+    fi
+  done
+fi
+
+# --- Target Backup File ---
+BACKUP_DIR="${BACKUP_DIR:-${ROOT_DIR}/backups}"
+RETENTION_DAYS=7
+DATE=$(date +%Y-%m-%d_%H%M%S)
+DB_LABEL="kanban-crm"
+if [ -n "$DATABASE_URL" ]; then
+  DB_LABEL="supabase-cloud"
+fi
+BACKUP_FILE="${BACKUP_DIR}/${DB_LABEL}_${DATE}.sql.gz"
+
 mkdir -p "$BACKUP_DIR"
 
-echo "$LOG_PREFIX Starting backup of '$DB_NAME' at $(date)"
+echo "$LOG_PREFIX Starting database backup at $(date)"
 
-# --- Run pg_dump and compress ---
-pg_dump \
-  --host="$DB_HOST" \
-  --port="$DB_PORT" \
-  --username="$DB_USER" \
-  --dbname="$DB_NAME" \
-  --format=plain \
-  --no-owner \
-  --no-privileges \
-  | gzip > "$BACKUP_FILE"
+# --- Execute pg_dump ---
+if [ -n "$DATABASE_URL" ]; then
+  echo "$LOG_PREFIX Connecting via DATABASE_URL from application config..."
+  pg_dump \
+    --dbname="$DATABASE_URL" \
+    --format=plain \
+    --no-owner \
+    --no-privileges \
+    | gzip > "$BACKUP_FILE"
+else
+  DB_NAME="${POSTGRES_DB:-kanban-crm}"
+  DB_USER="${POSTGRES_USER:-kanban}"
+  DB_HOST="${DB_HOST:-localhost}"
+  DB_PORT="${DB_PORT:-5433}"
+  PGPASSWORD="${POSTGRES_PASSWORD:-kanban123}"
+  export PGPASSWORD
+
+  echo "$LOG_PREFIX Connecting to local database '$DB_NAME' at $DB_HOST:$DB_PORT (user: $DB_USER)..."
+  pg_dump \
+    --host="$DB_HOST" \
+    --port="$DB_PORT" \
+    --username="$DB_USER" \
+    --dbname="$DB_NAME" \
+    --format=plain \
+    --no-owner \
+    --no-privileges \
+    | gzip > "$BACKUP_FILE"
+fi
 
 # --- Verify backup was created and is non-empty ---
 if [ ! -s "$BACKUP_FILE" ]; then
@@ -59,15 +119,14 @@ if [ ! -s "$BACKUP_FILE" ]; then
 fi
 
 BACKUP_SIZE=$(du -h "$BACKUP_FILE" | cut -f1)
-echo "$LOG_PREFIX Backup created: $BACKUP_FILE ($BACKUP_SIZE)"
+echo "$LOG_PREFIX Backup successfully created: $BACKUP_FILE ($BACKUP_SIZE)"
 
 # --- Delete backups older than RETENTION_DAYS ---
-DELETED=$(find "$BACKUP_DIR" -name "${DB_NAME}_*.sql.gz" -mtime +${RETENTION_DAYS} -print -delete | wc -l)
+DELETED=$(find "$BACKUP_DIR" -name "*.sql.gz" -mtime +${RETENTION_DAYS} -print -delete 2>/dev/null | wc -l || true)
 if [ "$DELETED" -gt 0 ]; then
-  echo "$LOG_PREFIX Cleaned up $DELETED old backup(s)"
+  echo "$LOG_PREFIX Cleaned up $DELETED old backup(s) older than $RETENTION_DAYS days"
 fi
 
-# --- List current backups ---
-TOTAL=$(find "$BACKUP_DIR" -name "${DB_NAME}_*.sql.gz" | wc -l)
+TOTAL=$(find "$BACKUP_DIR" -name "*.sql.gz" 2>/dev/null | wc -l || true)
 echo "$LOG_PREFIX Total backups retained: $TOTAL"
 echo "$LOG_PREFIX Backup completed successfully at $(date)"
