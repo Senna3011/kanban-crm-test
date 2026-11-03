@@ -344,7 +344,11 @@ export default function CampaignWorkspacePage({
       }
       await fetchCampaign();
     } catch (err: any) {
-      toast.error(`Discovery error: ${err.message}`);
+      const rawMsg = err.message || 'Pencarian prospek gagal';
+      const cleanMsg = rawMsg.startsWith('{') || rawMsg.includes('{"') || rawMsg.includes('SyntaxError')
+        ? 'Pencarian prospek belum berhasil diproses. Silakan coba sesuaikan kriteria atau pilih provider alternatif.'
+        : rawMsg;
+      toast.error(cleanMsg);
     } finally {
       setActionLoading('');
     }

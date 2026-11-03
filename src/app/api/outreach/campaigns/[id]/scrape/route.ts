@@ -6,6 +6,7 @@ import { scrapeApifyLeads } from '@/lib/apify';
 import { scrapeOutscraperLeads } from '@/lib/outscraper';
 import { searchLeadOceanLeads } from '@/lib/leadocean';
 import { searchTregLeads } from '@/lib/treg';
+import { sanitizeOutreachError } from '@/lib/outreach-error';
 import { outreachScrapeQueue } from '@/../queue';
 
 export async function POST(
@@ -30,6 +31,8 @@ export async function POST(
     return NextResponse.json({ error: 'Campaign not found' }, { status: 404 });
   }
 
+  let activeProvider = 'gateway';
+
   try {
     const body = await req.json().catch(() => ({}));
     const query = body.query || campaign.searchQuery || undefined;
@@ -52,6 +55,7 @@ export async function POST(
         : process.env.TREG_API_KEY
         ? 'treg'
         : 'outscraper';
+    activeProvider = provider;
     const linkedinUrls = Array.isArray(body.linkedinUrls) ? body.linkedinUrls : undefined;
 
     // For massive scale (> 30 leads or async requested), enqueue to BullMQ background worker
@@ -239,7 +243,14 @@ export async function POST(
       skippedDuplicates,
     });
   } catch (error: any) {
-    console.error('[API OUTREACH SCRAPE] Error:', error);
-    return NextResponse.json({ error: error.message || 'Lead discovery failed' }, { status: 500 });
+    const sanitized = sanitizeOutreachError(error, {
+      provider: activeProvider,
+      action: 'scrape',
+      campaignId,
+    });
+    return NextResponse.json(
+      { error: sanitized.clientMessage, code: sanitized.errorCode },
+      { status: sanitized.statusCode }
+    );
   }
 }

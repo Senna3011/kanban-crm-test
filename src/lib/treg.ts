@@ -156,15 +156,19 @@ export async function searchTregLeads(params: TregSearchParams): Promise<ApifySc
 
     if (!res.ok) {
       const errText = await res.text();
-      let parsedErr = errText;
+      let summary = `HTTP ${res.status}`;
       try {
         const jsonErr = JSON.parse(errText);
-        parsedErr =
-          typeof jsonErr.error === 'object'
-            ? JSON.stringify(jsonErr.error)
-            : jsonErr.message || jsonErr.error || jsonErr.detail || errText;
-      } catch {}
-      throw new Error(`On-Demand B2B Gateway Error (${res.status}): ${parsedErr}`);
+        if (typeof jsonErr.detail === 'string') summary = `${summary} - ${jsonErr.detail}`;
+        else if (typeof jsonErr.message === 'string') summary = `${summary} - ${jsonErr.message}`;
+        else if (typeof jsonErr.error === 'string') summary = `${summary} - ${jsonErr.error}`;
+        else if (jsonErr.error?.message) summary = `${summary} - ${jsonErr.error.message}`;
+        else if (jsonErr.detail?.message) summary = `${summary} - ${jsonErr.detail.message}`;
+      } catch {
+        if (errText && errText.length < 100) summary = `${summary} - ${errText.trim()}`;
+      }
+      console.error(`[On-Demand B2B Gateway] Upstream error raw body: ${errText.slice(0, 500)}`);
+      throw new Error(`On-Demand B2B Gateway (${res.status}): ${summary}`);
     }
 
     const resData = await res.json();

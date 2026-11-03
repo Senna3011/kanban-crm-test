@@ -246,15 +246,17 @@ export async function searchLeadOceanLeads(params: LeadOceanSearchParams): Promi
 
     if (!res.ok) {
       const errText = await res.text();
-      let parsedErr = errText;
+      let summary = `HTTP ${res.status}`;
       try {
         const jsonErr = JSON.parse(errText);
-        parsedErr =
-          typeof jsonErr.error === 'object'
-            ? JSON.stringify(jsonErr.error)
-            : jsonErr.message || jsonErr.error || errText;
-      } catch {}
-      throw new Error(`Enterprise B2B Index Error (${res.status}): ${parsedErr}`);
+        if (typeof jsonErr.message === 'string') summary = `${summary} - ${jsonErr.message}`;
+        else if (typeof jsonErr.error === 'string') summary = `${summary} - ${jsonErr.error}`;
+        else if (jsonErr.error?.message) summary = `${summary} - ${jsonErr.error.message}`;
+      } catch {
+        if (errText && errText.length < 100) summary = `${summary} - ${errText.trim()}`;
+      }
+      console.error(`[Enterprise B2B Index] Upstream error raw body: ${errText.slice(0, 500)}`);
+      throw new Error(`Enterprise B2B Index (${res.status}): ${summary}`);
     }
 
     const resData = await res.json();

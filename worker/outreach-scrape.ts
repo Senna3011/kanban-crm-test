@@ -3,19 +3,21 @@ import { scrapeApifyLeads, ApifyScrapedLead } from '../src/lib/apify';
 import { scrapeOutscraperLeads } from '../src/lib/outscraper';
 import { searchLeadOceanLeads } from '../src/lib/leadocean';
 import { searchTregLeads } from '../src/lib/treg';
+import { maskSensitiveInfo } from '../src/lib/outreach-error';
 import { OutreachScrapeJob } from '../queue/jobs';
 
 export async function processOutreachScrape(job: OutreachScrapeJob) {
   console.log(`[Scrape Worker] Starting discovery scrape for campaign ${job.campaignId} (Target: ${job.limit} leads, Provider: ${job.provider || 'apify'})`);
 
-  const campaign = await prisma.outreachCampaign.findUnique({
-    where: { id: job.campaignId },
-    include: { account: true },
-  });
+  try {
+    const campaign = await prisma.outreachCampaign.findUnique({
+      where: { id: job.campaignId },
+      include: { account: true },
+    });
 
-  if (!campaign) {
-    throw new Error(`Campaign ${job.campaignId} not found`);
-  }
+    if (!campaign) {
+      throw new Error(`Campaign ${job.campaignId} not found`);
+    }
 
   const token = job.apiToken || campaign.account?.apifyApiToken || process.env.APIFY_API_TOKEN;
   let scrapedLeads: ApifyScrapedLead[] = [];
@@ -135,14 +137,22 @@ export async function processOutreachScrape(job: OutreachScrapeJob) {
     insertedCount += result.count;
   }
 
-  console.log(`[Scrape Worker] Successfully inserted ${insertedCount} leads into campaign ${job.campaignId}`);
+    console.log(`[Scrape Worker] Successfully inserted ${insertedCount} leads into campaign ${job.campaignId}`);
 
-  // Reset campaign status: if drip automation is enabled, keep RUNNING so scheduler processes drip follow-ups; otherwise return to DRAFT
-  const finalStatus = campaign.dripEnabled ? 'RUNNING' : 'DRAFT';
-  await prisma.outreachCampaign.update({
-    where: { id: job.campaignId },
-    data: { status: finalStatus },
-  }).catch(() => {});
+    // Reset campaign status: if drip automation is enabled, keep RUNNING so scheduler processes drip follow-ups; otherwise return to DRAFT
+    const finalStatus = campaign.dripEnabled ? 'RUNNING' : 'DRAFT';
+    await prisma.outreachCampaign.update({
+      where: { id: job.campaignId },
+      data: { status: finalStatus },
+    }).catch(() => {});
 
-  return { success: true, count: insertedCount };
+    return { success: true, count: insertedCount };
+  } catch (err: any) {
+    console.error(`[Scrape Worker] Scrape error for campaign ${job.campaignId}:`, maskSensitiveInfo(err?.message || 'Unknown error'));
+    await prisma.outreachCampaign.update({
+      where: { id: job.campaignId },
+      data: { status: 'DRAFT' },
+    }).catch(() => {});
+    throw err;
+  }
 }
