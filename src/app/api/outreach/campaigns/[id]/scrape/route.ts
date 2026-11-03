@@ -113,6 +113,9 @@ export async function POST(
           limit,
         });
       } catch (err: any) {
+        if (rawProvider === 'leadocean') {
+          throw err;
+        }
         console.warn(`[Scrape Route] Enterprise B2B Index error: ${err.message}. Falling back to Outscraper.`);
         scrapedLeads = await scrapeOutscraperLeads({
           query,
@@ -132,6 +135,9 @@ export async function POST(
           limit,
         });
       } catch (err: any) {
+        if (rawProvider === 'treg') {
+          throw err;
+        }
         console.warn(`[Scrape Route] On-Demand Gateway error: ${err.message}. Falling back to Outscraper.`);
         scrapedLeads = await scrapeOutscraperLeads({
           query,

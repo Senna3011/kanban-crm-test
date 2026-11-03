@@ -30,6 +30,9 @@ export async function processOutreachScrape(job: OutreachScrapeJob) {
         limit: job.limit,
       });
     } catch (err: any) {
+      if (job.provider === 'leadocean') {
+        throw err;
+      }
       console.warn(`[Scrape Worker] Enterprise B2B Index error: ${err.message}. Falling back to Outscraper.`);
       scrapedLeads = await scrapeOutscraperLeads({
         query: job.query || job.role || job.industry || 'Business Executive',
@@ -47,6 +50,9 @@ export async function processOutreachScrape(job: OutreachScrapeJob) {
         limit: job.limit,
       });
     } catch (err: any) {
+      if (job.provider === 'treg') {
+        throw err;
+      }
       console.warn(`[Scrape Worker] On-Demand Gateway error: ${err.message}. Falling back to Outscraper.`);
       scrapedLeads = await scrapeOutscraperLeads({
         query: job.query || job.role || job.industry || 'Business Executive',

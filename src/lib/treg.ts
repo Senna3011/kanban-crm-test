@@ -65,18 +65,23 @@ function cleanDomain(rawDomain?: string): string | undefined {
 }
 
 /**
- * Resolves standard 2-letter ISO country code from location string
+ * Resolves standard 2-letter ISO country code from location string.
+ * Returns undefined if location is global/worldwide or unspecified.
  */
-function resolveCountry(loc?: string): string {
-  if (!loc) return 'US';
+function resolveCountry(loc?: string): string | undefined {
+  if (!loc) return undefined;
   const clean = loc.toLowerCase().trim();
-  if (clean.includes('indonesia') || clean === 'id') return 'ID';
+  if (clean.includes('worldwide') || clean.includes('global') || clean.includes('all')) return undefined;
+  if (clean.includes('indonesia') || clean.includes('jakarta') || clean.includes('surabaya') || clean.includes('bali') || clean === 'id') return 'ID';
   if (clean.includes('singapore') || clean === 'sg') return 'SG';
-  if (clean.includes('united kingdom') || clean === 'uk' || clean === 'gb') return 'GB';
-  if (clean.includes('australia') || clean === 'au') return 'AU';
-  if (clean.includes('canada') || clean === 'ca') return 'CA';
-  if (clean.includes('germany') || clean === 'de') return 'DE';
-  return 'US';
+  if (clean.includes('united kingdom') || clean.includes('london') || clean === 'uk' || clean === 'gb') return 'GB';
+  if (clean.includes('australia') || clean.includes('sydney') || clean.includes('melbourne') || clean === 'au') return 'AU';
+  if (clean.includes('canada') || clean.includes('toronto') || clean.includes('vancouver') || clean === 'ca') return 'CA';
+  if (clean.includes('germany') || clean.includes('berlin') || clean === 'de') return 'DE';
+  if (clean.includes('japan') || clean.includes('tokyo') || clean === 'jp') return 'JP';
+  if (clean.includes('netherlands') || clean.includes('amsterdam') || clean === 'nl') return 'NL';
+  if (clean.includes('united states') || clean.includes('usa') || clean.includes('california') || clean.includes('new york') || clean.includes('san francisco') || clean === 'us') return 'US';
+  return 'US'; // sensible fallback if specific non-global location was entered
 }
 
 /**
@@ -93,7 +98,10 @@ export async function searchTregLeads(params: TregSearchParams): Promise<ApifySc
   const fetchLimit = Math.min(targetLimit * 2, 50);
 
   // Build the nested where query required by Treg.to / crawl4ai.people.search
-  const personWhere: Record<string, any> = {};
+  const personWhere: Record<string, any> = {
+    has_email: true, // Guarantees verified work/personal email is present in returned records
+  };
+
   if (params.role) {
     personWhere.title = params.role.split(',')[0].trim();
   } else if (params.query) {
@@ -102,19 +110,28 @@ export async function searchTregLeads(params: TregSearchParams): Promise<ApifySc
     personWhere.title = 'Founder';
   }
 
-  const companyWhere: Record<string, any> = {
-    country: resolveCountry(params.location),
-  };
+  const companyWhere: Record<string, any> = {};
 
-  if (params.industry) {
+  const resolvedCountry = resolveCountry(params.location);
+  if (resolvedCountry) {
+    companyWhere.country = resolvedCountry;
+  }
+
+  // Filter out "All Industries (Broad)" or any generic wildcard to prevent 0 leads / 400 Bad Request
+  if (params.industry && !params.industry.toLowerCase().includes('all') && !params.industry.toLowerCase().includes('broad')) {
     companyWhere.industry = params.industry.split(',')[0].trim();
   }
 
+  const wherePayload: Record<string, any> = {
+    person: personWhere,
+  };
+
+  if (Object.keys(companyWhere).length > 0) {
+    wherePayload.company = companyWhere;
+  }
+
   const requestBody = {
-    where: {
-      person: personWhere,
-      company: companyWhere,
-    },
+    where: wherePayload,
     limit: fetchLimit,
   };
 
