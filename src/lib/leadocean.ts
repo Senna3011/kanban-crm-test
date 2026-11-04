@@ -215,9 +215,10 @@ export async function searchLeadOceanLeads(params: LeadOceanSearchParams): Promi
   }
 
   if (params.industry) {
-    const industries = params.industry.split(',').map((i) => i.trim()).filter(Boolean);
-    if (industries.length > 0) {
-      bodyPayload.industry = industries;
+    const rawList = params.industry.split(',').map((i) => i.trim()).filter(Boolean);
+    const validIndustries = rawList.filter((i) => !i.toLowerCase().includes('all') && !i.toLowerCase().includes('broad'));
+    if (validIndustries.length > 0) {
+      bodyPayload.industry = validIndustries;
     }
   }
 
