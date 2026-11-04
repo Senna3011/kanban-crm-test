@@ -265,7 +265,8 @@ export default function OutreachTrendChart() {
                 y1={paddingY}
                 x2={chartWidth - paddingX}
                 y2={paddingY}
-                stroke="#f1f5f9"
+                stroke="currentColor"
+                className="text-slate-100 dark:text-[#2C333A]"
                 strokeDasharray="4 4"
                 strokeWidth={1}
               />
@@ -274,7 +275,8 @@ export default function OutreachTrendChart() {
                 y1={chartHeight / 2}
                 x2={chartWidth - paddingX}
                 y2={chartHeight / 2}
-                stroke="#f1f5f9"
+                stroke="currentColor"
+                className="text-slate-100 dark:text-[#2C333A]"
                 strokeDasharray="4 4"
                 strokeWidth={1}
               />
@@ -283,7 +285,8 @@ export default function OutreachTrendChart() {
                 y1={chartHeight - paddingY}
                 x2={chartWidth - paddingX}
                 y2={chartHeight - paddingY}
-                stroke="#e2e8f0"
+                stroke="currentColor"
+                className="text-slate-200 dark:text-[#2C333A]"
                 strokeWidth={1}
               />
 
@@ -303,7 +306,8 @@ export default function OutreachTrendChart() {
                         y1={paddingY}
                         x2={p.x}
                         y2={chartHeight - paddingY}
-                        stroke="#cbd5e1"
+                        stroke="currentColor"
+                        className="text-slate-300 dark:text-[#38414A]"
                         strokeDasharray="2 2"
                         strokeWidth={1.5}
                       />
@@ -314,10 +318,10 @@ export default function OutreachTrendChart() {
                       cx={p.x}
                       cy={p.y}
                       r={isHovered ? 5 : 3.5}
-                      fill="#ffffff"
+                      fill="currentColor"
                       stroke={currentTheme.stroke}
                       strokeWidth={isHovered ? 3 : 2}
-                      className="transition-all duration-150"
+                      className="text-white dark:text-[#22272B] transition-all duration-150"
                     />
 
                     {/* Transparent Hover Hitbox */}

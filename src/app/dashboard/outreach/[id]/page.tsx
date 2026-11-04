@@ -1919,17 +1919,17 @@ export default function CampaignWorkspacePage({
             </div>
 
             {/* Target Count & Summary */}
-            <div className="p-3.5 bg-indigo-50/80 border border-indigo-100 rounded-xl text-xs space-y-1.5">
-              <div className="flex items-center justify-between font-bold text-indigo-950">
+            <div className="p-3.5 bg-indigo-50/80 dark:bg-[#1c2b41] border border-indigo-100 dark:border-[#204677] rounded-xl text-xs space-y-1.5">
+              <div className="flex items-center justify-between font-bold text-indigo-950 dark:text-[#B6C2CF]">
                 <span>Eligible Leads to Push:</span>
                 <span className="bg-indigo-600 text-white px-2 py-0.5 rounded-full text-[11px]">
                   {crmTargetLeadIds.length} Leads
                 </span>
               </div>
-              <p className="text-[11px] text-indigo-700/80">
+              <p className="text-[11px] text-indigo-700/80 dark:text-[#8C9BAB]">
                 Leads are saved into your Kanban board under <strong>&quot;Fresh leads&quot;</strong>.
               </p>
-              <div className="pt-1.5 border-t border-indigo-100/80 text-[11px] font-semibold text-emerald-800 flex items-center gap-1">
+              <div className="pt-1.5 border-t border-indigo-100/80 dark:border-[#204677] text-[11px] font-semibold text-emerald-800 dark:text-[#4BCE97] flex items-center gap-1">
                 <span>🛡️</span>
                 <span>Safe Mode Active: Pushing will NOT send emails. Leads remain as pending drafts until you review and click &quot;Start Sending All&quot;.</span>
               </div>

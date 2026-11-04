@@ -44,8 +44,8 @@ export default function ConfirmDialog({
 
   const variantStyles = {
     danger: {
-      iconBg: 'bg-rose-100 text-rose-600 ring-8 ring-rose-50',
-      btnBg: 'bg-rose-600 hover:bg-rose-700 text-white shadow-rose-200',
+      iconBg: 'bg-rose-100 dark:bg-rose-950/60 text-rose-600 dark:text-rose-400 ring-8 ring-rose-50 dark:ring-rose-950/30',
+      btnBg: 'bg-rose-600 hover:bg-rose-700 text-white shadow-rose-200/50',
       icon: (
         <svg className="w-6 h-6 animate-bounce" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
           <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
@@ -53,8 +53,8 @@ export default function ConfirmDialog({
       ),
     },
     warning: {
-      iconBg: 'bg-amber-100 text-amber-600 ring-8 ring-amber-50',
-      btnBg: 'bg-amber-600 hover:bg-amber-700 text-white shadow-amber-200',
+      iconBg: 'bg-amber-100 dark:bg-amber-950/60 text-amber-600 dark:text-amber-400 ring-8 ring-amber-50 dark:ring-amber-950/30',
+      btnBg: 'bg-amber-600 hover:bg-amber-700 text-white shadow-amber-200/50',
       icon: (
         <svg className="w-6 h-6 animate-pulse" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
           <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
@@ -62,8 +62,8 @@ export default function ConfirmDialog({
       ),
     },
     info: {
-      iconBg: 'bg-blue-100 text-blue-600 ring-8 ring-blue-50',
-      btnBg: 'bg-blue-600 hover:bg-blue-700 text-white shadow-blue-200',
+      iconBg: 'bg-blue-100 dark:bg-blue-950/60 text-blue-600 dark:text-blue-400 ring-8 ring-blue-50 dark:ring-blue-950/30',
+      btnBg: 'bg-blue-600 hover:bg-blue-700 text-white shadow-blue-200/50',
       icon: (
         <svg className="w-6 h-6 animate-pulse" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
           <path strokeLinecap="round" strokeLinejoin="round" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
@@ -71,8 +71,8 @@ export default function ConfirmDialog({
       ),
     },
     primary: {
-      iconBg: 'bg-primary-100 text-primary-600 ring-8 ring-primary-50',
-      btnBg: 'bg-primary-600 hover:bg-primary-700 text-white shadow-primary-200',
+      iconBg: 'bg-primary-100 dark:bg-primary-950/60 text-primary-600 dark:text-primary-400 ring-8 ring-primary-50 dark:ring-primary-950/30',
+      btnBg: 'bg-primary-600 hover:bg-primary-700 text-white shadow-primary-200/50',
       icon: (
         <svg className="w-6 h-6 animate-bounce" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
           <path strokeLinecap="round" strokeLinejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z" />

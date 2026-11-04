@@ -38,87 +38,96 @@
 
 /* 
  * ============================================================================
- * CALM TRELLO DARK MODE COMPATIBILITY LAYER
- * Automatically harmonizes surfaces, cards, borders, text, and inputs across 
- * ALL pages (Kanban, Outreach, Team, Settings, Guide, Profiles) to eliminate
- * color clashes, glaring white rectangles, and harsh pitch-black contrast.
+ * CALM TRELLO DARK MODE COMPATIBILITY LAYER (WILDCARD SELECTOR ENGINE)
+ * Automatically harmonizes all surfaces, opacity variants (/10 to /95), cards,
+ * linear gradients, borders, text, rings, and inputs across ALL pages 
+ * (Kanban, Outreach, Team, Settings, Guide, Profiles).
  * ============================================================================
  */
 .dark {
   color-scheme: dark;
 }
 
-/* Main background canvas */
-.dark .bg-slate-50,
-.dark .bg-gray-50 {
+/* 1. Base Canvas Surfaces (Matches bg-slate-50 and all opacity variants) */
+.dark [class*="bg-slate-50"],
+.dark [class*="bg-gray-50"] {
   background-color: #1D2125 !important;
 }
 
-/* Columns, Sidebars, Sub-containers */
-.dark .bg-slate-100,
-.dark .bg-gray-100,
-.dark .bg-slate-100\/70,
-.dark .bg-slate-100\/80 {
+/* 2. Sub-surface Columns, Sidebars, Toolbars & Table Headers */
+.dark [class*="bg-slate-100"],
+.dark [class*="bg-gray-100"],
+.dark [class*="bg-slate-200"],
+.dark [class*="bg-gray-200"] {
   background-color: #161A1D !important;
 }
 
-/* Cards & Modals Surface (Trello Card Color) */
-.dark .bg-white,
-.dark .bg-white\/95,
-.dark .bg-white\/90,
-.dark .bg-white\/80 {
+/* 3. Cards, Modals & Dropdown Panels (Trello Card Color) */
+.dark [class*="bg-white"] {
   background-color: #22272B !important;
 }
 
-/* Hover Elevated Surfaces */
-.dark .hover\:bg-slate-50:hover,
-.dark .hover\:bg-slate-100:hover,
-.dark .hover\:bg-slate-200:hover,
-.dark .hover\:bg-gray-50:hover,
-.dark .hover\:bg-gray-100:hover {
+/* 4. Hover Elevated Surfaces */
+.dark [class*="hover:bg-slate-50"]:hover,
+.dark [class*="hover:bg-slate-100"]:hover,
+.dark [class*="hover:bg-slate-200"]:hover,
+.dark [class*="hover:bg-gray-50"]:hover,
+.dark [class*="hover:bg-gray-100"]:hover {
   background-color: #282E33 !important;
 }
 
-/* Calm Subtle Borders (No harsh lines) */
-.dark .border-slate-100,
-.dark .border-slate-200,
-.dark .border-slate-200\/60,
-.dark .border-slate-200\/80,
-.dark .border-slate-200\/90,
-.dark .border-slate-300,
-.dark .border-gray-100,
-.dark .border-gray-200,
-.dark .border-gray-300 {
+/* 5. Linear Gradient Stops (Sub-Board Banner, Lens Filter, etc.) */
+.dark [class*="from-indigo-50"],
+.dark [class*="from-primary-50"],
+.dark [class*="from-blue-50"] {
+  --tw-gradient-from: #1c2b41 !important;
+  --tw-gradient-to: rgb(28 43 65 / 0) !important;
+  --tw-gradient-stops: var(--tw-gradient-from), var(--tw-gradient-to) !important;
+}
+
+.dark [class*="to-blue-50"],
+.dark [class*="to-purple-50"],
+.dark [class*="to-indigo-50"] {
+  --tw-gradient-to: #161A1D !important;
+}
+
+/* 6. Calm Subtle Borders (Matches all border-slate-* & border-gray-*) */
+.dark [class*="border-slate-100"],
+.dark [class*="border-slate-200"],
+.dark [class*="border-slate-300"],
+.dark [class*="border-gray-100"],
+.dark [class*="border-gray-200"],
+.dark [class*="border-gray-300"] {
   border-color: #2C333A !important;
 }
 
-/* Primary Headings & High Contrast Text -> Silvery Off-White */
-.dark .text-slate-900,
-.dark .text-slate-850,
-.dark .text-slate-800,
-.dark .text-gray-900,
-.dark .text-gray-800,
-.dark .text-indigo-950 {
+/* 7. Primary Headings & High Contrast Text -> Silvery Off-White */
+.dark [class*="text-slate-900"],
+.dark [class*="text-slate-850"],
+.dark [class*="text-slate-800"],
+.dark [class*="text-gray-900"],
+.dark [class*="text-gray-800"],
+.dark [class*="text-indigo-950"] {
   color: #B6C2CF !important;
 }
 
-/* Secondary & Body Text -> Calm Slate */
-.dark .text-slate-700,
-.dark .text-slate-600,
-.dark .text-gray-700,
-.dark .text-gray-600 {
+/* 8. Secondary & Body Text -> Calm Slate */
+.dark [class*="text-slate-700"],
+.dark [class*="text-slate-600"],
+.dark [class*="text-gray-700"],
+.dark [class*="text-gray-600"] {
   color: #9FADBC !important;
 }
 
-/* Sub-labels & Muted Text -> Soft Silver */
-.dark .text-slate-500,
-.dark .text-slate-400,
-.dark .text-gray-500,
-.dark .text-gray-400 {
+/* 9. Sub-labels & Muted Text -> Soft Silver */
+.dark [class*="text-slate-500"],
+.dark [class*="text-slate-400"],
+.dark [class*="text-gray-500"],
+.dark [class*="text-gray-400"] {
   color: #8C9BAB !important;
 }
 
-/* Inputs, Textareas & Dropdowns */
+/* 10. Inputs, Textareas & Dropdowns */
 .dark input:not([type="checkbox"]):not([type="radio"]),
 .dark select,
 .dark textarea {
@@ -132,43 +141,68 @@
   color: #738496 !important;
 }
 
-/* Calm Status Badges in Dark Mode */
-.dark .bg-emerald-50,
-.dark .bg-emerald-100 {
+.dark select.bg-transparent,
+.dark input.bg-transparent {
+  background-color: transparent !important;
+}
+
+/* 11. Calm Status Badges & Chips */
+.dark [class*="bg-emerald-50"],
+.dark [class*="bg-emerald-100"] {
   background-color: #1c3829 !important;
   border-color: #216E4E !important;
   color: #4BCE97 !important;
 }
 
-.dark .bg-amber-50,
-.dark .bg-amber-100 {
+.dark [class*="bg-amber-50"],
+.dark [class*="bg-amber-100"] {
   background-color: #382d12 !important;
   border-color: #7F5F01 !important;
   color: #F5CD47 !important;
 }
 
-.dark .bg-rose-50,
-.dark .bg-rose-100,
-.dark .bg-red-50,
-.dark .bg-red-100 {
+.dark [class*="bg-rose-50"],
+.dark [class*="bg-rose-100"],
+.dark [class*="bg-red-50"],
+.dark [class*="bg-red-100"] {
   background-color: #3d1c1a !important;
   border-color: #73231d !important;
   color: #F87168 !important;
 }
 
-.dark .bg-indigo-50,
-.dark .bg-indigo-100,
-.dark .bg-blue-50,
-.dark .bg-blue-100,
-.dark .bg-primary-50 {
+.dark [class*="bg-indigo-50"],
+.dark [class*="bg-indigo-100"],
+.dark [class*="bg-blue-50"],
+.dark [class*="bg-primary-50"] {
   background-color: #1c2b41 !important;
   border-color: #204677 !important;
   color: #579DFF !important;
 }
 
-.dark .bg-purple-50,
-.dark .bg-purple-100 {
+.dark [class*="bg-purple-50"],
+.dark [class*="bg-purple-100"] {
   background-color: #2b1d38 !important;
   border-color: #5b3577 !important;
   color: #C084FC !important;
+}
+
+/* 12. Ring Halos for SweetAlert Confirm Dialog */
+.dark [class*="ring-rose-50"],
+.dark [class*="ring-red-50"] {
+  --tw-ring-color: #3d1c1a !important;
+}
+
+.dark [class*="ring-amber-50"],
+.dark [class*="ring-yellow-50"] {
+  --tw-ring-color: #382d12 !important;
+}
+
+.dark [class*="ring-blue-50"],
+.dark [class*="ring-indigo-50"],
+.dark [class*="ring-primary-50"] {
+  --tw-ring-color: #1c2b41 !important;
+}
+
+.dark [class*="ring-emerald-50"] {
+  --tw-ring-color: #1c3829 !important;
 }

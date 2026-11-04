@@ -1044,15 +1044,15 @@ export default function KanbanBoard() {
 
         {/* Active Sub-Board Filter Banner */}
         {activeSubBoard !== 'all' && (
-          <div className="flex items-center justify-between px-3.5 py-2 bg-gradient-to-r from-indigo-50 to-blue-50 border border-indigo-200/80 rounded-xl text-xs text-indigo-950 shadow-2xs animate-in fade-in">
+          <div className="flex items-center justify-between px-3.5 py-2 bg-gradient-to-r from-indigo-50 to-blue-50 dark:from-[#1c2b41] dark:to-[#161A1D] border border-indigo-200/80 dark:border-[#204677] rounded-xl text-xs text-indigo-950 dark:text-[#B6C2CF] shadow-2xs animate-in fade-in">
             <div className="flex items-center gap-2">
               <span className="text-base">🎯</span>
               <div>
                 <span className="font-bold">Active Sub-Board Lens:</span>{' '}
-                <span className="font-mono font-bold bg-white px-2 py-0.5 rounded border border-indigo-200 text-indigo-900 shadow-2xs">
+                <span className="font-mono font-bold bg-white dark:bg-[#22272B] px-2 py-0.5 rounded border border-indigo-200 dark:border-[#204677] text-indigo-900 dark:text-[#579DFF] shadow-2xs">
                   {activeSubBoard}
                 </span>{' '}
-                <span className="text-indigo-600 font-medium ml-1">
+                <span className="text-indigo-600 dark:text-[#8C9BAB] font-medium ml-1">
                   ({totalFilteredCards} cards isolated in this pipeline)
                 </span>
               </div>
@@ -1060,7 +1060,7 @@ export default function KanbanBoard() {
             <button
               type="button"
               onClick={() => handleSelectSubBoard('all')}
-              className="text-xs font-bold text-indigo-700 hover:text-indigo-900 hover:underline px-2 py-1 cursor-pointer"
+              className="text-xs font-bold text-indigo-700 dark:text-[#579DFF] hover:text-indigo-900 dark:hover:text-[#8FB8F6] hover:underline px-2 py-1 cursor-pointer"
             >
               ✕ Reset to All Senders
             </button>

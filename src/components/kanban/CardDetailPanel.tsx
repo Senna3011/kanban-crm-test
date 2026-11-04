@@ -307,8 +307,8 @@ function ChatBubble({ message }: { message: TimelineMessage }) {
       <div
         className={`w-full max-w-[88%] sm:max-w-[80%] rounded-2xl p-4 shadow-2xs transition-all overflow-hidden border ${
           isSent
-            ? 'bg-primary-50/90 border-primary-200/80 rounded-tr-xs text-slate-900'
-            : 'bg-white border-slate-200/90 rounded-tl-xs text-slate-900'
+            ? 'bg-primary-50/90 dark:bg-[#1c2b41] border-primary-200/80 dark:border-[#204677] rounded-tr-xs text-slate-900 dark:text-[#B6C2CF]'
+            : 'bg-white dark:bg-[#22272B] border-slate-200/90 dark:border-[#2C333A] rounded-tl-xs text-slate-900 dark:text-[#B6C2CF]'
         }`}
       >
         {/* Bubble Header: Sender, Badge & Timestamp */}
@@ -726,14 +726,14 @@ export default function CardDetailPanel({ card, onClose }: Props) {
 
       {/* Modal Card Container */}
       <div
-        className={`relative w-full bg-white rounded-2xl shadow-2xl border border-slate-200 flex flex-col transition-all duration-200 overflow-hidden ${
+        className={`relative w-full bg-white dark:bg-[#22272B] rounded-2xl shadow-2xl border border-slate-200 dark:border-[#2C333A] flex flex-col transition-all duration-200 overflow-hidden ${
           isMaximized
             ? 'max-w-5xl h-[95vh]'
             : 'max-w-2xl max-h-[94vh] sm:max-h-[90vh]'
         }`}
       >
         {/* Header */}
-        <div className="px-4 sm:px-6 py-3.5 border-b border-slate-200/80 bg-slate-50/60 flex items-start justify-between gap-3 flex-shrink-0">
+        <div className="px-4 sm:px-6 py-3.5 border-b border-slate-200/80 dark:border-[#2C333A] bg-slate-50/60 dark:bg-[#161A1D] flex items-start justify-between gap-3 flex-shrink-0">
           <div className="flex items-start gap-3 min-w-0 flex-1">
             <div
               className={`w-9 h-9 rounded-xl flex items-center justify-center text-xs font-bold shadow-xs bg-gradient-to-br flex-shrink-0 ${avatarGradient}`}
@@ -1113,9 +1113,9 @@ export default function CardDetailPanel({ card, onClose }: Props) {
               </div>
 
               {showHtml && cardHtml ? (
-                <div className="bg-white border border-slate-200 rounded-xl overflow-hidden shadow-xs">
+                <div className="bg-white dark:bg-[#1D2125] border border-slate-200 dark:border-[#2C333A] rounded-xl overflow-hidden shadow-xs">
                   <iframe
-                    srcDoc={cardHtml}
+                    srcDoc={`<style>html,body{color:#B6C2CF;background:#1D2125;font-family:system-ui,sans-serif;margin:12px;font-size:13px;line-height:1.6;}a{color:#579DFF;}table,td,th{border-color:#2C333A;}img{max-width:100%;}</style>${cardHtml}`}
                     className="w-full border-0"
                     style={{ minHeight: isMaximized ? 420 : 260, maxHeight: isMaximized ? 650 : 420 }}
                     sandbox="allow-popups"
@@ -1123,7 +1123,7 @@ export default function CardDetailPanel({ card, onClose }: Props) {
                   />
                 </div>
               ) : card.bodyText ? (
-                <div className="bg-slate-50 rounded-xl p-4 text-xs sm:text-sm text-slate-800 whitespace-pre-wrap leading-relaxed border border-slate-200/90 font-mono break-words [overflow-wrap:anywhere]">
+                <div className="bg-slate-50 dark:bg-[#161A1D] rounded-xl p-4 text-xs sm:text-sm text-slate-800 dark:text-[#B6C2CF] whitespace-pre-wrap leading-relaxed border border-slate-200/90 dark:border-[#2C333A] font-mono break-words [overflow-wrap:anywhere]">
                   {card.bodyText}
                 </div>
               ) : (
@@ -1160,14 +1160,14 @@ export default function CardDetailPanel({ card, onClose }: Props) {
 
         {/* Collapsible Quick Reply Composer (Maximizes Reading Space) */}
         {!error && (
-          <div className="border-t border-slate-200 bg-slate-50/90 px-4 sm:px-6 py-3 flex-shrink-0 transition-all">
+          <div className="border-t border-slate-200 dark:border-[#2C333A] bg-slate-50/90 dark:bg-[#161A1D] px-4 sm:px-6 py-3 flex-shrink-0 transition-all">
             {!replyExpanded ? (
               /* Collapsed Compact State */
               <div className="flex items-center justify-between gap-3">
                 <button
                   type="button"
                   onClick={() => setReplyExpanded(true)}
-                  className="flex-1 flex items-center gap-2 px-3.5 py-2 bg-white border border-slate-300 hover:border-primary-400 rounded-xl text-xs text-slate-400 text-left shadow-2xs hover:text-slate-600 transition group cursor-pointer"
+                  className="flex-1 flex items-center gap-2 px-3.5 py-2 bg-white dark:bg-[#22272B] border border-slate-300 dark:border-[#2C333A] hover:border-primary-400 dark:hover:border-primary-500 rounded-xl text-xs text-slate-400 dark:text-[#8C9BAB] text-left shadow-2xs hover:text-slate-600 dark:hover:text-[#B6C2CF] transition group cursor-pointer"
                 >
                   <span className="text-slate-400 group-hover:text-primary-600">💬</span>
                   <span className="font-medium">Click here to write a reply or choose a template...</span>

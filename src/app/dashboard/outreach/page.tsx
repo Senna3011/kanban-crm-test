@@ -162,66 +162,66 @@ export default function OutreachDashboardPage() {
           return (
             <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-9 gap-3">
               {/* 1. Prospects */}
-              <div className="bg-slate-50/70 p-3 rounded-xl border border-slate-100 flex flex-col justify-between">
+              <div className="bg-slate-50/70 dark:bg-[#161A1D] p-3 rounded-xl border border-slate-100 dark:border-[#2C333A] flex flex-col justify-between">
                 <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Prospects</p>
-                <p className="text-xl font-bold text-slate-900 mt-1">{totalProspects}</p>
+                <p className="text-xl font-bold text-slate-900 dark:text-[#B6C2CF] mt-1">{totalProspects}</p>
               </div>
 
               {/* 2. Sent */}
-              <div className="bg-slate-50/70 p-3 rounded-xl border border-slate-100 flex flex-col justify-between">
+              <div className="bg-slate-50/70 dark:bg-[#161A1D] p-3 rounded-xl border border-slate-100 dark:border-[#2C333A] flex flex-col justify-between">
                 <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Sent</p>
                 <div className="flex items-baseline gap-1 mt-1">
-                  <span className="text-xl font-bold text-indigo-600">{totalSent}</span>
-                  <span className="text-[10px] font-bold text-indigo-500">({sentPct}%)</span>
+                  <span className="text-xl font-bold text-indigo-600 dark:text-indigo-400">{totalSent}</span>
+                  <span className="text-[10px] font-bold text-indigo-500 dark:text-indigo-400">({sentPct}%)</span>
                 </div>
               </div>
 
               {/* 3. Reached */}
-              <div className="bg-slate-50/70 p-3 rounded-xl border border-slate-100 flex flex-col justify-between">
+              <div className="bg-slate-50/70 dark:bg-[#161A1D] p-3 rounded-xl border border-slate-100 dark:border-[#2C333A] flex flex-col justify-between">
                 <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Reached</p>
-                <p className="text-xl font-bold text-blue-600 mt-1">{totalReached}</p>
+                <p className="text-xl font-bold text-blue-600 dark:text-blue-400 mt-1">{totalReached}</p>
               </div>
 
               {/* 4. Opened */}
-              <div className="bg-slate-50/70 p-3 rounded-xl border border-slate-100 flex flex-col justify-between">
+              <div className="bg-slate-50/70 dark:bg-[#161A1D] p-3 rounded-xl border border-slate-100 dark:border-[#2C333A] flex flex-col justify-between">
                 <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Opened</p>
                 <div className="flex items-baseline gap-1 mt-1">
-                  <span className="text-xl font-bold text-cyan-600">{totalOpened}</span>
-                  <span className="text-[10px] font-bold text-cyan-500">({openedPct}%)</span>
+                  <span className="text-xl font-bold text-cyan-600 dark:text-cyan-400">{totalOpened}</span>
+                  <span className="text-[10px] font-bold text-cyan-500 dark:text-cyan-400">({openedPct}%)</span>
                 </div>
               </div>
 
               {/* 5. Clicked */}
-              <div className="bg-slate-50/70 p-3 rounded-xl border border-slate-100 flex flex-col justify-between">
+              <div className="bg-slate-50/70 dark:bg-[#161A1D] p-3 rounded-xl border border-slate-100 dark:border-[#2C333A] flex flex-col justify-between">
                 <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Clicked</p>
-                <p className="text-xl font-bold text-purple-600 mt-1">{totalClicked}</p>
+                <p className="text-xl font-bold text-purple-600 dark:text-purple-400 mt-1">{totalClicked}</p>
               </div>
 
               {/* 6. Replied */}
-              <div className="bg-slate-50/70 p-3 rounded-xl border border-slate-100 flex flex-col justify-between">
+              <div className="bg-slate-50/70 dark:bg-[#161A1D] p-3 rounded-xl border border-slate-100 dark:border-[#2C333A] flex flex-col justify-between">
                 <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Replied</p>
                 <div className="flex items-baseline gap-1 mt-1">
-                  <span className="text-xl font-bold text-amber-600">{totalReplied}</span>
-                  <span className="text-[10px] font-bold text-amber-500">({repliedPct}%)</span>
+                  <span className="text-xl font-bold text-amber-600 dark:text-amber-400">{totalReplied}</span>
+                  <span className="text-[10px] font-bold text-amber-500 dark:text-amber-400">({repliedPct}%)</span>
                 </div>
               </div>
 
               {/* 7. Interested */}
-              <div className="bg-slate-50/70 p-3 rounded-xl border border-slate-100 flex flex-col justify-between">
+              <div className="bg-slate-50/70 dark:bg-[#161A1D] p-3 rounded-xl border border-slate-100 dark:border-[#2C333A] flex flex-col justify-between">
                 <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Interested</p>
-                <p className="text-xl font-bold text-emerald-600 mt-1">{totalInterested}</p>
+                <p className="text-xl font-bold text-emerald-600 dark:text-emerald-400 mt-1">{totalInterested}</p>
               </div>
 
               {/* 8. Opportunities */}
-              <div className="bg-slate-50/70 p-3 rounded-xl border border-slate-100 flex flex-col justify-between">
+              <div className="bg-slate-50/70 dark:bg-[#161A1D] p-3 rounded-xl border border-slate-100 dark:border-[#2C333A] flex flex-col justify-between">
                 <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Opportunities</p>
-                <p className="text-xl font-bold text-emerald-700 mt-1">${totalOpportunities.toLocaleString()}</p>
+                <p className="text-xl font-bold text-emerald-700 dark:text-emerald-400 mt-1">${totalOpportunities.toLocaleString()}</p>
               </div>
 
               {/* 9. Bounced */}
-              <div className="bg-slate-50/70 p-3 rounded-xl border border-slate-100 flex flex-col justify-between col-span-2 sm:col-span-1">
+              <div className="bg-slate-50/70 dark:bg-[#161A1D] p-3 rounded-xl border border-slate-100 dark:border-[#2C333A] flex flex-col justify-between col-span-2 sm:col-span-1">
                 <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Bounced</p>
-                <p className="text-xl font-bold text-rose-600 mt-1">{totalBounced}</p>
+                <p className="text-xl font-bold text-rose-600 dark:text-rose-400 mt-1">{totalBounced}</p>
               </div>
             </div>
           );
