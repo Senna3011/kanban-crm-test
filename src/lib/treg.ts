@@ -1,5 +1,5 @@
 import { ApifyScrapedLead } from './apify';
-import { isValidDecisionMakerLead } from './leadocean';
+import { isValidDecisionMakerLead } from './outreach-validator';
 
 export interface TregSearchParams {
   role?: string;

@@ -4,11 +4,14 @@ import Link from 'next/link';
 import { useState, useEffect } from 'react';
 import { useSession, signOut } from 'next-auth/react';
 import { useSocket } from '@/providers/SocketProvider';
+import { useTheme } from '@/components/theme-provider';
+import { SunIcon, MoonIcon } from '@/components/ui/icons';
 import Button from '@/components/ui/Button';
 
 export default function Navbar() {
   const { data: session } = useSession();
   const { connected } = useSocket();
+  const { toggleTheme, resolvedTheme } = useTheme();
   const [isOffline, setIsOffline] = useState(false);
   const [profileMeta, setProfileMeta] = useState<{
     user?: { name?: string | null; email?: string; avatar?: string | null; role?: string };
@@ -70,12 +73,12 @@ export default function Navbar() {
           <span>Internet connection lost. The system will automatically sync data when back online.</span>
         </div>
       )}
-      <header className="h-14 bg-white/95 backdrop-blur-md border-b border-slate-200 flex items-center justify-between px-3 sm:px-6 sticky top-0 z-30">
+      <header className="h-14 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md border-b border-slate-200 dark:border-slate-800 flex items-center justify-between px-3 sm:px-6 sticky top-0 z-30 transition-colors">
         {/* Left: Mobile Toggle + Brand Logo */}
         <div className="flex items-center gap-2 sm:gap-3 min-w-0">
           <button
             onClick={handleToggleMobileSidebar}
-            className="p-1.5 -ml-1 rounded-lg text-slate-500 hover:text-slate-800 hover:bg-slate-100 md:hidden flex-shrink-0 transition-colors"
+            className="p-1.5 -ml-1 rounded-lg text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 md:hidden flex-shrink-0 transition-colors"
             title="Open menu"
           >
             <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -83,7 +86,7 @@ export default function Navbar() {
             </svg>
           </button>
           <div className="flex items-center gap-2 sm:gap-2.5 min-w-0">
-            <span className="w-8 h-8 rounded-xl bg-gradient-to-br from-primary-600 to-indigo-700 text-white text-xs font-bold flex items-center justify-center tracking-tight flex-shrink-0 shadow-2xs overflow-hidden border border-slate-200/80">
+            <span className="w-8 h-8 rounded-xl bg-gradient-to-br from-primary-600 to-indigo-700 text-white text-xs font-bold flex items-center justify-center tracking-tight flex-shrink-0 shadow-2xs overflow-hidden border border-slate-200/80 dark:border-slate-700">
               {tenantLogo ? (
                 <img src={tenantLogo} alt="Logo" className="w-full h-full object-cover" onError={(e) => { (e.target as any).style.display = 'none'; }} />
               ) : (
@@ -91,26 +94,41 @@ export default function Navbar() {
               )}
             </span>
             <div className="leading-tight min-w-0">
-              <p className="text-sm font-bold text-slate-900 truncate max-w-[140px] sm:max-w-xs">
+              <p className="text-sm font-bold text-slate-900 dark:text-slate-100 truncate max-w-[140px] sm:max-w-xs">
                 {tenantName}
               </p>
-              <p className="text-[11px] text-slate-400 truncate max-w-[140px] sm:max-w-xs">
+              <p className="text-[11px] text-slate-500 dark:text-slate-400 truncate max-w-[140px] sm:max-w-xs">
                 {currentRole === 'admin' ? 'Administrator' : 'Team Member'}
               </p>
             </div>
           </div>
         </div>
 
-        {/* Right: Live Sync Pill + Guide Shortcut + User profile */}
+        {/* Right: Theme Toggle + Live Sync Pill + Guide Shortcut + User profile */}
         <div className="flex items-center gap-2 sm:gap-3 flex-shrink-0">
+          {/* Theme Toggle (Dark / Light) */}
+          <button
+            type="button"
+            onClick={toggleTheme}
+            className="p-1.5 rounded-lg text-slate-600 dark:text-slate-300 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700 transition-colors"
+            title={resolvedTheme === 'dark' ? 'Switch to Light Mode' : 'Switch to Dark Mode'}
+            aria-label="Toggle Dark Mode"
+          >
+            {resolvedTheme === 'dark' ? (
+              <SunIcon className="w-4 h-4 text-amber-400" />
+            ) : (
+              <MoonIcon className="w-4 h-4 text-slate-600" />
+            )}
+          </button>
+
           {/* Real-time sync badge */}
           <div
             className={`hidden sm:inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-semibold border transition-all ${
               isOffline
-                ? 'bg-rose-50 text-rose-700 border-rose-200/80'
+                ? 'bg-rose-50 text-rose-700 border-rose-200/80 dark:bg-rose-950/40 dark:text-rose-400 dark:border-rose-900/60'
                 : connected
-                ? 'bg-emerald-50 text-emerald-700 border-emerald-200/80'
-                : 'bg-amber-50 text-amber-700 border-amber-200/80'
+                ? 'bg-emerald-50 text-emerald-700 border-emerald-200/80 dark:bg-emerald-950/40 dark:text-emerald-400 dark:border-emerald-900/60'
+                : 'bg-amber-50 text-amber-700 border-amber-200/80 dark:bg-amber-950/40 dark:text-amber-400 dark:border-amber-900/60'
             }`}
             title={
               isOffline
@@ -131,29 +149,29 @@ export default function Navbar() {
           {/* User Guide Button */}
           <Link
             href="/dashboard/guide"
-            className="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-semibold text-slate-700 bg-slate-50 border border-slate-200/90 rounded-lg hover:bg-slate-100 hover:border-slate-300 transition-all shadow-2xs"
+            className="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-semibold text-slate-700 dark:text-slate-300 bg-slate-50 dark:bg-slate-800 border border-slate-200/90 dark:border-slate-700 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 transition-all shadow-2xs"
           >
-            <span>📖</span>
+            <span className="text-slate-500 dark:text-slate-400">📖</span>
             <span className="hidden sm:inline">Guide</span>
           </Link>
 
           {/* User Avatar & Profile Link */}
           <Link
             href="/dashboard/profile"
-            className="hidden sm:flex items-center gap-2 p-1 rounded-xl hover:bg-slate-100 transition"
+            className="hidden sm:flex items-center gap-2 p-1 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 transition"
             title="My Profile"
           >
-            <span className="w-7 h-7 rounded-full bg-gradient-to-br from-primary-600 to-indigo-600 text-white text-xs font-bold flex items-center justify-center shadow-2xs overflow-hidden border border-slate-200">
+            <span className="w-7 h-7 rounded-full bg-gradient-to-br from-primary-600 to-indigo-600 text-white text-xs font-bold flex items-center justify-center shadow-2xs overflow-hidden border border-slate-200 dark:border-slate-700">
               {currentUserAvatar ? (
                 <img src={currentUserAvatar} alt="Avatar" className="w-full h-full object-cover" onError={(e) => { (e.target as any).style.display = 'none'; }} />
               ) : (
                 initial
               )}
             </span>
-            <span className="text-xs font-medium text-slate-700 max-w-[130px] truncate">{currentUserName || currentUserEmail}</span>
+            <span className="text-xs font-medium text-slate-700 dark:text-slate-300 max-w-[130px] truncate">{currentUserName || currentUserEmail}</span>
           </Link>
 
-          <Button variant="ghost" size="sm" onClick={handleSignOut} className="text-xs font-medium">
+          <Button variant="ghost" size="sm" onClick={handleSignOut} className="text-xs font-medium dark:text-slate-300 dark:hover:bg-slate-800">
             Sign out
           </Button>
         </div>

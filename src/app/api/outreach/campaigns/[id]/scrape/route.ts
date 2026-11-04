@@ -4,7 +4,6 @@ import { authOptions } from '@/server/auth';
 import prisma from '@/lib/prisma';
 import { scrapeApifyLeads } from '@/lib/apify';
 import { scrapeOutscraperLeads } from '@/lib/outscraper';
-import { searchLeadOceanLeads } from '@/lib/leadocean';
 import { searchTregLeads } from '@/lib/treg';
 import { sanitizeOutreachError } from '@/lib/outreach-error';
 import { outreachScrapeQueue } from '@/../queue';
@@ -41,20 +40,12 @@ export async function POST(
     const industry = body.industry || campaign.targetIndustry || undefined;
     const limit = Number(body.limit) || 10;
     const rawProvider = String(body.provider || '').toLowerCase();
-    const provider: 'leadocean' | 'treg' | 'outscraper' | 'apify' =
-      rawProvider === 'leadocean'
-        ? 'leadocean'
-        : rawProvider === 'treg'
-        ? 'treg'
+    const provider: 'treg' | 'outscraper' | 'apify' =
+      rawProvider === 'outscraper'
+        ? 'outscraper'
         : rawProvider === 'apify'
         ? 'apify'
-        : rawProvider === 'outscraper'
-        ? 'outscraper'
-        : process.env.LEADOCEAN_API_KEY
-        ? 'leadocean'
-        : process.env.TREG_API_KEY
-        ? 'treg'
-        : 'outscraper';
+        : 'treg';
     activeProvider = provider;
     const linkedinUrls = Array.isArray(body.linkedinUrls) ? body.linkedinUrls : undefined;
 
@@ -107,59 +98,7 @@ export async function POST(
     const apiToken = campaign.account?.apifyApiToken || process.env.APIFY_API_TOKEN || process.env.APIFY_API_KEY;
 
     let scrapedLeads = [];
-    if (provider === 'leadocean') {
-      try {
-        scrapedLeads = await searchLeadOceanLeads({
-          query,
-          role,
-          location,
-          industry,
-          limit,
-        });
-
-        // If LeadOcean returned fewer leads than requested (e.g. trial credits limit), supplement with Treg.to
-        if (scrapedLeads.length < limit && process.env.TREG_API_KEY) {
-          const remaining = limit - scrapedLeads.length;
-          console.log(`[Scrape Route] LeadOcean provided ${scrapedLeads.length}/${limit} leads. Supplementing with Treg.to...`);
-          try {
-            const extra = await searchTregLeads({
-              query,
-              role,
-              location,
-              industry,
-              limit: remaining,
-            });
-            scrapedLeads = [...scrapedLeads, ...extra];
-          } catch (suppErr: any) {
-            console.warn(`[Scrape Route] Treg supplement failed: ${suppErr?.message}`);
-          }
-        }
-      } catch (err: any) {
-        console.warn(`[Scrape Route] Enterprise B2B Index error: ${err.message}. Trying Treg.to cross-fallback.`);
-        try {
-          if (process.env.TREG_API_KEY) {
-            scrapedLeads = await searchTregLeads({
-              query,
-              role,
-              location,
-              industry,
-              limit,
-            });
-          } else {
-            throw new Error('TREG_API_KEY not configured');
-          }
-        } catch (tregErr: any) {
-          console.warn(`[Scrape Route] Treg cross-fallback failed (${tregErr.message}). Falling back to Outscraper.`);
-          scrapedLeads = await scrapeOutscraperLeads({
-            query,
-            role,
-            location,
-            industry,
-            limit,
-          });
-        }
-      }
-    } else if (provider === 'treg') {
+    if (provider === 'treg') {
       try {
         scrapedLeads = await searchTregLeads({
           query,
@@ -169,27 +108,25 @@ export async function POST(
           limit,
         });
       } catch (err: any) {
-        console.warn(`[Scrape Route] On-Demand Gateway error: ${err.message}. Trying LeadOcean cross-fallback.`);
+        console.warn(`[Scrape Route] Treg Gateway error: ${err.message}. Trying Outscraper fallback.`);
         try {
-          if (process.env.LEADOCEAN_API_KEY) {
-            scrapedLeads = await searchLeadOceanLeads({
-              query,
-              role,
-              location,
-              industry,
-              limit,
-            });
-          } else {
-            throw new Error('LEADOCEAN_API_KEY not configured');
-          }
-        } catch (loErr: any) {
-          console.warn(`[Scrape Route] LeadOcean cross-fallback failed (${loErr.message}). Falling back to Outscraper.`);
           scrapedLeads = await scrapeOutscraperLeads({
             query,
             role,
             location,
             industry,
             limit,
+          });
+        } catch (outErr: any) {
+          console.warn(`[Scrape Route] Outscraper fallback failed: ${outErr.message}. Trying Apify.`);
+          scrapedLeads = await scrapeApifyLeads({
+            query,
+            role,
+            location,
+            industry,
+            limit,
+            apiToken,
+            linkedinUrls,
           });
         }
       }
@@ -252,9 +189,7 @@ export async function POST(
           summary: lead.summary ? String(lead.summary) : undefined,
           source:
             lead.metadata?.source ||
-            (provider === 'leadocean'
-              ? 'enterprise-b2b-index'
-              : provider === 'treg'
+            (provider === 'treg'
               ? 'on-demand-gateway'
               : 'discovery-live'),
           ...(lead.metadata || {}),

@@ -124,7 +124,7 @@ export default function CampaignWorkspacePage({
   const [rowLoading, setRowLoading] = useState<Record<string, boolean>>({});
   const [exportingCsv, setExportingCsv] = useState(false);
   const [sourceBatchSize, setSourceBatchSize] = useState(10);
-  const [sourceProvider, setSourceProvider] = useState<'leadocean' | 'treg' | 'outscraper' | 'apify'>('leadocean');
+  const [sourceProvider, setSourceProvider] = useState<'treg' | 'outscraper' | 'apify'>('treg');
 
   // Selection state for Checkboxes
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
@@ -326,7 +326,7 @@ export default function CampaignWorkspacePage({
   async function handleSourceLeads(customLimit?: number, customProvider?: string) {
     setActionLoading('scrape');
     try {
-      const provider = customProvider || sourceProvider || searchParams?.get('provider') || 'leadocean';
+      const provider = customProvider || sourceProvider || searchParams?.get('provider') || 'treg';
       const res = await fetch(`/api/outreach/campaigns/${campaignId}/scrape`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -983,13 +983,13 @@ export default function CampaignWorkspacePage({
     score = Math.min(score, 100);
 
     let label = 'Moderate';
-    let badgeClass = 'bg-blue-50 text-blue-700 border-blue-200';
+    let badgeClass = 'bg-slate-50 text-slate-700 border-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-700 font-medium';
     if (score >= 85) {
-      label = '🔥 High ICP Match';
-      badgeClass = 'bg-emerald-50 text-emerald-800 border-emerald-300 font-bold';
+      label = 'High Match';
+      badgeClass = 'bg-emerald-50 text-emerald-800 border-emerald-300 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-800 font-bold';
     } else if (score >= 70) {
-      label = '⭐ Strong Match';
-      badgeClass = 'bg-indigo-50 text-indigo-700 border-indigo-200 font-semibold';
+      label = 'Strong Match';
+      badgeClass = 'bg-indigo-50 text-indigo-700 border-indigo-200 dark:bg-indigo-950/40 dark:text-indigo-300 dark:border-indigo-800 font-semibold';
     }
 
     return { score, label, badgeClass };
@@ -1166,25 +1166,25 @@ export default function CampaignWorkspacePage({
       />
 
       {/* Top Header */}
-      <div className="bg-white p-6 rounded-2xl border border-slate-200/80 shadow-xs space-y-4">
+      <div className="bg-white dark:bg-slate-900 p-6 rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-xs space-y-4">
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
           <div>
             <Link
               href="/dashboard/outreach"
-              className="text-xs font-semibold text-primary-600 hover:text-primary-800 flex items-center gap-1 mb-1"
+              className="text-xs font-semibold text-primary-600 dark:text-primary-400 hover:text-primary-800 flex items-center gap-1 mb-1"
             >
               ← Back to Outreach Campaigns
             </Link>
             <div className="flex items-center gap-3">
-              <h1 className="text-xl font-bold text-slate-900 tracking-tight">{campaign.name}</h1>
-              <span className="px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-primary-50 text-primary-700 border border-primary-200/60">
+              <h1 className="text-xl font-bold text-slate-900 dark:text-slate-100 tracking-tight">{campaign.name}</h1>
+              <span className="px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-primary-50 dark:bg-primary-950/60 text-primary-700 dark:text-primary-300 border border-primary-200/60 dark:border-primary-800/60">
                 {campaign.status}
               </span>
             </div>
-            <p className="text-xs text-slate-500 mt-1">
-              Target: <span className="font-semibold text-slate-700">{campaign.targetRole || 'Executives'}</span> in{' '}
-              <span className="font-semibold text-slate-700">{campaign.targetLocation || 'Global'}</span> • Sender:{' '}
-              <span className="font-semibold text-slate-700">{campaign.account?.senderEmail || 'Default JetDigitalPro Mailer'}</span>
+            <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+              Target: <span className="font-semibold text-slate-700 dark:text-slate-300">{campaign.targetRole || 'Executives'}</span> in{' '}
+              <span className="font-semibold text-slate-700 dark:text-slate-300">{campaign.targetLocation || 'Global'}</span> • Sender:{' '}
+              <span className="font-semibold text-slate-700 dark:text-slate-300">{campaign.account?.senderEmail || 'Default JetDigitalPro Mailer'}</span>
             </p>
           </div>
 
@@ -1192,7 +1192,7 @@ export default function CampaignWorkspacePage({
           <div className="flex flex-wrap items-center gap-2">
             <button
               onClick={openSettingsModal}
-              className="px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200/90 text-xs font-bold rounded-xl transition-colors flex items-center gap-1.5 shadow-2xs"
+              className="px-3 py-2 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 border border-slate-200/90 dark:border-slate-700 text-xs font-bold rounded-xl transition-colors flex items-center gap-1.5 shadow-2xs"
               title="Edit Campaign identity, targeting parameters, and AI copywriting prompt"
             >
               <span>⚙️</span>
@@ -1201,16 +1201,15 @@ export default function CampaignWorkspacePage({
             <button
               onClick={() => setIsTestSendOpen(true)}
               disabled={Boolean(actionLoading) || loading}
-              className="px-3 py-2 bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-300 text-xs font-bold rounded-xl transition-colors flex items-center gap-1.5 shadow-2xs disabled:opacity-50"
+              className="px-3 py-2 bg-amber-50 dark:bg-amber-950/40 hover:bg-amber-100 dark:hover:bg-amber-900/60 text-amber-900 dark:text-amber-300 border border-amber-300 dark:border-amber-800 text-xs font-bold rounded-xl transition-colors flex items-center gap-1.5 shadow-2xs disabled:opacity-50"
               title="Kirim 1 email uji coba ke inbox pribadi sebelum kirim massal"
             >
-              <span>⚡</span>
               <span>Send Test Email</span>
             </button>
             <button
               onClick={() => setIsAddLeadOpen(true)}
               disabled={Boolean(actionLoading) || loading}
-              className="px-3 py-2 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-300 text-xs font-bold rounded-xl transition-colors flex items-center gap-1.5 shadow-2xs disabled:opacity-50"
+              className="px-3 py-2 bg-emerald-50 dark:bg-emerald-950/40 hover:bg-emerald-100 dark:hover:bg-emerald-900/60 text-emerald-800 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800 text-xs font-bold rounded-xl transition-colors flex items-center gap-1.5 shadow-2xs disabled:opacity-50"
             >
               <span>➕</span>
               <span>Add Custom Lead</span>
@@ -1221,13 +1220,12 @@ export default function CampaignWorkspacePage({
                 value={sourceProvider}
                 onChange={(e) => setSourceProvider(e.target.value as any)}
                 disabled={Boolean(actionLoading) || loading || isPollingWorker || campaign.status === 'RUNNING'}
-                className="bg-white hover:bg-slate-50 px-2.5 py-2 text-xs font-bold text-slate-800 border-r border-slate-200 focus:outline-none cursor-pointer disabled:opacity-50"
+                className="bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-750 px-2.5 py-2 text-xs font-bold text-slate-800 dark:text-slate-200 border-r border-slate-200 dark:border-slate-700 focus:outline-none cursor-pointer disabled:opacity-50"
                 title="Select Lead Discovery Mode"
               >
-                <option value="leadocean">⚡ Enterprise B2B Index (Instant)</option>
-                <option value="treg">🎯 On-Demand Gateway (Pay-As-You-Go)</option>
-                <option value="outscraper">🔍 Live Executive Search</option>
-                <option value="apify">🌐 Deep Profile Crawler</option>
+                <option value="treg">B2B Gateway (Treg.to - Recommended)</option>
+                <option value="outscraper">Live Search (Outscraper)</option>
+                <option value="apify">Profile Crawler (Apify)</option>
               </select>
               <button
                 onClick={() => handleSourceLeads(sourceBatchSize, sourceProvider)}
@@ -1711,8 +1709,8 @@ export default function CampaignWorkspacePage({
                     <tr
                       key={lead.id}
                       onClick={() => toggleSelectLead(lead.id)}
-                      className={`transition-colors cursor-pointer ${
-                        isChecked ? 'bg-primary-50/50' : 'hover:bg-slate-50/70'
+                      className={`transition-colors cursor-pointer border-b border-slate-100 dark:border-slate-800 ${
+                        isChecked ? 'bg-primary-50/50 dark:bg-primary-950/40' : 'hover:bg-slate-50/70 dark:hover:bg-slate-850/60'
                       }`}
                     >
                       {/* Checkbox */}
@@ -1721,7 +1719,7 @@ export default function CampaignWorkspacePage({
                           type="checkbox"
                           checked={isChecked}
                           onChange={() => toggleSelectLead(lead.id)}
-                          className="rounded border-slate-300 text-primary-600 focus:ring-primary-500 w-4 h-4 cursor-pointer"
+                          className="rounded border-slate-300 dark:border-slate-600 text-primary-600 focus:ring-primary-500 w-4 h-4 cursor-pointer"
                         />
                       </td>
 
@@ -1729,33 +1727,33 @@ export default function CampaignWorkspacePage({
                       <td className="px-5 py-4">
                         <div className="space-y-1">
                           {/* Line 1: Full Name & Credentials */}
-                          <div className="font-bold text-slate-900 text-sm tracking-tight flex items-center gap-2">
+                          <div className="font-bold text-slate-900 dark:text-slate-100 text-sm tracking-tight flex items-center gap-2">
                             <span>{lead.fullName}</span>
                             {lead.status === 'CONVERTED' && (
-                              <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-200">
+                              <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-950/60 text-emerald-800 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800">
                                 ✓ in CRM
                               </span>
                             )}
                           </div>
 
-                          {/* Line 2: Full Job Title / Role (No truncation) */}
-                          <div className="text-xs font-semibold text-indigo-950 leading-snug">
+                          {/* Line 2: Full Job Title / Role */}
+                          <div className="text-xs font-semibold text-indigo-950 dark:text-indigo-300 leading-snug">
                             {lead.jobTitle || 'Decision Maker'}
                           </div>
 
                           {/* Line 3: Company & Direct Links */}
-                          <div className="text-xs text-slate-700 flex items-center gap-2.5 flex-wrap pt-0.5">
-                            <span className="font-bold text-slate-900">{lead.companyName || 'Enterprise'}</span>
+                          <div className="text-xs text-slate-700 dark:text-slate-300 flex items-center gap-2.5 flex-wrap pt-0.5">
+                            <span className="font-bold text-slate-900 dark:text-slate-100">{lead.companyName || 'Enterprise'}</span>
                             {isValidWebsiteDomain(lead.companyDomain) && (
                               <a
                                 href={lead.companyDomain!.startsWith('http') ? lead.companyDomain! : `https://${lead.companyDomain}`}
                                 target="_blank"
                                 rel="noreferrer"
-                                className="inline-flex items-center gap-1 text-[11px] text-primary-600 hover:text-primary-800 font-semibold hover:underline"
+                                className="inline-flex items-center gap-1 text-[11px] text-primary-600 dark:text-primary-400 hover:underline font-semibold"
                                 title="Visit Official Company Website"
                                 onClick={(e) => e.stopPropagation()}
                               >
-                                <span>🌐 {lead.companyDomain!.replace(/^https?:\/\//, '').replace(/\/.*$/, '')}</span>
+                                <span>{lead.companyDomain!.replace(/^https?:\/\//, '').replace(/\/.*$/, '')}</span>
                                 <span className="text-[9px]">↗</span>
                               </a>
                             )}
@@ -1764,7 +1762,7 @@ export default function CampaignWorkspacePage({
                                 href={lead.linkedinUrl.startsWith('http') ? lead.linkedinUrl : `https://${lead.linkedinUrl}`}
                                 target="_blank"
                                 rel="noreferrer"
-                                className="inline-flex items-center gap-1 text-[11px] text-[#0077b5] hover:text-[#005582] font-semibold hover:underline"
+                                className="inline-flex items-center gap-1 text-[11px] text-[#0077b5] dark:text-[#3897d3] hover:underline font-semibold"
                                 title="Open Official LinkedIn Profile"
                                 onClick={(e) => e.stopPropagation()}
                               >
@@ -1779,7 +1777,7 @@ export default function CampaignWorkspacePage({
 
                           {/* Line 4: Location */}
                           {lead.location && (
-                            <div className="text-[11px] text-slate-500 flex items-center gap-1 pt-0.5">
+                            <div className="text-[11px] text-slate-500 dark:text-slate-400 flex items-center gap-1 pt-0.5">
                               <span>📍</span>
                               <span>{lead.location}</span>
                             </div>
@@ -1788,16 +1786,16 @@ export default function CampaignWorkspacePage({
                       </td>
 
                       {/* Email Address */}
-                      <td className="px-4 py-4 font-mono text-xs text-slate-800" onClick={(e) => e.stopPropagation()}>
+                      <td className="px-4 py-4 font-mono text-xs text-slate-800 dark:text-slate-200" onClick={(e) => e.stopPropagation()}>
                         {lead.email ? (
                           <div className="flex items-center gap-1.5 flex-wrap">
-                            <span className="font-semibold text-slate-900 select-all">{lead.email}</span>
+                            <span className="font-semibold text-slate-900 dark:text-slate-100 select-all">{lead.email}</span>
                             <button
                               onClick={() => {
                                 navigator.clipboard.writeText(lead.email!);
                                 toast.success(`Copied ${lead.email} to clipboard!`);
                               }}
-                              className="text-slate-400 hover:text-slate-700 text-xs p-1 rounded hover:bg-slate-100"
+                              className="text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 text-xs p-1 rounded hover:bg-slate-100 dark:hover:bg-slate-800"
                               title="Copy email to clipboard"
                             >
                               📋
@@ -1807,7 +1805,7 @@ export default function CampaignWorkspacePage({
                           <button
                             onClick={() => handleFindEmails([lead.id])}
                             disabled={isFinding}
-                            className="px-2.5 py-1 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 text-xs font-bold rounded-lg transition-colors inline-flex items-center gap-1"
+                            className="px-2.5 py-1 bg-indigo-50 dark:bg-indigo-950/40 hover:bg-indigo-100 dark:hover:bg-indigo-900/60 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800 text-xs font-bold rounded-lg transition-colors inline-flex items-center gap-1"
                           >
                             {isFinding ? (
                               <>
@@ -1816,7 +1814,6 @@ export default function CampaignWorkspacePage({
                               </>
                             ) : (
                               <>
-                                <span>📬</span>
                                 <span>+ Get Email</span>
                               </>
                             )}

@@ -1,13 +1,12 @@
 import { prisma } from '../src/lib/prisma';
 import { scrapeApifyLeads, ApifyScrapedLead } from '../src/lib/apify';
 import { scrapeOutscraperLeads } from '../src/lib/outscraper';
-import { searchLeadOceanLeads } from '../src/lib/leadocean';
 import { searchTregLeads } from '../src/lib/treg';
 import { maskSensitiveInfo } from '../src/lib/outreach-error';
 import { OutreachScrapeJob } from '../queue/jobs';
 
 export async function processOutreachScrape(job: OutreachScrapeJob) {
-  console.log(`[Scrape Worker] Starting discovery scrape for campaign ${job.campaignId} (Target: ${job.limit} leads, Provider: ${job.provider || 'apify'})`);
+  console.log(`[Scrape Worker] Starting discovery scrape for campaign ${job.campaignId} (Target: ${job.limit} leads, Provider: ${job.provider || 'treg'})`);
 
   try {
     const campaign = await prisma.outreachCampaign.findUnique({
@@ -22,39 +21,7 @@ export async function processOutreachScrape(job: OutreachScrapeJob) {
   const token = job.apiToken || campaign.account?.apifyApiToken || process.env.APIFY_API_TOKEN;
   let scrapedLeads: ApifyScrapedLead[] = [];
 
-  if (job.provider === 'leadocean' || (!job.provider && process.env.LEADOCEAN_API_KEY)) {
-    try {
-      scrapedLeads = await searchLeadOceanLeads({
-        query: job.query,
-        role: job.role,
-        location: job.location,
-        industry: job.industry,
-        limit: job.limit,
-      });
-    } catch (err: any) {
-      console.warn(`[Scrape Worker] Enterprise B2B Index error: ${err.message}. Trying Treg.to cross-fallback.`);
-      try {
-        if (process.env.TREG_API_KEY) {
-          scrapedLeads = await searchTregLeads({
-            query: job.query,
-            role: job.role,
-            location: job.location,
-            industry: job.industry,
-            limit: job.limit,
-          });
-        } else {
-          throw new Error('TREG_API_KEY not configured');
-        }
-      } catch (tregErr: any) {
-        console.warn(`[Scrape Worker] Treg cross-fallback failed (${tregErr.message}). Falling back to Outscraper.`);
-        scrapedLeads = await scrapeOutscraperLeads({
-          query: job.query || job.role || job.industry || 'Business Executive',
-          location: job.location || 'United States',
-          limit: job.limit,
-        });
-      }
-    }
-  } else if (job.provider === 'treg' || (!job.provider && process.env.TREG_API_KEY)) {
+  if (job.provider === 'treg' || (!job.provider && process.env.TREG_API_KEY)) {
     try {
       scrapedLeads = await searchTregLeads({
         query: job.query,
@@ -64,25 +31,22 @@ export async function processOutreachScrape(job: OutreachScrapeJob) {
         limit: job.limit,
       });
     } catch (err: any) {
-      console.warn(`[Scrape Worker] On-Demand Gateway error: ${err.message}. Trying LeadOcean cross-fallback.`);
+      console.warn(`[Scrape Worker] Treg Gateway error: ${err.message}. Trying Outscraper cross-fallback.`);
       try {
-        if (process.env.LEADOCEAN_API_KEY) {
-          scrapedLeads = await searchLeadOceanLeads({
-            query: job.query,
-            role: job.role,
-            location: job.location,
-            industry: job.industry,
-            limit: job.limit,
-          });
-        } else {
-          throw new Error('LEADOCEAN_API_KEY not configured');
-        }
-      } catch (loErr: any) {
-        console.warn(`[Scrape Worker] LeadOcean cross-fallback failed (${loErr.message}). Falling back to Outscraper.`);
         scrapedLeads = await scrapeOutscraperLeads({
           query: job.query || job.role || job.industry || 'Business Executive',
           location: job.location || 'United States',
           limit: job.limit,
+        });
+      } catch (outErr: any) {
+        console.warn(`[Scrape Worker] Outscraper cross-fallback failed (${outErr.message}). Falling back to Apify.`);
+        scrapedLeads = await scrapeApifyLeads({
+          query: job.query,
+          role: job.role,
+          location: job.location,
+          industry: job.industry,
+          limit: job.limit,
+          apiToken: token,
         });
       }
     }

@@ -4,6 +4,15 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import toast, { Toaster } from 'react-hot-toast';
+import {
+  DatabaseIcon,
+  GlobeIcon,
+  SearchIcon,
+  SparklesIcon,
+  CheckIcon,
+  TargetIcon,
+  MailIcon,
+} from '@/components/ui/icons';
 
 interface OutreachAccount {
   id: string;
@@ -38,7 +47,7 @@ export default function NewOutreachCampaignPage() {
   const [selectedAccountIds, setSelectedAccountIds] = useState<string[]>([]);
 
   // Step 2: Target Lead Parameters
-  const [leadProvider, setLeadProvider] = useState<'leadocean' | 'treg' | 'outscraper' | 'apify'>('leadocean');
+  const [leadProvider, setLeadProvider] = useState<'treg' | 'outscraper' | 'apify'>('treg');
   const [targetRole, setTargetRole] = useState('Chief Technology Officer');
   const [targetLocation, setTargetLocation] = useState('United States');
   const [targetIndustry, setTargetIndustry] = useState('Information Technology & Services');
@@ -259,55 +268,55 @@ export default function NewOutreachCampaignPage() {
         <div>
           <Link
             href="/dashboard/outreach"
-            className="text-xs font-semibold text-primary-600 hover:text-primary-800 flex items-center gap-1 mb-1"
+            className="text-xs font-semibold text-primary-600 dark:text-primary-400 hover:text-primary-800 flex items-center gap-1 mb-1"
           >
             ← Back to Outreach Campaigns
           </Link>
-          <h1 className="text-xl font-bold text-slate-900 tracking-tight">Create Targeted Outreach Campaign</h1>
-          <p className="text-xs text-slate-500 mt-0.5">
+          <h1 className="text-xl font-bold text-slate-900 dark:text-slate-100 tracking-tight">Create Targeted Outreach Campaign</h1>
+          <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
             Follow the 3-step wizard to configure lead discovery parameters and AI copywriting directives.
           </p>
         </div>
       </div>
 
       {/* Step Indicator */}
-      <div className="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-xs">
+      <div className="bg-white dark:bg-slate-900 p-4 rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-xs">
         <div className="flex items-center justify-between max-w-2xl mx-auto">
           <div className="flex items-center gap-2">
             <span
               className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold ${
-                step >= 1 ? 'bg-primary-600 text-white' : 'bg-slate-100 text-slate-400'
+                step >= 1 ? 'bg-primary-600 text-white' : 'bg-slate-100 dark:bg-slate-800 text-slate-400'
               }`}
             >
               1
             </span>
-            <span className={`text-xs font-semibold ${step >= 1 ? 'text-slate-900' : 'text-slate-400'}`}>
+            <span className={`text-xs font-semibold ${step >= 1 ? 'text-slate-900 dark:text-slate-100' : 'text-slate-400 dark:text-slate-500'}`}>
               Campaign Setup & Mailbox
             </span>
           </div>
-          <div className="h-0.5 w-10 bg-slate-200" />
+          <div className="h-0.5 w-10 bg-slate-200 dark:bg-slate-800" />
           <div className="flex items-center gap-2">
             <span
               className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold ${
-                step >= 2 ? 'bg-primary-600 text-white' : 'bg-slate-100 text-slate-400'
+                step >= 2 ? 'bg-primary-600 text-white' : 'bg-slate-100 dark:bg-slate-800 text-slate-400'
               }`}
             >
               2
             </span>
-            <span className={`text-xs font-semibold ${step >= 2 ? 'text-slate-900' : 'text-slate-400'}`}>
+            <span className={`text-xs font-semibold ${step >= 2 ? 'text-slate-900 dark:text-slate-100' : 'text-slate-400 dark:text-slate-500'}`}>
               Target Audience & ICP (AI-Assisted)
             </span>
           </div>
-          <div className="h-0.5 w-10 bg-slate-200" />
+          <div className="h-0.5 w-10 bg-slate-200 dark:bg-slate-800" />
           <div className="flex items-center gap-2">
             <span
               className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold ${
-                step >= 3 ? 'bg-primary-600 text-white' : 'bg-slate-100 text-slate-400'
+                step >= 3 ? 'bg-primary-600 text-white' : 'bg-slate-100 dark:bg-slate-800 text-slate-400'
               }`}
             >
               3
             </span>
-            <span className={`text-xs font-semibold ${step >= 3 ? 'text-slate-900' : 'text-slate-400'}`}>
+            <span className={`text-xs font-semibold ${step >= 3 ? 'text-slate-900 dark:text-slate-100' : 'text-slate-400 dark:text-slate-500'}`}>
               AI Messaging Strategy & Follow-ups
             </span>
           </div>
@@ -322,11 +331,11 @@ export default function NewOutreachCampaignPage() {
             e.preventDefault();
           }
         }}
-        className="bg-white p-6 rounded-2xl border border-slate-200/80 shadow-xs space-y-6"
+        className="bg-white dark:bg-slate-900 p-6 rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-xs space-y-6"
       >
         {error && (
-          <div className="p-3 bg-red-50 border border-red-200 text-xs text-red-600 rounded-xl font-medium">
-            ⚠️ {error}
+          <div className="p-3 bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-900/60 text-xs text-red-600 dark:text-red-400 rounded-xl font-medium">
+            {error}
           </div>
         )}
 
@@ -334,12 +343,12 @@ export default function NewOutreachCampaignPage() {
         {step === 1 && (
           <div className="space-y-4 animate-in fade-in">
             <div>
-              <h2 className="text-sm font-bold text-slate-900">Step 1: Campaign Identity & Multi-Sender Setup</h2>
-              <p className="text-xs text-slate-500 mt-0.5">Name your campaign and select sender mailbox accounts for automated round-robin rotation.</p>
+              <h2 className="text-sm font-bold text-slate-900 dark:text-slate-100">Step 1: Campaign Identity & Multi-Sender Setup</h2>
+              <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">Name your campaign and select sender mailbox accounts for automated round-robin rotation.</p>
             </div>
             <div className="space-y-4 pt-1">
               <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">
+                <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
                   Campaign Name <span className="text-red-500">*</span>
                 </label>
                 <input
@@ -348,18 +357,19 @@ export default function NewOutreachCampaignPage() {
                   placeholder="e.g., US Enterprise CTOs - Q4 Outbound"
                   value={name}
                   onChange={(e) => setName(e.target.value)}
-                  className="w-full px-3.5 py-2.5 border border-slate-300 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-primary-500"
+                  className="w-full px-3.5 py-2.5 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 text-slate-900 dark:text-slate-100 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-primary-500"
                 />
               </div>
 
               {/* Multi-Sender Pool Selection */}
-              <div className="bg-slate-50 p-4 rounded-xl border border-slate-200/80 space-y-3">
+              <div className="bg-slate-50 dark:bg-slate-800/60 p-4 rounded-xl border border-slate-200/80 dark:border-slate-700 space-y-3">
                 <div className="flex items-center justify-between">
                   <div>
-                    <label className="block text-xs font-bold text-slate-800">
-                      📬 Multi-Sender Rotation Pool ({selectedAccountIds.length}/{outreachAccounts.length} selected)
+                    <label className="block text-xs font-bold text-slate-800 dark:text-slate-200 flex items-center gap-1.5">
+                      <MailIcon className="w-3.5 h-3.5 text-indigo-500" />
+                      <span>Multi-Sender Rotation Pool ({selectedAccountIds.length}/{outreachAccounts.length} selected)</span>
                     </label>
-                    <p className="text-[11px] text-slate-500">
+                    <p className="text-[11px] text-slate-500 dark:text-slate-400">
                       Cold emails will automatically rotate between selected mailboxes to protect sender domain reputation.
                     </p>
                   </div>
@@ -649,95 +659,79 @@ export default function NewOutreachCampaignPage() {
 
               {/* Lead Discovery Engine Selector */}
               <div className="sm:col-span-2">
-                <label className="block text-xs font-semibold text-slate-700 mb-1.5">
+                <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">
                   Lead Sourcing Architecture & Discovery Mode
                 </label>
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5">
-                  <button
-                    type="button"
-                    onClick={() => setLeadProvider('leadocean')}
-                    className={`p-3 rounded-xl border text-left transition-all cursor-pointer ${
-                      leadProvider === 'leadocean'
-                        ? 'bg-indigo-50/90 border-indigo-400 text-indigo-950 ring-2 ring-indigo-200'
-                        : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50'
-                    }`}
-                  >
-                    <div className="flex items-center justify-between mb-1">
-                      <span className="text-xs font-bold flex items-center gap-1.5">
-                        <span>⚡</span> Enterprise B2B Index
-                      </span>
-                      <span className="text-[10px] font-bold px-1.5 py-0.2 rounded-full bg-indigo-600 text-white">
-                        Instant
-                      </span>
-                    </div>
-                    <p className="text-[11px] text-slate-500">
-                      690M+ global decision makers. Sub-second discovery with verified direct corporate emails.
-                    </p>
-                  </button>
-
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  {/* Option 1: Treg.to (Primary & Recommended) */}
                   <button
                     type="button"
                     onClick={() => setLeadProvider('treg')}
-                    className={`p-3 rounded-xl border text-left transition-all cursor-pointer ${
+                    className={`p-3.5 rounded-xl border text-left transition-all cursor-pointer ${
                       leadProvider === 'treg'
-                        ? 'bg-amber-50/90 border-amber-400 text-amber-950 ring-2 ring-amber-200'
-                        : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50'
+                        ? 'bg-indigo-50/70 dark:bg-indigo-950/40 border-indigo-400 dark:border-indigo-600 text-indigo-950 dark:text-indigo-200 ring-2 ring-indigo-200/80 dark:ring-indigo-900/50'
+                        : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-750'
                     }`}
                   >
-                    <div className="flex items-center justify-between mb-1">
-                      <span className="text-xs font-bold flex items-center gap-1.5">
-                        <span>🎯</span> On-Demand Gateway
+                    <div className="flex items-center justify-between mb-1.5">
+                      <span className="text-xs font-bold flex items-center gap-2">
+                        <DatabaseIcon className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
+                        <span>B2B Executive Gateway</span>
                       </span>
-                      <span className="text-[10px] font-bold px-1.5 py-0.2 rounded-full bg-amber-600 text-white">
-                        Pay-As-You-Go
+                      <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-indigo-100 dark:bg-indigo-900/60 text-indigo-700 dark:text-indigo-300">
+                        Rekomendasi
                       </span>
                     </div>
-                    <p className="text-[11px] text-slate-500">
-                      Aggregated 120+ provider gateway. Lowest cost per lead with verified work emails.
+                    <p className="text-[11px] text-slate-500 dark:text-slate-400 leading-relaxed">
+                      Gateway B2B terpadu (Treg.to). Respon cepat (&lt;2 detik) dengan email korporat terverifikasi lengkap.
                     </p>
                   </button>
 
+                  {/* Option 2: Outscraper */}
                   <button
                     type="button"
                     onClick={() => setLeadProvider('outscraper')}
-                    className={`p-3 rounded-xl border text-left transition-all cursor-pointer ${
+                    className={`p-3.5 rounded-xl border text-left transition-all cursor-pointer ${
                       leadProvider === 'outscraper'
-                        ? 'bg-primary-50/90 border-primary-400 text-primary-950 ring-2 ring-primary-200'
-                        : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50'
+                        ? 'bg-slate-100 dark:bg-slate-800 border-slate-400 dark:border-slate-600 text-slate-900 dark:text-slate-100 ring-2 ring-slate-300/80 dark:ring-slate-700'
+                        : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-750'
                     }`}
                   >
-                    <div className="flex items-center justify-between mb-1">
-                      <span className="text-xs font-bold flex items-center gap-1.5">
-                        <span>🔍</span> Live Executive Search
+                    <div className="flex items-center justify-between mb-1.5">
+                      <span className="text-xs font-bold flex items-center gap-2">
+                        <GlobeIcon className="w-4 h-4 text-slate-600 dark:text-slate-400" />
+                        <span>Live Business Search</span>
                       </span>
-                      <span className="text-[10px] font-bold px-1.5 py-0.2 rounded-full bg-slate-100 text-slate-600">
-                        Targeted
+                      <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300">
+                        Direktori Web
                       </span>
                     </div>
-                    <p className="text-[11px] text-slate-500">
-                      Real-time targeted discovery across executive networks and verified web directories.
+                    <p className="text-[11px] text-slate-500 dark:text-slate-400 leading-relaxed">
+                      Pencarian direktori bisnis lokal dan domain web terindeks via Outscraper.
                     </p>
                   </button>
 
+                  {/* Option 3: Apify */}
                   <button
                     type="button"
                     onClick={() => setLeadProvider('apify')}
-                    className={`p-3 rounded-xl border text-left transition-all cursor-pointer ${
+                    className={`p-3.5 rounded-xl border text-left transition-all cursor-pointer ${
                       leadProvider === 'apify'
-                        ? 'bg-blue-50/90 border-blue-400 text-blue-950 ring-2 ring-blue-200'
-                        : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50'
+                        ? 'bg-slate-100 dark:bg-slate-800 border-slate-400 dark:border-slate-600 text-slate-900 dark:text-slate-100 ring-2 ring-slate-300/80 dark:ring-slate-700'
+                        : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-750'
                     }`}
                   >
-                    <div className="flex items-center justify-between mb-1">
-                      <span className="text-xs font-bold flex items-center gap-1.5">
-                        <span>🌐</span> Deep Profile Crawler
+                    <div className="flex items-center justify-between mb-1.5">
+                      <span className="text-xs font-bold flex items-center gap-2">
+                        <SearchIcon className="w-4 h-4 text-slate-600 dark:text-slate-400" />
+                        <span>Deep Profile Crawler</span>
                       </span>
-                      <span className="text-[10px] font-bold px-1.5 py-0.2 rounded-full bg-slate-100 text-slate-600">
-                        Deep
+                      <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300">
+                        Multi-Source
                       </span>
                     </div>
-                    <p className="text-[11px] text-slate-500">
-                      Multi-source crawler for in-depth professional background and corporate insights.
+                    <p className="text-[11px] text-slate-500 dark:text-slate-400 leading-relaxed">
+                      Crawler multi-sumber untuk analisis mendalam jejak profesional via Apify.
                     </p>
                   </button>
                 </div>

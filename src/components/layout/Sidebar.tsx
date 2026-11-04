@@ -98,21 +98,21 @@ export default function Sidebar() {
       {/* Sidebar container (static on desktop, slide-over drawer on mobile) */}
       <aside
         className={clsx(
-          'fixed inset-y-0 left-0 z-50 w-64 bg-white border-r border-slate-200/90 flex flex-col transition-transform duration-200 ease-in-out md:static md:translate-x-0 md:z-auto md:w-60 shadow-xs',
+          'fixed inset-y-0 left-0 z-50 w-64 bg-white dark:bg-slate-900 border-r border-slate-200/90 dark:border-slate-800 flex flex-col transition-all duration-200 ease-in-out md:static md:translate-x-0 md:z-auto md:w-60 shadow-xs',
           mobileOpen ? 'translate-x-0 shadow-2xl' : '-translate-x-full md:translate-x-0'
         )}
       >
         {/* Brand Header */}
-        <div className="p-4 border-b border-slate-200/80 flex items-center justify-between">
+        <div className="p-4 border-b border-slate-200/80 dark:border-slate-800 flex items-center justify-between">
           <div className="flex items-center gap-2.5">
             <span className="w-7 h-7 rounded-lg bg-gradient-to-br from-primary-600 to-indigo-700 text-white font-bold flex items-center justify-center text-xs shadow-2xs">
               CRM
             </span>
-            <h1 className="text-base font-bold text-slate-900 tracking-tight">Kanban CRM</h1>
+            <h1 className="text-base font-bold text-slate-900 dark:text-white tracking-tight">Kanban CRM</h1>
           </div>
           <button
             onClick={() => setMobileOpen(false)}
-            className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 md:hidden"
+            className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 md:hidden"
             title="Close menu"
           >
             <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -122,9 +122,9 @@ export default function Sidebar() {
         </div>
 
         {/* Boards Selector & Creator */}
-        <div className="p-3 border-b border-slate-100 space-y-1">
+        <div className="p-3 border-b border-slate-100 dark:border-slate-800 space-y-1">
           <div className="flex items-center justify-between px-2">
-            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Boards</p>
+            <p className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider">Boards</p>
             {isAdmin && (
               <button
                 onClick={() => {
@@ -132,7 +132,7 @@ export default function Sidebar() {
                   setBoardError('');
                   setShowNewBoardModal(true);
                 }}
-                className="text-[11px] font-bold text-primary-600 hover:text-primary-800 hover:underline flex items-center gap-0.5"
+                className="text-[11px] font-bold text-primary-600 dark:text-primary-400 hover:underline flex items-center gap-0.5"
                 title="Buat Board Baru"
               >
                 <span>+ Board</span>
@@ -146,8 +146,8 @@ export default function Sidebar() {
                 className={clsx(
                   'group flex items-center justify-between rounded-lg text-xs font-semibold transition-all px-2.5 py-1.5',
                   activeBoard === board.id
-                    ? 'bg-primary-50 text-primary-700 border border-primary-200/70 shadow-2xs'
-                    : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
+                    ? 'bg-primary-50 dark:bg-primary-950/60 text-primary-700 dark:text-primary-300 border border-primary-200/70 dark:border-primary-800/60 shadow-2xs'
+                    : 'text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800/80 hover:text-slate-900 dark:hover:text-slate-100'
                 )}
               >
                 <button
@@ -180,7 +180,7 @@ export default function Sidebar() {
 
         {/* Main Nav Links */}
         <nav className="flex-1 p-3 space-y-1 overflow-y-auto">
-          <p className="px-2 text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Navigation</p>
+          <p className="px-2 text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-1">Navigation</p>
           {navItems.map((item) => {
             const isActive = pathname === item.href;
             return (
@@ -192,7 +192,7 @@ export default function Sidebar() {
                   'flex items-center gap-2.5 px-2.5 py-2 rounded-xl text-xs font-semibold transition-all',
                   isActive
                     ? 'bg-primary-600 text-white shadow-xs font-bold'
-                    : 'text-slate-600 hover:bg-slate-100/80 hover:text-slate-900'
+                    : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100/80 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-slate-100'
                 )}
               >
                 <span className="text-sm">{item.icon}</span>
