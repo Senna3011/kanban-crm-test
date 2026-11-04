@@ -32,9 +32,6 @@ export async function processOutreachScrape(job: OutreachScrapeJob) {
         limit: job.limit,
       });
     } catch (err: any) {
-      if (job.provider === 'leadocean') {
-        throw err;
-      }
       console.warn(`[Scrape Worker] Enterprise B2B Index error: ${err.message}. Trying Treg.to cross-fallback.`);
       try {
         if (process.env.TREG_API_KEY) {
@@ -67,9 +64,6 @@ export async function processOutreachScrape(job: OutreachScrapeJob) {
         limit: job.limit,
       });
     } catch (err: any) {
-      if (job.provider === 'treg') {
-        throw err;
-      }
       console.warn(`[Scrape Worker] On-Demand Gateway error: ${err.message}. Trying LeadOcean cross-fallback.`);
       try {
         if (process.env.LEADOCEAN_API_KEY) {

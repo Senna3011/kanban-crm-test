@@ -184,6 +184,66 @@ async function enrichLeadOceanPerson(personId: string, apiKey: string, linkedinU
 }
 
 /**
+ * Maps common UI industry options to strict LeadOcean / LinkedIn standard industry enums.
+ * Unmapped or broad generic wildcards are omitted so LeadOcean searches across all industries without 400 validation error.
+ */
+const LEADOCEAN_INDUSTRY_MAP: Record<string, string> = {
+  'information technology & services': 'IT Services and IT Consulting',
+  'it services': 'IT Services and IT Consulting',
+  'computer software / saas': 'Software Development',
+  'software': 'Software Development',
+  'saas': 'Software Development',
+  'financial services & fintech': 'Financial Services',
+  'fintech': 'Financial Services',
+  'healthcare & medical': 'Hospitals and Health Care',
+  'medical': 'Hospitals and Health Care',
+  'e-commerce & retail': 'Retail',
+  'retail': 'Retail',
+  'ecommerce': 'Retail',
+  'marketing & advertising': 'Advertising Services',
+  'advertising': 'Advertising Services',
+  'real estate & construction': 'Real Estate',
+  'real estate': 'Real Estate',
+  'construction': 'Construction',
+  'manufacturing & logistics': 'Manufacturing',
+  'manufacturing': 'Manufacturing',
+  'logistics': 'Freight and Package Transportation',
+  'education management': 'Education Administration Programs',
+  'education': 'Education Administration Programs',
+  'hospitality & tourism': 'Hospitality',
+  'hospitality': 'Hospitality',
+  'tourism': 'Travel Arrangements',
+  'legal & consulting': 'Business Consulting and Services',
+  'consulting': 'Business Consulting and Services',
+};
+
+function resolveLeadOceanIndustries(rawIndustry?: string): string[] | undefined {
+  if (!rawIndustry) return undefined;
+  const items = rawIndustry.split(',').map((i) => i.trim().toLowerCase()).filter(Boolean);
+  const matched = new Set<string>();
+
+  for (const item of items) {
+    if (item.includes('all') || item.includes('broad')) {
+      continue;
+    }
+    const exact = LEADOCEAN_INDUSTRY_MAP[item];
+    if (exact) {
+      matched.add(exact);
+    } else {
+      // Check partial match in map
+      for (const [key, val] of Object.entries(LEADOCEAN_INDUSTRY_MAP)) {
+        if (item.includes(key) || key.includes(item)) {
+          matched.add(val);
+          break;
+        }
+      }
+    }
+  }
+
+  return matched.size > 0 ? Array.from(matched) : undefined;
+}
+
+/**
  * Searches B2B leads from Enterprise B2B Pre-Indexed Database (<500ms response)
  * Uses strict camelCase payload schema matching LeadOcean API v1.
  */
@@ -203,7 +263,7 @@ export async function searchLeadOceanLeads(params: LeadOceanSearchParams): Promi
   };
 
   if (params.role) {
-    const titles = params.role.split(',').map((r) => r.trim()).filter(Boolean);
+    const titles = params.role.split(/[,/|]/).map((r) => r.trim()).filter(Boolean);
     if (titles.length > 0) {
       bodyPayload.title = titles;
     }
@@ -214,12 +274,9 @@ export async function searchLeadOceanLeads(params: LeadOceanSearchParams): Promi
     bodyPayload.country = resolvedCodes;
   }
 
-  if (params.industry) {
-    const rawList = params.industry.split(',').map((i) => i.trim()).filter(Boolean);
-    const validIndustries = rawList.filter((i) => !i.toLowerCase().includes('all') && !i.toLowerCase().includes('broad'));
-    if (validIndustries.length > 0) {
-      bodyPayload.industry = validIndustries;
-    }
+  const validIndustries = resolveLeadOceanIndustries(params.industry);
+  if (validIndustries && validIndustries.length > 0) {
+    bodyPayload.industry = validIndustries;
   }
 
   if (params.query) {

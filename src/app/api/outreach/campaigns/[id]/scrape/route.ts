@@ -117,9 +117,6 @@ export async function POST(
           limit,
         });
       } catch (err: any) {
-        if (rawProvider === 'leadocean') {
-          throw err;
-        }
         console.warn(`[Scrape Route] Enterprise B2B Index error: ${err.message}. Trying Treg.to cross-fallback.`);
         try {
           if (process.env.TREG_API_KEY) {
@@ -154,9 +151,6 @@ export async function POST(
           limit,
         });
       } catch (err: any) {
-        if (rawProvider === 'treg') {
-          throw err;
-        }
         console.warn(`[Scrape Route] On-Demand Gateway error: ${err.message}. Trying LeadOcean cross-fallback.`);
         try {
           if (process.env.LEADOCEAN_API_KEY) {
