@@ -86,17 +86,17 @@ export default function KanbanColumn({
   return (
     <div
       ref={setNodeRef}
-      className={`flex-shrink-0 w-[82vw] max-w-[290px] sm:w-80 bg-slate-100/70 border rounded-2xl flex flex-col max-h-full transition-all duration-200 overflow-hidden shadow-2xs ${
+      className={`flex-shrink-0 w-[82vw] max-w-[290px] sm:w-80 bg-slate-100/70 dark:bg-[#161A1D] border rounded-2xl flex flex-col max-h-full transition-all duration-200 overflow-hidden shadow-2xs ${
         isOver
-          ? 'bg-primary-50/50 border-primary-300 ring-2 ring-primary-400/30'
-          : 'border-slate-200/80 hover:border-slate-300/80'
+          ? 'bg-primary-50/50 dark:bg-primary-950/40 border-primary-300 dark:border-primary-700 ring-2 ring-primary-400/30'
+          : 'border-slate-200/80 dark:border-[#2C333A] hover:border-slate-300/80 dark:hover:border-[#38414A]'
       }`}
     >
       {/* Top column color strip */}
       <div className="h-1.5 w-full transition-colors" style={{ backgroundColor: column.color || '#3b82f6' }} />
 
       {/* Column header */}
-      <div className="p-3.5 flex items-center justify-between border-b border-slate-200/60 bg-white/50 backdrop-blur-xs">
+      <div className="p-3.5 flex items-center justify-between border-b border-slate-200/60 dark:border-[#2C333A] bg-white/50 dark:bg-[#161A1D] backdrop-blur-xs">
         <div className="flex items-center gap-2.5 min-w-0">
           {selectionMode ? (
             <input

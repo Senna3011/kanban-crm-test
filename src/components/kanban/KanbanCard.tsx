@@ -123,13 +123,13 @@ export default function KanbanCard({
       {...(selectionMode ? {} : listeners)}
       onClick={handleCardClick}
       className={clsx(
-        'group relative bg-white rounded-xl p-3.5 cursor-pointer select-none transition-all duration-150',
-        'border border-slate-200/90 shadow-[0_1px_3px_rgba(0,0,0,0.03)] hover:shadow-[0_6px_16px_rgba(0,0,0,0.06)] hover:border-slate-300/90 hover:-translate-y-0.5',
+        'group relative bg-white dark:bg-[#22272B] rounded-xl p-3.5 cursor-pointer select-none transition-all duration-150',
+        'border border-slate-200/90 dark:border-[#2C333A] shadow-[0_1px_3px_rgba(0,0,0,0.03)] hover:shadow-[0_4px_12px_rgba(0,0,0,0.2)] hover:border-slate-300/90 dark:hover:border-[#38414A] hover:-translate-y-0.5',
         (isDragging || isSortableDragging) && 'opacity-60 shadow-2xl ring-2 ring-primary-500 scale-[1.02] rotate-1 z-30',
-        isSelected && 'ring-2 ring-primary-600 bg-primary-50/20 border-primary-300',
-        !isSelected && isUnread && 'border-l-4 border-l-primary-600 bg-gradient-to-r from-primary-50/30 to-white',
-        !isSelected && !isUnread && isReply && 'border-l-4 border-l-amber-500 bg-gradient-to-r from-amber-50/20 to-white',
-        !isSelected && !isUnread && !isReply && 'border-l-4 border-l-slate-200 hover:border-l-primary-400'
+        isSelected && 'ring-2 ring-primary-600 bg-primary-50/20 dark:bg-primary-950/40 border-primary-300',
+        !isSelected && isUnread && 'border-l-4 border-l-primary-600 bg-primary-50/10 dark:bg-[#22272B]',
+        !isSelected && !isUnread && isReply && 'border-l-4 border-l-amber-500 bg-amber-50/10 dark:bg-[#22272B]',
+        !isSelected && !isUnread && !isReply && 'border-l-4 border-l-transparent hover:border-l-primary-400'
       )}
     >
       {/* Top row: Avatar, Sender, Status Badge */}

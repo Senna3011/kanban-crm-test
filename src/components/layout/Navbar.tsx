@@ -73,7 +73,7 @@ export default function Navbar() {
           <span>Internet connection lost. The system will automatically sync data when back online.</span>
         </div>
       )}
-      <header className="h-14 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md border-b border-slate-200 dark:border-slate-800 flex items-center justify-between px-3 sm:px-6 sticky top-0 z-30 transition-colors">
+      <header className="h-14 bg-white/95 dark:bg-[#1D2125]/95 backdrop-blur-md border-b border-slate-200 dark:border-[#2C333A] flex items-center justify-between px-3 sm:px-6 sticky top-0 z-30 transition-colors">
         {/* Left: Mobile Toggle + Brand Logo */}
         <div className="flex items-center gap-2 sm:gap-3 min-w-0">
           <button

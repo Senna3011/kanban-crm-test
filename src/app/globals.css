@@ -6,6 +6,12 @@
   body {
     @apply bg-slate-50 text-slate-800 antialiased;
   }
+
+  /* Trello / Atlassian Calm Dark Theme Standard */
+  html.dark body {
+    background-color: #1D2125;
+    color: #B6C2CF;
+  }
 }
 
 /* Thin minimal scrollbars */
@@ -28,4 +34,141 @@
     scrollbar-width: thin;
     scrollbar-color: rgba(100, 116, 139, 0.3) transparent;
   }
+}
+
+/* 
+ * ============================================================================
+ * CALM TRELLO DARK MODE COMPATIBILITY LAYER
+ * Automatically harmonizes surfaces, cards, borders, text, and inputs across 
+ * ALL pages (Kanban, Outreach, Team, Settings, Guide, Profiles) to eliminate
+ * color clashes, glaring white rectangles, and harsh pitch-black contrast.
+ * ============================================================================
+ */
+.dark {
+  color-scheme: dark;
+}
+
+/* Main background canvas */
+.dark .bg-slate-50,
+.dark .bg-gray-50 {
+  background-color: #1D2125 !important;
+}
+
+/* Columns, Sidebars, Sub-containers */
+.dark .bg-slate-100,
+.dark .bg-gray-100,
+.dark .bg-slate-100\/70,
+.dark .bg-slate-100\/80 {
+  background-color: #161A1D !important;
+}
+
+/* Cards & Modals Surface (Trello Card Color) */
+.dark .bg-white,
+.dark .bg-white\/95,
+.dark .bg-white\/90,
+.dark .bg-white\/80 {
+  background-color: #22272B !important;
+}
+
+/* Hover Elevated Surfaces */
+.dark .hover\:bg-slate-50:hover,
+.dark .hover\:bg-slate-100:hover,
+.dark .hover\:bg-slate-200:hover,
+.dark .hover\:bg-gray-50:hover,
+.dark .hover\:bg-gray-100:hover {
+  background-color: #282E33 !important;
+}
+
+/* Calm Subtle Borders (No harsh lines) */
+.dark .border-slate-100,
+.dark .border-slate-200,
+.dark .border-slate-200\/60,
+.dark .border-slate-200\/80,
+.dark .border-slate-200\/90,
+.dark .border-slate-300,
+.dark .border-gray-100,
+.dark .border-gray-200,
+.dark .border-gray-300 {
+  border-color: #2C333A !important;
+}
+
+/* Primary Headings & High Contrast Text -> Silvery Off-White */
+.dark .text-slate-900,
+.dark .text-slate-850,
+.dark .text-slate-800,
+.dark .text-gray-900,
+.dark .text-gray-800,
+.dark .text-indigo-950 {
+  color: #B6C2CF !important;
+}
+
+/* Secondary & Body Text -> Calm Slate */
+.dark .text-slate-700,
+.dark .text-slate-600,
+.dark .text-gray-700,
+.dark .text-gray-600 {
+  color: #9FADBC !important;
+}
+
+/* Sub-labels & Muted Text -> Soft Silver */
+.dark .text-slate-500,
+.dark .text-slate-400,
+.dark .text-gray-500,
+.dark .text-gray-400 {
+  color: #8C9BAB !important;
+}
+
+/* Inputs, Textareas & Dropdowns */
+.dark input:not([type="checkbox"]):not([type="radio"]),
+.dark select,
+.dark textarea {
+  background-color: #161A1D !important;
+  border-color: #2C333A !important;
+  color: #B6C2CF !important;
+}
+
+.dark input::placeholder,
+.dark textarea::placeholder {
+  color: #738496 !important;
+}
+
+/* Calm Status Badges in Dark Mode */
+.dark .bg-emerald-50,
+.dark .bg-emerald-100 {
+  background-color: #1c3829 !important;
+  border-color: #216E4E !important;
+  color: #4BCE97 !important;
+}
+
+.dark .bg-amber-50,
+.dark .bg-amber-100 {
+  background-color: #382d12 !important;
+  border-color: #7F5F01 !important;
+  color: #F5CD47 !important;
+}
+
+.dark .bg-rose-50,
+.dark .bg-rose-100,
+.dark .bg-red-50,
+.dark .bg-red-100 {
+  background-color: #3d1c1a !important;
+  border-color: #73231d !important;
+  color: #F87168 !important;
+}
+
+.dark .bg-indigo-50,
+.dark .bg-indigo-100,
+.dark .bg-blue-50,
+.dark .bg-blue-100,
+.dark .bg-primary-50 {
+  background-color: #1c2b41 !important;
+  border-color: #204677 !important;
+  color: #579DFF !important;
+}
+
+.dark .bg-purple-50,
+.dark .bg-purple-100 {
+  background-color: #2b1d38 !important;
+  border-color: #5b3577 !important;
+  color: #C084FC !important;
 }

@@ -98,12 +98,12 @@ export default function Sidebar() {
       {/* Sidebar container (static on desktop, slide-over drawer on mobile) */}
       <aside
         className={clsx(
-          'fixed inset-y-0 left-0 z-50 w-64 bg-white dark:bg-slate-900 border-r border-slate-200/90 dark:border-slate-800 flex flex-col transition-all duration-200 ease-in-out md:static md:translate-x-0 md:z-auto md:w-60 shadow-xs',
+          'fixed inset-y-0 left-0 z-50 w-64 bg-white dark:bg-[#161A1D] border-r border-slate-200/90 dark:border-[#2C333A] flex flex-col transition-all duration-200 ease-in-out md:static md:translate-x-0 md:z-auto md:w-60 shadow-xs',
           mobileOpen ? 'translate-x-0 shadow-2xl' : '-translate-x-full md:translate-x-0'
         )}
       >
         {/* Brand Header */}
-        <div className="p-4 border-b border-slate-200/80 dark:border-slate-800 flex items-center justify-between">
+        <div className="p-4 border-b border-slate-200/80 dark:border-[#2C333A] flex items-center justify-between">
           <div className="flex items-center gap-2.5">
             <span className="w-7 h-7 rounded-lg bg-gradient-to-br from-primary-600 to-indigo-700 text-white font-bold flex items-center justify-center text-xs shadow-2xs">
               CRM
