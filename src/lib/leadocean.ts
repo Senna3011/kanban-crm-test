@@ -19,7 +19,7 @@ const COMPANY_LEGAL_ENTITY_REGEX =
  * Regex identifying generic/departmental email prefixes (Must be blocked 100%)
  */
 const GENERIC_EMAIL_PREFIX_REGEX =
-  /^(info|sales|contact|support|admin|help|office|team|billing|jobs|marketing|inquiry|general|hello|hi|press|media|service|careers)@/i;
+  /^(info|sales|contact|support|admin|help|office|team|billing|jobs|marketing|inquiry|general|hello|hi|press|media|service|careers|vendors?|invoices?|accounts?|procurement|finance|legal|security|hr|recruiting)@/i;
 
 /**
  * Decision Maker Seniority Role Matcher (Pak Nell Standards)
@@ -109,6 +109,11 @@ export function isValidDecisionMakerLead(lead: ApifyScrapedLead): boolean {
     return false;
   }
 
+  // Reject single-letter last names or truncated initials (e.g. "Candice K.", "John D.")
+  if (lead.lastName && lead.lastName.replace(/[^a-zA-Z]/g, '').length <= 1) {
+    return false;
+  }
+
   // 2. Reject non-decision maker roles
   const title = lead.jobTitle || '';
   if (NON_DECISION_MAKER_REGEX.test(title)) {
@@ -171,10 +176,12 @@ async function enrichLeadOceanPerson(personId: string, apiKey: string, linkedinU
       [];
 
     if (Array.isArray(emailsList) && emailsList.length > 0) {
-      const best = emailsList[0];
-      const rawEmail = typeof best === 'string' ? best : best.email;
-      if (rawEmail && !GENERIC_EMAIL_PREFIX_REGEX.test(rawEmail.toLowerCase().trim())) {
-        return rawEmail.toLowerCase().trim();
+      // Pick best non-generic corporate email
+      for (const item of emailsList) {
+        const rawEmail = typeof item === 'string' ? item : item?.email;
+        if (rawEmail && !GENERIC_EMAIL_PREFIX_REGEX.test(rawEmail.toLowerCase().trim())) {
+          return rawEmail.toLowerCase().trim();
+        }
       }
     }
     return undefined;

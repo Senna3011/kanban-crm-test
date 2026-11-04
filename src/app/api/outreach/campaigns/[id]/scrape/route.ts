@@ -116,6 +116,24 @@ export async function POST(
           industry,
           limit,
         });
+
+        // If LeadOcean returned fewer leads than requested (e.g. trial credits limit), supplement with Treg.to
+        if (scrapedLeads.length < limit && process.env.TREG_API_KEY) {
+          const remaining = limit - scrapedLeads.length;
+          console.log(`[Scrape Route] LeadOcean provided ${scrapedLeads.length}/${limit} leads. Supplementing with Treg.to...`);
+          try {
+            const extra = await searchTregLeads({
+              query,
+              role,
+              location,
+              industry,
+              limit: remaining,
+            });
+            scrapedLeads = [...scrapedLeads, ...extra];
+          } catch (suppErr: any) {
+            console.warn(`[Scrape Route] Treg supplement failed: ${suppErr?.message}`);
+          }
+        }
       } catch (err: any) {
         console.warn(`[Scrape Route] Enterprise B2B Index error: ${err.message}. Trying Treg.to cross-fallback.`);
         try {
