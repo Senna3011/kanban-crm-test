@@ -280,7 +280,11 @@ export async function searchLeadOceanLeads(params: LeadOceanSearchParams): Promi
   }
 
   if (params.query) {
-    bodyPayload.q = params.query.trim();
+    const rawQ = params.query.trim();
+    // Google Dorks (e.g. site:linkedin.com/in ...) are only for Google search scrapers, not for direct B2B indexed databases
+    if (!/site:\s*linkedin\.com/i.test(rawQ)) {
+      bodyPayload.q = rawQ;
+    }
   }
 
   console.log('[Enterprise B2B Index] Querying LeadOcean with payload:', JSON.stringify(bodyPayload));

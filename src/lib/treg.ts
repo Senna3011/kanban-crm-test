@@ -103,8 +103,8 @@ export async function searchTregLeads(params: TregSearchParams): Promise<ApifySc
   };
 
   if (params.role) {
-    personWhere.title = params.role.split(',')[0].trim();
-  } else if (params.query) {
+    personWhere.title = params.role.split(/[,/|]/)[0].trim();
+  } else if (params.query && !/site:\s*linkedin\.com/i.test(params.query)) {
     personWhere.title = params.query.trim();
   } else {
     personWhere.title = 'Founder';

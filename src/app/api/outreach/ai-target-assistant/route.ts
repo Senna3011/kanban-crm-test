@@ -51,7 +51,7 @@ export async function POST(req: NextRequest) {
           targetRole: role,
           targetIndustries: ['Information Technology & Services', 'Computer Software / SaaS'],
           targetLocation: location,
-          searchQuery: `site:linkedin.com/in ("${role.split(',')[0].trim()}") "${location}"`,
+          searchQuery: '',
           summary: 'Rule-based targeting profile generated from ICP keywords.',
         },
       });
@@ -94,7 +94,7 @@ OUTPUT FORMAT: Strict JSON only with no markdown or fences:
   "targetRole": "comma-separated top decision maker titles (e.g. Founder, Chief Technology Officer, VP Engineering)",
   "targetIndustries": ["Array of 1 to 3 matching industries from the available list above"],
   "targetLocation": "target country, region, or city (e.g. United States, Indonesia, Singapore, Global)",
-  "searchQuery": "clean Boolean LinkedIn discovery search query (e.g. site:linkedin.com/in (\\"Founder\\" OR \\"CTO\\") \\"United States\\")",
+  "searchQuery": "optional short topic qualifier (e.g. B2B SaaS, AI) or empty string. DO NOT use site:linkedin.com or Boolean syntax",
   "summary": "1 concise sentence explaining the targeting strategy"
 }`,
           },
@@ -129,7 +129,7 @@ Generate structured targeting parameters matching the user's intent.`,
           ? parsed.targetIndustries
           : ['Computer Software / SaaS'],
         targetLocation: parsed.targetLocation || 'United States',
-        searchQuery: parsed.searchQuery || `site:linkedin.com/in ("Founder" OR "CTO") "${parsed.targetLocation || 'United States'}"`,
+        searchQuery: (parsed.searchQuery && !parsed.searchQuery.includes('site:')) ? parsed.searchQuery : '',
         summary: parsed.summary || 'AI-recommended decision maker targeting based on ICP.',
       },
     });
