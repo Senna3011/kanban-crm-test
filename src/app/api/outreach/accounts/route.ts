@@ -69,8 +69,12 @@ export async function POST(req: NextRequest) {
       try {
         const { encrypt } = await import('@/lib/encryption');
         storedPass = encrypt(smtpPass);
-      } catch {
-        storedPass = smtpPass;
+      } catch (err: any) {
+        console.error('[API OUTREACH ACCOUNTS] Encryption failed:', err.message);
+        return NextResponse.json(
+          { error: 'Gagal mengamankan kredensial: modul enkripsi tidak dapat mengenkripsi password.' },
+          { status: 500 }
+        );
       }
     }
 

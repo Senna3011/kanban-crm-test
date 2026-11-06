@@ -1,7 +1,14 @@
 import { NextResponse } from 'next/server';
+import { getServerSession } from 'next-auth';
+import { authOptions } from '@/server/auth';
 import { getAIConfig } from '@/lib/ai';
 
 export async function GET() {
+  const session = await getServerSession(authOptions);
+  if (!session?.user) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
   const { apiKey, endpoint, model } = getAIConfig();
   const isDeepSeek = !process.env.AI_API_KEY && !!process.env.DEEPSEEK_API_KEY;
   const providerName = isDeepSeek ? 'DeepSeek' : 'Custom AI (' + model + ')';

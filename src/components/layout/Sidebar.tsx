@@ -51,14 +51,16 @@ export default function Sidebar() {
       .then((data: BoardItem[]) => {
         setBoards(data);
         if (data.length > 0 && !activeBoard) {
-          const saved = localStorage.getItem('activeBoardId');
+          const urlParams = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : null;
+          const urlBoard = urlParams?.get('boardId');
+          const saved = urlBoard || localStorage.getItem('activeBoardId');
           const found = saved && data.some((b) => b.id === saved) ? saved : data[0].id;
           setActiveBoard(found);
           localStorage.setItem('activeBoardId', found);
         }
       })
       .catch(() => {});
-  }, [activeBoard]);
+  }, []);
 
   // Listen for mobile sidebar toggle from Navbar
   useEffect(() => {
@@ -80,6 +82,11 @@ export default function Sidebar() {
   function selectBoard(id: string) {
     setActiveBoard(id);
     localStorage.setItem('activeBoardId', id);
+    if (typeof window !== 'undefined') {
+      const url = new URL(window.location.href);
+      url.searchParams.set('boardId', id);
+      window.history.replaceState({}, '', url.toString());
+    }
     window.dispatchEvent(new Event('board-switched'));
     setMobileOpen(false);
     router.refresh();

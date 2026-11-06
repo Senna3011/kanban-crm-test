@@ -1115,7 +1115,7 @@ export default function CardDetailPanel({ card, onClose }: Props) {
               {showHtml && cardHtml ? (
                 <div className="bg-white dark:bg-[#1D2125] border border-slate-200 dark:border-[#2C333A] rounded-xl overflow-hidden shadow-xs">
                   <iframe
-                    srcDoc={`<style>html,body{color:#B6C2CF;background:#1D2125;font-family:system-ui,sans-serif;margin:12px;font-size:13px;line-height:1.6;}a{color:#579DFF;}table,td,th{border-color:#2C333A;}img{max-width:100%;}</style>${cardHtml}`}
+                    srcDoc={`<style>html,body{color:${typeof document !== 'undefined' && document.documentElement.classList.contains('dark') ? '#B6C2CF' : '#1e293b'};background:${typeof document !== 'undefined' && document.documentElement.classList.contains('dark') ? '#1D2125' : '#ffffff'};font-family:system-ui,sans-serif;margin:12px;font-size:13px;line-height:1.6;}a{color:${typeof document !== 'undefined' && document.documentElement.classList.contains('dark') ? '#579DFF' : '#2563eb'};}table,td,th{border-color:${typeof document !== 'undefined' && document.documentElement.classList.contains('dark') ? '#2C333A' : '#e2e8f0'};}img{max-width:100%;}</style>${cardHtml}`}
                     className="w-full border-0"
                     style={{ minHeight: isMaximized ? 420 : 260, maxHeight: isMaximized ? 650 : 420 }}
                     sandbox="allow-popups"

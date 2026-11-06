@@ -28,7 +28,9 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Column not found or unauthorized' }, { status: 404 });
     }
 
-    // Find all cards in this column with pending or edited drafts
+    const limit = Math.min(Number(body.limit) || 15, 20);
+
+    // Find cards in this column with pending or edited drafts (capped to prevent HTTP 504 timeout)
     const cards = await prisma.card.findMany({
       where: {
         columnId,
@@ -45,6 +47,7 @@ export async function POST(req: NextRequest) {
           take: 1,
         },
       },
+      take: limit,
     });
 
     if (cards.length === 0) {

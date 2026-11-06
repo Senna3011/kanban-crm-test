@@ -539,7 +539,11 @@ export async function processEmailPoll(data: { tenantId: string; emailConfigId: 
         }
 
         const cards = await prisma.card.findMany({
-          where: { imapFolder: folder },
+          where: {
+            tenantId,
+            emailConfigId,
+            imapFolder: folder,
+          },
           select: { id: true, imapUid: true, messageId: true, status: true },
         });
         console.log(`[IMAP Poller] Status sync ${folder}: ${statusMap.size} entries, ${cards.length} cards`);

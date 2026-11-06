@@ -66,12 +66,17 @@ export default function KanbanBoard() {
   // Sub-Board per Alias / Sender State
   const [activeSubBoard, setActiveSubBoard] = useState<string>('all');
 
-  // Load active sub-board from URL query param if present
+  // Load active sub-board and boardId from URL query param if present
   useEffect(() => {
     if (typeof window !== 'undefined') {
       const params = new URLSearchParams(window.location.search);
       const sb = params.get('subBoard');
       if (sb) setActiveSubBoard(sb);
+      const bId = params.get('boardId');
+      if (bId) {
+        setActiveBoardId(bId);
+        localStorage.setItem('activeBoardId', bId);
+      }
     }
   }, []);
 
@@ -251,11 +256,20 @@ export default function KanbanBoard() {
       .catch(() => {});
   }, []);
 
-  // Real-time refresh listeners
+  // Real-time refresh listeners with debouncing to prevent server connection pool exhaustion
   useEffect(() => {
-    const handler = () => fetchColumns();
+    let timer: NodeJS.Timeout;
+    const handler = () => {
+      clearTimeout(timer);
+      timer = setTimeout(() => {
+        fetchColumns();
+      }, 800);
+    };
     window.addEventListener('board-refresh', handler);
-    return () => window.removeEventListener('board-refresh', handler);
+    return () => {
+      clearTimeout(timer);
+      window.removeEventListener('board-refresh', handler);
+    };
   }, [fetchColumns]);
 
   useEffect(() => {
@@ -288,6 +302,11 @@ export default function KanbanBoard() {
   function handleSwitchBoard(newId: string) {
     setActiveBoardId(newId);
     localStorage.setItem('activeBoardId', newId);
+    if (typeof window !== 'undefined') {
+      const url = new URL(window.location.href);
+      url.searchParams.set('boardId', newId);
+      window.history.replaceState({}, '', url.toString());
+    }
     setLoading(true);
     window.dispatchEvent(new Event('board-switched'));
   }

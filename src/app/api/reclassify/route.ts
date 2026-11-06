@@ -20,7 +20,7 @@ export async function POST() {
       status: { not: 'deleted' },
       column: { title: { notIn: workflowColumns } },
     },
-    take: 30, // Limit per run to prevent HTTP timeout
+    take: 15, // Capped to 15 cards per run to ensure fast response and stay under reverse-proxy timeouts
     select: {
       id: true,
       subject: true,

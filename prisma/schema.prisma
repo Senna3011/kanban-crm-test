@@ -143,10 +143,10 @@ model Card {
   tenant    Tenant  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
   emailConfigId String?
-  emailConfig   EmailConfig? @relation(fields: [emailConfigId], references: [id])
+  emailConfig   EmailConfig? @relation(fields: [emailConfigId], references: [id], onDelete: SetNull)
 
   assignedToId String?
-  assignedTo   User?   @relation(fields: [assignedToId], references: [id])
+  assignedTo   User?   @relation(fields: [assignedToId], references: [id], onDelete: SetNull)
 
   activityLogs ActivityLog[]
   drafts       DraftMessage[]
@@ -158,6 +158,7 @@ model Card {
   @@index([tenantId, status])
   @@index([imapFolder])
   @@index([tenantId, lastActivityAt])
+  @@index([tenantId, emailConfigId, imapFolder, imapUid])
 }
 
 model ActivityLog {
@@ -239,7 +240,7 @@ model SpamLog {
   tenant         Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
   emailConfigId  String
-  emailConfig    EmailConfig  @relation(fields: [emailConfigId], references: [id])
+  emailConfig    EmailConfig  @relation(fields: [emailConfigId], references: [id], onDelete: Cascade)
 
   recoveredToId  String?
   recoveredTo    Card?        @relation(fields: [recoveredToId], references: [id], onDelete: SetNull)
@@ -387,11 +388,12 @@ model OutreachLead {
   campaignId String
   campaign   OutreachCampaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
 
+  @@unique([campaignId, email])
   @@index([campaignId])
   @@index([campaignId, status])
   @@index([campaignId, verifyStatus])
-  @@index([campaignId, email])
   @@index([campaignId, linkedinUrl])
+  @@index([campaignId, dripStatus, nextDripAt])
   @@index([status])
   @@index([verifyStatus])
   @@index([email])

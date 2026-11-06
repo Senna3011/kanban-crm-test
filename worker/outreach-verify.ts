@@ -28,7 +28,8 @@ export async function processOutreachVerify(job: OutreachVerifyJob) {
       where: {
         campaignId: job.campaignId,
         ...(job.leadIds && job.leadIds.length > 0 ? { id: { in: job.leadIds } } : {}),
-        verifyStatus: null,
+        OR: [{ verifyStatus: null }, { verifyStatus: 'UNVERIFIED' }],
+        status: { not: 'INVALID' },
       },
       take: batchSize,
       skip: cursor ? 1 : 0,

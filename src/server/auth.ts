@@ -30,6 +30,12 @@ export const authOptions: NextAuthOptions = {
 
         const normalizedEmail = credentials.email.trim().toLowerCase();
 
+        const { checkRateLimit, LOGIN_RATE_LIMIT } = await import('@/lib/rate-limit');
+        const rateLimitResult = checkRateLimit(normalizedEmail, LOGIN_RATE_LIMIT);
+        if (!rateLimitResult.success) {
+          throw new Error('Terlalu banyak percobaan login. Silakan tunggu beberapa menit.');
+        }
+
         const user = await prisma.user.findUnique({
           where: { email: normalizedEmail },
           include: { tenant: true },
@@ -87,7 +93,7 @@ export const authOptions: NextAuthOptions = {
         if (
           parsedUrl.origin === parsedBase.origin ||
           (nextAuthEnv && parsedUrl.origin === nextAuthEnv.origin) ||
-          parsedUrl.host === 'violation-james-difficulties-tomato.trycloudflare.com'
+          parsedUrl.host.endsWith('.trycloudflare.com')
         ) {
           return url;
         }

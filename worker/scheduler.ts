@@ -168,6 +168,8 @@ export function startSchedulers() {
             if (res.success) {
               console.log(`[Scheduler] Drip follow-up step ${nextStep} sent to ${lead.email} for campaign ${camp.id}`);
             }
+            // Stagger follow-up dispatches (2.5s) to strictly respect SMTP rate limits and avoid ESP bans
+            await new Promise((resolve) => setTimeout(resolve, 2500));
           } catch (dripErr: any) {
             console.error(`[Scheduler] Error sending drip step ${nextStep} to ${lead.email}:`, dripErr?.message || dripErr);
           }
