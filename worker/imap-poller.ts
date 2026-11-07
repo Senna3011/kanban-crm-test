@@ -351,8 +351,11 @@ async function pollFolder(imapConfig: Record<string, string>, folder: string, te
             : null;
 
           if (!alreadyLogged) {
-            // Mark parent card as replied (highlighted)
-            await prisma.card.update({ where: { id: parentCard.id }, data: { highlighted: true, lastActivityAt: new Date() } });
+            // Mark parent card as replied (highlighted) and unread so badge counter matches Zoho
+            await prisma.card.update({
+              where: { id: parentCard.id },
+              data: { highlighted: true, status: 'unread', lastActivityAt: new Date() },
+            });
             await prisma.activityLog.create({
               data: {
                 type: 'email_reply_received',
@@ -515,8 +518,20 @@ export async function processEmailPoll(data: { tenantId: string; emailConfigId: 
         });
       }
 
-      const availableLower = new Set(available.map((f) => f.toLowerCase()));
-      folders = candidateFolders.filter((f) => f.toUpperCase() === 'INBOX' || availableLower.has(f.toLowerCase()));
+      const systemExclude = new Set(['trash', 'junk', 'spam', 'drafts', 'sent', 'sent messages', 'outbox', 'templates', 'deleted']);
+      const matchedFolders = new Set<string>(['INBOX']);
+
+      for (const candidate of candidateFolders) {
+        const cLower = candidate.toLowerCase();
+        for (const av of available) {
+          const avLower = av.toLowerCase();
+          if (systemExclude.has(avLower)) continue;
+          if (avLower === cLower || avLower.includes(cLower) || cLower.includes(avLower)) {
+            matchedFolders.add(av);
+          }
+        }
+      }
+      folders = Array.from(matchedFolders);
     } catch {
       folders = ['INBOX'];
     }

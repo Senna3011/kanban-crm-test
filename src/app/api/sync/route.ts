@@ -23,17 +23,25 @@ export async function GET(req: NextRequest) {
   const where = tenantId ? { tenantId, isActive: true } : { isActive: true };
   const configs = await prisma.emailConfig.findMany({
     where,
-    select: { id: true, tenantId: true, imapUser: true },
+    select: { id: true, tenantId: true, imapUser: true, name: true, authType: true },
   });
 
   if (configs.length === 0) {
     return NextResponse.json({ message: 'No active email configured', synced: 0 }, { status: 200 });
   }
 
+  // Filter only primary mailboxes (skip Send-Mail-As aliases, as inbound mail is unified in primary Zoho mailbox)
+  const primaryConfigs = configs.filter((c) => {
+    if (c.authType === 'oauth2') {
+      return c.name?.startsWith('Zoho (') || false;
+    }
+    return true;
+  });
+  const targets = primaryConfigs.length > 0 ? primaryConfigs : configs;
+
   let totalDirectProcessed = 0;
 
-  // 1. Process directly on-demand for instant sync response
-  for (const config of configs) {
+  for (const config of targets) {
     try {
       const created = await processEmailPoll({
         tenantId: config.tenantId,
@@ -42,7 +50,6 @@ export async function GET(req: NextRequest) {
       totalDirectProcessed += typeof created === 'number' ? created : 0;
     } catch (directErr: any) {
       console.error(`[API /api/sync] Direct poll for ${config.imapUser} failed, queuing job to BullMQ:`, directErr?.message || directErr);
-      // Fallback: Queue job to BullMQ
       try {
         await emailPollQueue.add('poll_inbox', {
           type: 'poll_inbox',
@@ -53,9 +60,16 @@ export async function GET(req: NextRequest) {
     }
   }
 
+  try {
+    const { broadcastAppEvent } = await import('@/lib/events');
+    if (tenantId) {
+      broadcastAppEvent({ type: 'card_updated', tenantId });
+    }
+  } catch {}
+
   return NextResponse.json({
     success: true,
-    mailboxes: configs.length,
+    mailboxes: targets.length,
     newEmails: totalDirectProcessed,
   });
 }

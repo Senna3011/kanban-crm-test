@@ -249,7 +249,20 @@ export async function getValidZohoAccessToken(configId: string): Promise<string>
   const config = await prisma.emailConfig.findUnique({ where: { id: configId } });
   if (!config) throw new Error('Email configuration not found.');
   if (config.authType !== 'oauth2') throw new Error('Email configuration does not use OAuth2.');
-  if (!config.refreshToken) throw new Error('No refresh token stored.');
+  if (!config.refreshToken) {
+    // If this is an alias without its own refresh token, inherit from the primary OAuth2 config of the same tenant
+    const primaryOAuth = await prisma.emailConfig.findFirst({
+      where: {
+        tenantId: config.tenantId,
+        authType: 'oauth2',
+        refreshToken: { not: null },
+      },
+    });
+    if (primaryOAuth && primaryOAuth.id !== configId) {
+      return getValidZohoAccessToken(primaryOAuth.id);
+    }
+    throw new Error('Akun Zoho tidak memiliki refresh token. Silakan sambungkan ulang akun Zoho Anda di Settings.');
+  }
 
   const now = new Date();
   const bufferMs = 5 * 60 * 1000;

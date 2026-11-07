@@ -249,24 +249,17 @@ export class EmailAdapter implements ChannelAdapter {
       const fetchRange: any = uids && uids.length > 0 ? uids : '1:*';
       const fetchOptions: any = { uid: uids && uids.length > 0 };
 
-      for await (const message of imap.fetch(fetchRange, { source: true, uid: true, flags: true }, fetchOptions)) {
-        if (!message.source) continue;
+      for await (const message of imap.fetch(fetchRange, { envelope: true, uid: true, flags: true }, fetchOptions)) {
         const uid = message.uid;
         if (!uid) continue;
         const flags = message.flags instanceof Set ? [...message.flags] : [];
         const isRead = flags.some(f => f.endsWith('Seen'));
         const isReplied = flags.some(f => f.endsWith('Answered'));
-        try {
-          const { simpleParser } = await import('mailparser');
-          const parsed = await simpleParser(message.source);
-          const messageId = parsed.messageId?.trim();
-          if (messageId) {
-            statusMap.set(messageId, { isRead, isReplied });
-          }
-          statusMap.set(`uid:${uid}`, { isRead, isReplied });
-        } catch {
-          statusMap.set(`uid:${uid}`, { isRead, isReplied });
+        const messageId = message.envelope?.messageId?.trim();
+        if (messageId) {
+          statusMap.set(messageId, { isRead, isReplied });
         }
+        statusMap.set(`uid:${uid}`, { isRead, isReplied });
       }
       return statusMap;
     } catch {

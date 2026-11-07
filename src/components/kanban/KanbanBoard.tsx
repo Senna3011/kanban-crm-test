@@ -138,21 +138,27 @@ export default function KanbanBoard() {
     setSendingCompose(true);
     try {
       const activeId = activeBoardId || (boards[0]?.id || '');
-      await composeAndSendEmail({
+      const res = await composeAndSendEmail({
         boardId: activeId,
         fromAddress: composeFrom,
         toEmail: composeTo.trim(),
         subject: composeSubject.trim() || '(No Subject)',
         body: composeBody.trim(),
       });
-      toast.success('Outbound email sent & card created on board!');
+
+      if (!res.success) {
+        toast.error(res.error || 'Gagal mengirim email.');
+        return;
+      }
+
+      toast.success('Email berhasil dikirim dan kartu baru dibuat!');
       setComposeTo('');
       setComposeSubject('');
       setComposeBody('');
       setShowComposeModal(false);
       fetchColumns();
     } catch (err: any) {
-      toast.error(err?.message || 'Failed to send outbound email');
+      toast.error(err?.message || 'Gagal mengirim email.');
     } finally {
       setSendingCompose(false);
     }
@@ -620,7 +626,6 @@ export default function KanbanBoard() {
           card.targetAlias ||
           (card.metadata as any)?.deliveredTo ||
           (card.metadata as any)?.toEmail ||
-          (card.metadata as any)?.fromEmail ||
           card.emailConfig?.smtpUser ||
           card.emailConfig?.imapUser ||
           ''
@@ -670,7 +675,6 @@ export default function KanbanBoard() {
             card.targetAlias ||
             (card.metadata as any)?.deliveredTo ||
             (card.metadata as any)?.toEmail ||
-            (card.metadata as any)?.fromEmail ||
             card.emailConfig?.smtpUser ||
             card.emailConfig?.imapUser ||
             ''
@@ -701,7 +705,6 @@ export default function KanbanBoard() {
             card.targetAlias ||
             (card.metadata as any)?.deliveredTo ||
             (card.metadata as any)?.toEmail ||
-            (card.metadata as any)?.fromEmail ||
             card.emailConfig?.smtpUser ||
             card.emailConfig?.imapUser ||
             ''
