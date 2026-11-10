@@ -52,8 +52,24 @@ export function isGenericNonCompanyString(companyName?: string | null): boolean 
   const clean = companyName.trim().toLowerCase();
   if (clean.length < 2) return true;
 
+  // Reject industry categories, multiple department lists, or phrases with slashes/pipes
+  if (
+    clean.includes(' / ') ||
+    clean.includes(' | ') ||
+    clean.includes(' & ') ||
+    clean.split(',').length >= 2 ||
+    clean.length > 35
+  ) {
+    return true;
+  }
+
   for (const pattern of GENERIC_NON_COMPANY_PATTERNS) {
-    if (clean === pattern || clean.startsWith(`${pattern} `) || clean.endsWith(` ${pattern}`)) {
+    if (
+      clean === pattern ||
+      clean.includes(pattern) ||
+      clean.startsWith(`${pattern} `) ||
+      clean.endsWith(` ${pattern}`)
+    ) {
       return true;
     }
   }
@@ -242,14 +258,12 @@ export async function resolveCompanyDomain(
     };
   }
 
-  // 2. Reject non-company or generic industry strings, but provide resilient fallback domain
+  // 2. Reject non-company or generic industry strings
   if (!companyName || isGenericNonCompanyString(companyName)) {
-    const fallbackSlug = (companyName || '').toLowerCase().replace(/[^a-z0-9]/g, '');
-    const fallbackDomain = fallbackSlug.length >= 3 ? `${fallbackSlug}.com` : 'enterprise-lead.com';
     return {
-      domain: fallbackDomain,
+      domain: null,
       isVerifiedDomain: false,
-      reason: 'Generated fallback domain for generic/freelance prospect',
+      reason: 'Rejected generic industry or invalid company name',
     };
   }
 
@@ -263,11 +277,11 @@ export async function resolveCompanyDomain(
     };
   }
 
-  // 4. Fallback: Intelligent sanitization
+  // 4. Fallback: Intelligent sanitization (only for concise, valid brand names)
   const sanitized = sanitizeCompanyName(companyName);
   const slug = sanitized.toLowerCase().replace(/[^a-z0-9]/g, '');
 
-  if (slug && slug.length >= 2) {
+  if (slug && slug.length >= 2 && slug.length <= 25 && sanitized.split(' ').length <= 3) {
     return {
       domain: `${slug}.com`,
       isVerifiedDomain: false,
@@ -276,8 +290,8 @@ export async function resolveCompanyDomain(
   }
 
   return {
-    domain: 'enterprise-lead.com',
+    domain: null,
     isVerifiedDomain: false,
-    reason: 'Default candidate domain fallback',
+    reason: 'Could not determine corporate domain from company name',
   };
 }

@@ -512,7 +512,7 @@ function parseGoogleOrganicToLead(item: any, params: ApifySearchParams, forcedLo
     }
   }
 
-  companyName = companyName || params.industry || 'Enterprise Group';
+  companyName = companyName || 'Independent';
   const companyDomain = undefined;
 
   const cleanUrl = (item.url || '').split('?')[0];
