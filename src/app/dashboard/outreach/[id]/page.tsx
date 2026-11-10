@@ -1223,9 +1223,9 @@ export default function CampaignWorkspacePage({
                 className="bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-750 px-2.5 py-2 text-xs font-bold text-slate-800 dark:text-slate-200 border-r border-slate-200 dark:border-slate-700 focus:outline-none cursor-pointer disabled:opacity-50"
                 title="Select Lead Discovery Mode"
               >
-                <option value="treg">B2B Gateway (Treg.to - Recommended)</option>
-                <option value="outscraper">Live Search (Outscraper)</option>
-                <option value="apify">Profile Crawler (Apify)</option>
+                <option value="treg">B2B Verified Database (Recommended)</option>
+                <option value="outscraper">Business Directory Search</option>
+                <option value="apify">Executive Network Discovery</option>
               </select>
               <button
                 onClick={() => handleSourceLeads(sourceBatchSize, sourceProvider)}

@@ -683,7 +683,7 @@ export default function NewOutreachCampaignPage() {
                       </span>
                     </div>
                     <p className="text-[11px] text-slate-500 dark:text-slate-400 leading-relaxed">
-                      Gateway B2B terpadu (Treg.to). Respon cepat (&lt;2 detik) dengan email korporat terverifikasi lengkap.
+                      Database eksekutif B2B terverifikasi. Respon cepat (&lt;2 detik) dengan email korporat pengambil keputusan.
                     </p>
                   </button>
 
@@ -707,7 +707,7 @@ export default function NewOutreachCampaignPage() {
                       </span>
                     </div>
                     <p className="text-[11px] text-slate-500 dark:text-slate-400 leading-relaxed">
-                      Pencarian direktori bisnis lokal dan domain web terindeks via Outscraper.
+                      Pencarian direktori bisnis lokal, peta usaha, dan domain perusahaan terindeks.
                     </p>
                   </button>
 
@@ -731,7 +731,7 @@ export default function NewOutreachCampaignPage() {
                       </span>
                     </div>
                     <p className="text-[11px] text-slate-500 dark:text-slate-400 leading-relaxed">
-                      Crawler multi-sumber untuk analisis mendalam jejak profesional via Apify.
+                      Penelusuran multi-sumber untuk analisis jejak profesional dan profil eksekutif.
                     </p>
                   </button>
                 </div>
