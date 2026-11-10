@@ -562,7 +562,7 @@ export default function CampaignWorkspacePage({
         'AI Draft Body',
         'LinkedIn Profile URL',
         'Location',
-        'Phone Number',
+        'Profile Summary',
       ];
 
       const rows = campaign.leads.map((l) => [
@@ -578,7 +578,7 @@ export default function CampaignWorkspacePage({
         `"${(l.aiDraftBody || '').replace(/\r?\n/g, ' ').replace(/"/g, '""')}"`,
         `"${(l.linkedinUrl || '').replace(/"/g, '""')}"`,
         `"${(l.location || '').replace(/"/g, '""')}"`,
-        `"${((l.metadata as any)?.phone || '').replace(/"/g, '""')}"`,
+        `"${((l.metadata as any)?.summary || '').replace(/"/g, '""')}"`,
       ]);
 
       // \uFEFF is the UTF-8 Byte Order Mark (BOM) so Microsoft Excel opens it cleanly with proper column separation and accents

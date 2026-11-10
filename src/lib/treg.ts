@@ -256,6 +256,18 @@ export async function searchTregLeads(params: TregSearchParams): Promise<ApifySc
         email = typeof item.work_email === 'string' ? item.work_email.toLowerCase().trim() : undefined;
       }
 
+      // Build concise profile & organizational insight for AI draft personalization (strictly excluding phone numbers)
+      const profileSummary =
+        item.insight?.summary ||
+        [
+          item.insight?.decision_role ? `Role: ${item.insight.decision_role}` : null,
+          item.insight?.department ? `Department: ${item.insight.department}` : null,
+          item.insight?.seniority ? `Seniority: ${item.insight.seniority}` : null,
+        ]
+          .filter(Boolean)
+          .join(' | ') ||
+        undefined;
+
       const candidate: ApifyScrapedLead = {
         fullName,
         firstName,
@@ -266,11 +278,16 @@ export async function searchTregLeads(params: TregSearchParams): Promise<ApifySc
         linkedinUrl,
         location,
         email,
-        summary: item.insight?.summary || undefined,
+        summary: profileSummary,
         metadata: {
           source: 'on-demand-gateway',
           personId: item.id || undefined,
           sourceUrl: item.source_url || undefined,
+          summary: profileSummary,
+          industry: typeof item.company === 'object' ? item.company.industry : undefined,
+          department: item.insight?.department || undefined,
+          seniority: item.insight?.seniority || undefined,
+          decisionRole: item.insight?.decision_role || undefined,
           scrapedAt: new Date().toISOString(),
         },
       };

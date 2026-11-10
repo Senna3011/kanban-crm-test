@@ -87,35 +87,35 @@ export async function generatePersonalizedColdEmail(
 SENDER CONTEXT & OFFER:
 ${companyContext}
 
-COPYWRITING FRAMEWORK (8-POINT PERSONALIZATION):
-1. Natural Hook: Start with a natural, authentic 1-sentence observation tailored to their role (${params.jobTitle || 'Executive'}) at ${params.companyName || 'their company'}. Never use fake generic praise like "I hope this email finds you well" or "I came across your impressive profile".
-2. Role-Targeted Pain: ${roleAngle}
-3. Relevant Bridge: Connect the pain point directly to how ${senderCompany} delivers quantifiable results.
-4. Social Proof: Include a brief, believable metric or outcome.
-5. Low-Friction CTA: Ask for a casual 9-minute exchange or quick feedback.
-6. ${toneInstruction}
-7. ${lengthInstruction}
-8. Provide 2 distinct, highly clickable subject lines for A/B testing:
-   - "subject": Conversational & personalized (e.g. "quick question re: {companyName} systems")
-   - "alternativeSubject": Outcome & value-oriented (e.g. "accelerating pipeline efficiency at {companyName}")
+	COPYWRITING FRAMEWORK (8-POINT PERSONALIZATION):
+	1. Natural Hook: Start with a natural, authentic 1-sentence observation tailored to their role (${params.jobTitle || 'Executive'}) and specific profile insight at ${params.companyName || 'their company'}. If profile insight or departmental focus is provided, weave it naturally into the context. Never use fake generic praise like "I hope this email finds you well" or "I came across your impressive profile".
+	2. Role-Targeted Pain: ${roleAngle}
+	3. Relevant Bridge: Connect the pain point directly to how ${senderCompany} delivers quantifiable results.
+	4. Social Proof: Include a brief, believable metric or outcome.
+	5. Low-Friction CTA: Ask for a casual 9-minute exchange or quick feedback.
+	6. ${toneInstruction}
+	7. ${lengthInstruction}
+	8. Provide 2 distinct, highly clickable subject lines for A/B testing:
+	   - "subject": Conversational & personalized (e.g. "quick question re: {companyName} systems")
+	   - "alternativeSubject": Outcome & value-oriented (e.g. "accelerating pipeline efficiency at {companyName}")
 
-OUTPUT FORMAT: Strict JSON only with keys:
-- "subject": string
-- "alternativeSubject": string
-- "body": string`,
-          },
-          {
-            role: 'user',
-            content: `PROSPECT PROFILE:
-- Full Name: ${params.prospectName}
-- Role / Title: ${params.jobTitle || 'Executive'}
-- Company: ${params.companyName || 'Enterprise'}
-- Location: ${params.location || 'Global'}
-- Industry: ${params.industry || 'Business & Technology'}
-- LinkedIn Info / Background: ${params.linkedinSummary || `Leading ${params.jobTitle || 'operations'} at ${params.companyName || 'their organization'}`}
-${customInstructions}
+	OUTPUT FORMAT: Strict JSON only with keys:
+	- "subject": string
+	- "alternativeSubject": string
+	- "body": string`,
+	          },
+	          {
+	            role: 'user',
+	            content: `PROSPECT PROFILE:
+	- Full Name: ${params.prospectName}
+	- Role / Title: ${params.jobTitle || 'Executive'}
+	- Company: ${params.companyName || 'Enterprise'}
+	- Location: ${params.location || 'Global'}
+	- Industry: ${params.industry || 'Business & Technology'}
+	- Profile / Career Insight: ${params.linkedinSummary || `Leading ${params.jobTitle || 'operations'} at ${params.companyName || 'their organization'}`}
+	${customInstructions}
 
-Craft an ultra-personalized, authentic cold email.`,
+	Craft an ultra-personalized, authentic cold email.`,
           },
         ],
         temperature: 0.65,
