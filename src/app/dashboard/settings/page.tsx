@@ -5,6 +5,7 @@ import CompanyInfoForm from '@/components/setup/CompanyInfoForm';
 import EmailConfigForm from '@/components/setup/EmailConfigForm';
 import BoardSenderManager from '@/components/setup/BoardSenderManager';
 import ZohoConnectCard from '@/components/setup/ZohoConnectCard';
+import EmailConfigActiveToggle from '@/components/setup/EmailConfigActiveToggle';
 import Link from 'next/link';
 import AiStatusBanner from '@/components/AiStatusBanner';
 
@@ -200,13 +201,11 @@ export default async function SettingsPage({
                     </p>
                   </div>
                   <div className="flex items-center gap-2">
-                    <span
-                      className={`px-2 py-0.5 text-xs font-medium rounded-full ${
-                        cfg.isActive ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'
-                      }`}
-                    >
-                      {cfg.isActive ? 'Active' : 'Inactive'}
-                    </span>
+                    <EmailConfigActiveToggle
+                      configId={cfg.id}
+                      initialActive={cfg.isActive}
+                      readOnly={!isAdmin}
+                    />
                   </div>
                 </div>
                 <EmailConfigForm initial={cfg} boards={data.boards} />
@@ -232,13 +231,11 @@ export default async function SettingsPage({
                   </p>
                 </div>
                 <div className="flex items-center gap-2">
-                  <span
-                    className={`px-2.5 py-1 text-xs font-medium rounded-full ${
-                      cfg.isActive ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'
-                    }`}
-                  >
-                    {cfg.isActive ? 'Active' : 'Inactive'}
-                  </span>
+                  <EmailConfigActiveToggle
+                    configId={cfg.id}
+                    initialActive={cfg.isActive}
+                    readOnly
+                  />
                 </div>
               </div>
             ))}

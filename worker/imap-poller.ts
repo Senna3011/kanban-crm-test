@@ -138,6 +138,7 @@ async function resolveBoard(
     // Prefer non-Main Board if configured specifically for this alias
     const specificBoardConfig = matchingConfigs.find((c) => c.board && c.board.title.toLowerCase() !== 'main board');
     if (specificBoardConfig?.board) return specificBoardConfig.board;
+    if (matchingConfigs[0]?.board) return matchingConfigs[0].board;
   }
 
   // 2. PRIORITY 2: Check if any candidate recipient matches explicit routing or board title
@@ -258,6 +259,30 @@ async function pollFolder(imapConfig: Record<string, string>, folder: string, te
         });
         if (isInternalSender) {
           console.log(`[IMAP Poller] Skipping internal/outbound message: ${msg.subject} (from ${senderEmail})`);
+          continue;
+        }
+      }
+
+      // Check if candidate recipient is an inactive/disabled mailbox of this tenant
+      const candidateRecipients = [msg.toEmail, msg.deliveredTo, ...(msg.recipientEmails || [])]
+        .filter(Boolean)
+        .map((e) => e!.toLowerCase().trim());
+
+      if (candidateRecipients.length > 0) {
+        const inactiveAlias = await prisma.emailConfig.findFirst({
+          where: {
+            tenantId,
+            isActive: false,
+            OR: [
+              { imapUser: { in: candidateRecipients, mode: 'insensitive' } },
+              { smtpUser: { in: candidateRecipients, mode: 'insensitive' } },
+            ],
+          },
+          select: { id: true, name: true, smtpUser: true },
+        });
+
+        if (inactiveAlias) {
+          console.log(`[IMAP Poller] Skipping email for inactive/disabled mailbox: ${inactiveAlias.name} (${inactiveAlias.smtpUser})`);
           continue;
         }
       }

@@ -1,5 +1,6 @@
 'use server';
 
+import { revalidatePath } from 'next/cache';
 import { requireAuth, requireAdmin } from '@/lib/auth-guards';
 import prisma from '@/lib/prisma';
 import { encrypt, decrypt } from '@/lib/encryption';
@@ -97,6 +98,7 @@ export async function saveEmailConfig(data: {
   id?: string;
   name?: string;
   boardId?: string;
+  isActive?: boolean;
   imapHost: string;
   imapPort: number;
   imapUser: string;
@@ -125,6 +127,7 @@ export async function saveEmailConfig(data: {
     smtpPort: data.smtpPort,
     smtpUser: (data.smtpUser || data.imapUser).trim().toLowerCase(),
     boardId: data.boardId || null,
+    ...(data.isActive !== undefined && { isActive: Boolean(data.isActive) }),
   };
   if (data.imapPass) updateData.imapPass = encrypt(data.imapPass);
   if (data.smtpPass) updateData.smtpPass = encrypt(data.smtpPass);
@@ -134,11 +137,39 @@ export async function saveEmailConfig(data: {
   } else {
     if (!data.imapPass || !data.smtpPass) throw new Error('Password is required for new email configuration.');
     await prisma.emailConfig.create({
-      data: { tenantId, ...updateData, imapPass: encrypt(data.imapPass), smtpPass: encrypt(data.smtpPass) },
+      data: {
+        tenantId,
+        ...updateData,
+        imapPass: encrypt(data.imapPass),
+        smtpPass: encrypt(data.smtpPass),
+        isActive: data.isActive !== undefined ? Boolean(data.isActive) : true,
+      },
     });
   }
 
+  revalidatePath('/dashboard/settings');
   return { success: true };
+}
+
+export async function toggleEmailConfigActive(id: string, isActive: boolean) {
+  const user = await requireAdmin();
+  const tenantId = user.tenantId;
+
+  const existing = await prisma.emailConfig.findFirst({
+    where: { id, tenantId },
+  });
+
+  if (!existing) {
+    throw new Error('Mailbox configuration not found.');
+  }
+
+  await prisma.emailConfig.update({
+    where: { id: existing.id },
+    data: { isActive },
+  });
+
+  revalidatePath('/dashboard/settings');
+  return { success: true, isActive };
 }
 
 export async function deleteEmailConfig(id: string) {

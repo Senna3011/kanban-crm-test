@@ -17,6 +17,7 @@ interface ConfigItem {
   imapUser: string;
   boardId?: string;
   authType: string;
+  isActive?: boolean;
 }
 
 export default function BoardSenderManager({
@@ -47,7 +48,8 @@ export default function BoardSenderManager({
   };
 
   const getUnassignedConfigs = () => {
-    return localConfigs.filter((c) => !c.boardId);
+    // Only ACTIVE mailboxes that are not linked to any board
+    return localConfigs.filter((c) => !c.boardId && c.isActive !== false);
   };
 
   async function handleToggleOutreach(boardId: string, currentVal: boolean) {
@@ -192,26 +194,40 @@ export default function BoardSenderManager({
                   </div>
                 ) : (
                   <div className="flex flex-wrap gap-2">
-                    {assignedConfigs.map((cfg) => (
-                      <span
-                        key={cfg.id}
-                        className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-emerald-50 text-emerald-800 border border-emerald-200 rounded-xl text-xs font-semibold shadow-2xs"
-                      >
-                        <span className="w-2 h-2 rounded-full bg-emerald-500" />
-                        <span>{cfg.name}</span>
-                        <span className="text-[11px] text-emerald-600 font-mono">({cfg.smtpUser})</span>
-                        {!readOnly && (
-                          <button
-                            type="button"
-                            onClick={() => handleUnassignConfig(b.id, cfg.id)}
-                            className="hover:text-red-600 font-bold ml-1 text-xs"
-                            title="Unassign mailbox from this board"
-                          >
-                            ✕
-                          </button>
-                        )}
-                      </span>
-                    ))}
+                    {assignedConfigs.map((cfg) => {
+                      const isActive = cfg.isActive !== false;
+                      return (
+                        <span
+                          key={cfg.id}
+                          className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold shadow-2xs border transition-colors ${
+                            isActive
+                              ? 'bg-emerald-50 text-emerald-800 border-emerald-200'
+                              : 'bg-slate-100 text-slate-500 border-slate-300 opacity-75'
+                          }`}
+                        >
+                          <span className={`w-2 h-2 rounded-full ${isActive ? 'bg-emerald-500' : 'bg-slate-400'}`} />
+                          <span>{cfg.name}</span>
+                          <span className={`text-[11px] font-mono ${isActive ? 'text-emerald-600' : 'text-slate-500'}`}>
+                            ({cfg.smtpUser})
+                          </span>
+                          {!isActive && (
+                            <span className="text-[10px] bg-slate-200 text-slate-600 px-1.5 py-0.5 rounded font-medium">
+                              Inactive
+                            </span>
+                          )}
+                          {!readOnly && (
+                            <button
+                              type="button"
+                              onClick={() => handleUnassignConfig(b.id, cfg.id)}
+                              className="hover:text-red-600 font-bold ml-1 text-xs"
+                              title="Unassign mailbox from this board"
+                            >
+                              ✕
+                            </button>
+                          )}
+                        </span>
+                      );
+                    })}
 
                     {isOutreachEnabled && (
                       <span className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-indigo-50 text-indigo-800 border border-indigo-200 rounded-xl text-xs font-semibold shadow-2xs">
@@ -223,23 +239,27 @@ export default function BoardSenderManager({
                 )}
               </div>
 
-              {/* Assign Mailbox Selector */}
+              {/* Assign Mailbox Selector - Clean isolated dropdown for active unassigned mailboxes */}
               {!readOnly && unassigned.length > 0 && (
                 <div className="pt-2 border-t border-slate-100 flex items-center gap-2">
-                  <span className="text-xs text-slate-500">+ Link Available Mailbox:</span>
-                  <div className="flex flex-wrap gap-1.5">
+                  <span className="text-xs text-slate-500 font-medium">+ Link Available Mailbox:</span>
+                  <select
+                    value=""
+                    onChange={(e) => {
+                      if (e.target.value) handleAssignConfig(b.id, e.target.value);
+                    }}
+                    disabled={isSaving}
+                    className="px-2.5 py-1 bg-white hover:bg-slate-50 text-slate-700 rounded-lg text-xs font-medium border border-slate-300 focus:outline-none focus:ring-1 focus:ring-primary-500 cursor-pointer max-w-xs"
+                  >
+                    <option value="" disabled>
+                      Select active mailbox to link to {b.title}...
+                    </option>
                     {unassigned.map((u) => (
-                      <button
-                        key={u.id}
-                        type="button"
-                        onClick={() => handleAssignConfig(b.id, u.id)}
-                        disabled={isSaving}
-                        className="px-2.5 py-1 bg-slate-100 hover:bg-primary-50 hover:text-primary-700 text-slate-700 rounded-lg text-xs font-semibold border border-slate-200 transition-colors cursor-pointer"
-                      >
-                        + {u.name} ({u.smtpUser})
-                      </button>
+                      <option key={u.id} value={u.id}>
+                        {u.name} ({u.smtpUser})
+                      </option>
                     ))}
-                  </div>
+                  </select>
                 </div>
               )}
             </div>

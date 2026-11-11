@@ -16,6 +16,7 @@ type EmailValues = {
   boardId?: string;
   authType?: string;
   hasOAuthToken?: boolean;
+  isActive?: boolean;
   imapHost: string;
   imapPort: number;
   imapUser: string;
@@ -237,6 +238,7 @@ export default function EmailConfigForm({ initial, boards = [], isNew = false }:
         name: form.name || 'Zoho Mail',
         smtpUser: form.smtpUser || form.imapUser,
         smtpPass: form.smtpPass || form.imapPass,
+        isActive: form.isActive !== false,
       });
       toast.success('Email configuration saved successfully!');
       router.refresh();
@@ -275,7 +277,7 @@ export default function EmailConfigForm({ initial, boards = [], isNew = false }:
     });
   }
 
-  const updateField = (field: keyof EmailValues, value: string | number) => setForm((prev) => ({ ...prev, [field]: value }));
+  const updateField = (field: keyof EmailValues, value: any) => setForm((prev) => ({ ...prev, [field]: value }));
   const activePresetInfo = PRESETS[selectedPreset] || PRESETS.zoho;
   const passwordHint = hasSavedPasswords ? 'Leave blank to keep existing password.' : 'Enter account password or App Password.';
 
@@ -329,7 +331,21 @@ export default function EmailConfigForm({ initial, boards = [], isNew = false }:
           required
         />
         <div className="space-y-1">
-          <label className="block text-sm font-medium text-gray-700">Link to Pipeline Board</label>
+          <div className="flex items-center justify-between">
+            <label className="block text-sm font-medium text-gray-700">Link to Pipeline Board</label>
+            <button
+              type="button"
+              onClick={() => updateField('isActive', form.isActive === false ? true : false)}
+              className={`px-2 py-0.5 rounded-full text-[11px] font-semibold border transition-colors cursor-pointer ${
+                form.isActive !== false
+                  ? 'bg-emerald-50 text-emerald-800 border-emerald-300'
+                  : 'bg-slate-100 text-slate-500 border-slate-300'
+              }`}
+              title="Toggle Mailbox Active / Inactive"
+            >
+              {form.isActive !== false ? '● Active' : '○ Inactive'}
+            </button>
+          </div>
           <select
             id={`board-${form.id || 'new'}`}
             className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 bg-white text-sm text-slate-800"
