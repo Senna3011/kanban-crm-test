@@ -129,6 +129,41 @@ function isValidWebsiteDomain(domain?: string | null): boolean {
   return !blocked.some((b) => clean === b || clean.endsWith(`.${b}`));
 }
 
+function getLeadInitials(name: string): string {
+  const parts = (name || 'Lead').trim().split(/\s+/);
+  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+}
+
+const AVATAR_GRADIENTS = [
+  'from-blue-600 to-indigo-600',
+  'from-emerald-600 to-teal-600',
+  'from-violet-600 to-purple-600',
+  'from-amber-500 to-orange-600',
+  'from-rose-500 to-pink-600',
+  'from-cyan-600 to-blue-600',
+];
+
+function getAvatarGradient(name: string): string {
+  let hash = 0;
+  for (let i = 0; i < (name || '').length; i++) hash = name.charCodeAt(i) + ((hash << 5) - hash);
+  return AVATAR_GRADIENTS[Math.abs(hash) % AVATAR_GRADIENTS.length];
+}
+
+function sanitizeLeadCompany(company?: string | null): string {
+  if (!company) return 'Independent';
+  const clean = company.trim();
+  if (
+    clean.includes('/') ||
+    clean.includes('Computer Software') ||
+    clean.includes('Information Technology') ||
+    clean.length > 35
+  ) {
+    return 'Independent / Stealth';
+  }
+  return clean;
+}
+
 export default function CampaignWorkspacePage({
   params,
 }: {
@@ -1939,112 +1974,135 @@ export default function CampaignWorkspacePage({
 	                        />
 	                      </td>
 
-	                      {/* Visual Chip & Badge 3-Line Uncut Layout */}
+	                      {/* Executive Avatar + Lead & Organization Profile Layout */}
 	                      <td className="px-5 py-4">
-	                        <div className="space-y-1.5">
-	                          {/* Line 1: Full Name, Credentials, Verification Badge, & LinkedIn Pill */}
-	                          <div className="flex items-center gap-2 flex-wrap">
-	                            <span className="font-bold text-slate-900 dark:text-slate-100 text-sm tracking-tight break-words">
-	                              {lead.fullName}
-	                            </span>
-	                            {lead.status === 'CONVERTED' && (
-	                              <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-950/60 text-emerald-800 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800">
-	                                ✓ in CRM
+	                        <div className="flex items-start gap-3.5">
+	                          {/* Sleek Gradient Avatar with Initials */}
+	                          <div
+	                            className={`w-10 h-10 rounded-xl bg-gradient-to-br ${getAvatarGradient(
+	                              lead.fullName
+	                            )} text-white font-bold text-xs flex items-center justify-center shrink-0 shadow-xs border border-white/20 select-none mt-0.5`}
+	                            title={lead.fullName}
+	                          >
+	                            {getLeadInitials(lead.fullName)}
+	                          </div>
+
+	                          {/* Profile Details */}
+	                          <div className="space-y-1.5 flex-1 min-w-0">
+	                            {/* Line 1: Full Name, Credentials, CRM Status, LinkedIn Pill */}
+	                            <div className="flex items-center gap-2 flex-wrap">
+	                              <span className="font-bold text-slate-900 dark:text-slate-100 text-[13px] tracking-tight break-words">
+	                                {lead.fullName}
 	                              </span>
-	                            )}
-	                            {lead.linkedinUrl && (
-	                              <a
-	                                href={lead.linkedinUrl.startsWith('http') ? lead.linkedinUrl : `https://${lead.linkedinUrl}`}
-	                                target="_blank"
-	                                rel="noreferrer"
-	                                className="inline-flex items-center gap-1 text-[11px] font-semibold text-[#0077b5] dark:text-[#3897d3] bg-[#0077b5]/10 dark:bg-[#0077b5]/20 hover:bg-[#0077b5]/20 px-2 py-0.5 rounded-md border border-[#0077b5]/20 transition-colors"
-	                                title="Open Official LinkedIn Profile"
-	                                onClick={(e) => e.stopPropagation()}
-	                              >
-	                                <svg className="w-3 h-3 fill-current" viewBox="0 0 24 24">
-	                                  <path d="M19 3a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h14m-.5 15.5v-5.3a3.26 3.26 0 0 0-3.26-3.26c-.85 0-1.84.52-2.28 1.3v-1.11h-2.79v8.37h2.79v-4.93c0-.77.62-1.4 1.39-1.4a1.4 1.4 0 0 1 1.4 1.4v4.93h2.75M6.46 10.9v8.37H9.2V10.9H6.46M7.83 6.64a1.66 1.66 0 0 0-1.66 1.66 1.66 1.66 0 0 0 1.66 1.66 1.66 1.66 0 0 0 1.66-1.66c0-.92-.74-1.66-1.66-1.66Z" />
-	                                </svg>
-	                                <span>LinkedIn</span>
-	                                <span className="text-[9px]">↗</span>
-	                              </a>
-	                            )}
-	                          </div>
-
-	                          {/* Line 2: Full Job Title / Role (Uncut, complete line wrap with executive indicator) */}
-	                          <div className="text-xs font-semibold text-indigo-950 dark:text-indigo-300 leading-snug break-words whitespace-normal flex items-start gap-1.5">
-	                            <span className="text-indigo-500/80 dark:text-indigo-400 text-[11px] shrink-0 mt-0.5">👔</span>
-	                            <span className="break-words">{lead.jobTitle || 'Executive Decision Maker'}</span>
-	                          </div>
-
-	                          {/* Line 3: Distinct Badges for Company and Location */}
-	                          <div className="text-xs flex items-center gap-2 flex-wrap pt-0.5">
-	                            {/* Company Badge Chip */}
-	                            <div className="inline-flex items-center gap-1.5 text-slate-800 dark:text-slate-200 font-bold bg-slate-100 dark:bg-slate-800/80 px-2.5 py-1 rounded-md border border-slate-200/80 dark:border-slate-700/80 max-w-full">
-	                              <span className="text-slate-400 dark:text-slate-500 text-[11px] shrink-0">🏢</span>
-	                              <span className="break-words">{lead.companyName || 'Enterprise'}</span>
-	                              {isValidWebsiteDomain(lead.companyDomain) && (
+	                              {lead.status === 'CONVERTED' && (
+	                                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-950/60 text-emerald-800 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800">
+	                                  ✓ in CRM
+	                                </span>
+	                              )}
+	                              {lead.linkedinUrl && (
 	                                <a
-	                                  href={lead.companyDomain!.startsWith('http') ? lead.companyDomain! : `https://${lead.companyDomain}`}
+	                                  href={lead.linkedinUrl.startsWith('http') ? lead.linkedinUrl : `https://${lead.linkedinUrl}`}
 	                                  target="_blank"
 	                                  rel="noreferrer"
-	                                  className="inline-flex items-center gap-0.5 text-primary-600 dark:text-primary-400 hover:underline font-semibold ml-0.5 text-[10px]"
-	                                  title={`Visit ${lead.companyDomain}`}
+	                                  className="inline-flex items-center gap-1 text-[11px] font-semibold text-[#0077b5] dark:text-[#3897d3] bg-[#0077b5]/10 dark:bg-[#0077b5]/20 hover:bg-[#0077b5]/20 px-2 py-0.5 rounded-md border border-[#0077b5]/20 transition-colors"
+	                                  title="Open Official LinkedIn Profile"
 	                                  onClick={(e) => e.stopPropagation()}
 	                                >
-	                                  <span>{lead.companyDomain!.replace(/^https?:\/\//, '').replace(/\/.*$/, '')}</span>
+	                                  <svg className="w-3 h-3 fill-current" viewBox="0 0 24 24">
+	                                    <path d="M19 3a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h14m-.5 15.5v-5.3a3.26 3.26 0 0 0-3.26-3.26c-.85 0-1.84.52-2.28 1.3v-1.11h-2.79v8.37h2.79v-4.93c0-.77.62-1.4 1.39-1.4a1.4 1.4 0 0 1 1.4 1.4v4.93h2.75M6.46 10.9v8.37H9.2V10.9H6.46M7.83 6.64a1.66 1.66 0 0 0-1.66 1.66 1.66 1.66 0 0 0 1.66 1.66 1.66 1.66 0 0 0 1.66-1.66c0-.92-.74-1.66-1.66-1.66Z" />
+	                                  </svg>
+	                                  <span>LinkedIn</span>
 	                                  <span className="text-[9px]">↗</span>
 	                                </a>
 	                              )}
 	                            </div>
 
-	                            {/* Location Badge Chip */}
-	                            {lead.location && (
-	                              <div className="inline-flex items-center gap-1 text-[11px] font-medium text-slate-600 dark:text-slate-300 bg-slate-50 dark:bg-slate-850 px-2 py-1 rounded-md border border-slate-200/60 dark:border-slate-800 max-w-full">
-	                                <span className="text-[10px] shrink-0">📍</span>
-	                                <span className="break-words">{lead.location}</span>
+	                            {/* Line 2: Full Job Title / Role */}
+	                            <div className="text-xs font-semibold text-indigo-700 dark:text-indigo-300 leading-snug break-words whitespace-normal flex items-start gap-1.5">
+	                              <span className="text-indigo-500/80 dark:text-indigo-400 text-[11px] shrink-0 mt-0.5">👔</span>
+	                              <span className="break-words">{lead.jobTitle || 'Executive Decision Maker'}</span>
+	                            </div>
+
+	                            {/* Line 3: Distinct Badges for Company and Location */}
+	                            <div className="text-xs flex items-center gap-2 flex-wrap pt-0.5">
+	                              {/* Company Badge Chip */}
+	                              <div className="inline-flex items-center gap-1.5 text-slate-800 dark:text-slate-200 font-bold bg-slate-100 dark:bg-slate-800/80 px-2.5 py-1 rounded-md border border-slate-200/80 dark:border-slate-700/80 max-w-full">
+	                                <span className="text-slate-400 dark:text-slate-500 text-[11px] shrink-0">🏢</span>
+	                                <span className="break-words">{sanitizeLeadCompany(lead.companyName)}</span>
+	                                {isValidWebsiteDomain(lead.companyDomain) && (
+	                                  <a
+	                                    href={lead.companyDomain!.startsWith('http') ? lead.companyDomain! : `https://${lead.companyDomain}`}
+	                                    target="_blank"
+	                                    rel="noreferrer"
+	                                    className="inline-flex items-center gap-0.5 text-primary-600 dark:text-primary-400 hover:underline font-semibold ml-0.5 text-[10px]"
+	                                    title={`Visit ${lead.companyDomain}`}
+	                                    onClick={(e) => e.stopPropagation()}
+	                                  >
+	                                    <span>{lead.companyDomain!.replace(/^https?:\/\//, '').replace(/\/.*$/, '')}</span>
+	                                    <span className="text-[9px]">↗</span>
+	                                  </a>
+	                                )}
 	                              </div>
-	                            )}
+
+	                              {/* Location Badge Chip */}
+	                              {lead.location && (
+	                                <div className="inline-flex items-center gap-1 text-[11px] font-medium text-slate-600 dark:text-slate-300 bg-slate-50 dark:bg-slate-850 px-2 py-1 rounded-md border border-slate-200/60 dark:border-slate-800 max-w-full">
+	                                  <span className="text-[10px] shrink-0">📍</span>
+	                                  <span className="break-words">{lead.location}</span>
+	                                </div>
+	                              )}
+	                            </div>
 	                          </div>
 	                        </div>
 	                      </td>
 
-	                      {/* Email Address */}
-	                      <td className="px-4 py-4 font-mono text-xs text-slate-800 dark:text-slate-200" onClick={(e) => e.stopPropagation()}>
+	                      {/* Corporate Email */}
+	                      <td className="px-4 py-4 text-xs text-slate-800 dark:text-slate-200" onClick={(e) => e.stopPropagation()}>
 	                        {lead.email ? (
-	                          <div className="flex items-center gap-1.5 flex-wrap">
-	                            <span className="font-semibold text-slate-900 dark:text-slate-100 select-all break-all">{lead.email}</span>
-	                            <button
-	                              onClick={() => {
-	                                navigator.clipboard.writeText(lead.email!);
-	                                toast.success(`Copied ${lead.email} to clipboard!`);
-	                              }}
-	                              className="text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 text-xs p-1 rounded hover:bg-slate-100 dark:hover:bg-slate-800"
-	                              title="Copy email to clipboard"
-	                            >
-	                              📋
-	                            </button>
+	                          <div className="space-y-1">
+	                            <div className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-400 border border-emerald-200/60 dark:border-emerald-800 text-[10px] font-bold">
+	                              <span>🟢</span>
+	                              <span>Corporate Email</span>
+	                            </div>
+	                            <div className="flex items-center gap-1.5 flex-wrap font-mono">
+	                              <span className="font-semibold text-slate-900 dark:text-slate-100 select-all break-all">{lead.email}</span>
+	                              <button
+	                                onClick={() => {
+	                                  navigator.clipboard.writeText(lead.email!);
+	                                  toast.success(`Copied ${lead.email} to clipboard!`);
+	                                }}
+	                                className="text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 text-xs p-1 rounded hover:bg-slate-100 dark:hover:bg-slate-800"
+	                                title="Copy email to clipboard"
+	                              >
+	                                📋
+	                              </button>
+	                            </div>
 	                          </div>
 	                        ) : (
-                          <button
-                            onClick={() => handleFindEmails([lead.id])}
-                            disabled={isFinding}
-                            className="px-2.5 py-1 bg-indigo-50 dark:bg-indigo-950/40 hover:bg-indigo-100 dark:hover:bg-indigo-900/60 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800 text-xs font-bold rounded-lg transition-colors inline-flex items-center gap-1"
-                          >
-                            {isFinding ? (
-                              <>
-                                <span className="w-3 h-3 border-2 border-indigo-600 border-t-transparent rounded-full animate-spin" />
-                                <span>Finding...</span>
-                              </>
-                            ) : (
-                              <>
-                                <span>+ Get Email</span>
-                              </>
-                            )}
-                          </button>
-                        )}
-                      </td>
+	                          <div className="space-y-1">
+	                            <button
+	                              onClick={() => handleFindEmails([lead.id])}
+	                              disabled={isFinding}
+	                              className="px-2.5 py-1 bg-indigo-50 dark:bg-indigo-950/40 hover:bg-indigo-100 dark:hover:bg-indigo-900/60 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800 text-xs font-bold rounded-lg transition-colors inline-flex items-center gap-1.5 shadow-2xs"
+	                            >
+	                              {isFinding ? (
+	                                <>
+	                                  <span className="w-3 h-3 border-2 border-indigo-600 border-t-transparent rounded-full animate-spin" />
+	                                  <span>Finding...</span>
+	                                </>
+	                              ) : (
+	                                <>
+	                                  <span>✨</span>
+	                                  <span>Find Corporate Email</span>
+	                                </>
+	                              )}
+	                            </button>
+		                            <p className="text-[10px] text-slate-400 dark:text-slate-500">Email not revealed</p>
+		                          </div>
+		                        )}
+		                      </td>
 
-                      {/* ICP Match Score */}
+	                      {/* ICP Match Score */}
                       <td className="px-4 py-4 text-center" onClick={(e) => e.stopPropagation()}>
                         {(() => {
                           const { score, label, badgeClass } = computeLeadIcpScore(lead);
@@ -2254,16 +2312,16 @@ export default function CampaignWorkspacePage({
                       </span>
                     )}
                   </h3>
-	                  <p className="text-xs text-slate-500 break-words whitespace-normal mt-0.5">
-	                    <span className="font-semibold text-indigo-950 dark:text-indigo-300">{selectedLead.jobTitle || 'Executive'}</span>
-	                    {' at '}
-	                    <span className="font-bold text-slate-800 dark:text-slate-200">{selectedLead.companyName || 'Enterprise'}</span>
-	                    {selectedLead.location && (
-	                      <span className="ml-1 text-slate-500 dark:text-slate-400">
-	                        • 📍 {selectedLead.location}
-	                      </span>
-	                    )}
-	                  </p>
+		                  <p className="text-xs text-slate-500 break-words whitespace-normal mt-0.5">
+		                    <span className="font-semibold text-indigo-950 dark:text-indigo-300">{selectedLead.jobTitle || 'Executive'}</span>
+		                    {' at '}
+		                    <span className="font-bold text-slate-800 dark:text-slate-200">{sanitizeLeadCompany(selectedLead.companyName)}</span>
+		                    {selectedLead.location && (
+		                      <span className="ml-1 text-slate-500 dark:text-slate-400">
+		                        • 📍 {selectedLead.location}
+		                      </span>
+		                    )}
+		                  </p>
                 </div>
               </div>
 
