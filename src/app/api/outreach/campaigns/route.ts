@@ -12,7 +12,7 @@ export async function GET(req: NextRequest) {
   const tenantId = (session.user as any).tenantId;
 
   try {
-    const [campaigns, leadStatusGroups, safeStatusGroups] = await Promise.all([
+    const [campaigns, leadStatusGroups, safeStatusGroups, costGroups] = await Promise.all([
       prisma.outreachCampaign.findMany({
         where: { tenantId },
         orderBy: { createdAt: 'desc' },
@@ -38,12 +38,21 @@ export async function GET(req: NextRequest) {
         where: { campaign: { tenantId }, verifyStatus: 'SAFE' },
         _count: { id: true },
       }),
+      prisma.outreachRunLog.groupBy({
+        by: ['campaignId'],
+        where: { tenantId, step: 'SCRAPE' },
+        _sum: { actualCostUsd: true },
+      }),
     ]);
 
     // Map aggregated metrics per campaign
     const safeCountMap = new Map<string, number>();
     for (const item of safeStatusGroups) {
       safeCountMap.set(item.campaignId, item._count.id);
+    }
+    const costMap = new Map<string, number>();
+    for (const item of costGroups) {
+      costMap.set(item.campaignId, Number((item._sum.actualCostUsd || 0).toFixed(6)));
     }
 
     const dispatchedMap = new Map<string, number>();
@@ -105,6 +114,7 @@ export async function GET(req: NextRequest) {
           verifiedSafe,
           dispatched: sent,
           converted,
+          totalCostUsd: costMap.get(c.id) || 0,
         },
       };
     });

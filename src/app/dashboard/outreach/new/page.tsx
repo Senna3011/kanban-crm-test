@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import toast, { Toaster } from 'react-hot-toast';
+import { estimateLeadSearchCost, formatUsdCost } from '@/lib/treg-billing';
 import {
   DatabaseIcon,
   GlobeIcon,
@@ -84,6 +85,12 @@ export default function NewOutreachCampaignPage() {
   const [loading, setLoading] = useState(false);
   const [loadingStep, setLoadingStep] = useState('');
   const [error, setError] = useState('');
+  const [engineBalance, setEngineBalance] = useState<{
+    configured: boolean;
+    balanceUsd: number;
+    lowBalanceWarning: boolean;
+    criticalBalanceWarning: boolean;
+  } | null>(null);
 
   useEffect(() => {
     fetch('/api/outreach/accounts')
@@ -98,6 +105,15 @@ export default function NewOutreachCampaignPage() {
         }
       })
       .catch((e) => console.error('Failed to load accounts:', e));
+
+    fetch('/api/outreach/billing')
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data) => {
+        if (data?.balance) {
+          setEngineBalance(data.balance);
+        }
+      })
+      .catch(() => {});
   }, []);
 
   async function handleAutoResearchBrand(
@@ -685,6 +701,12 @@ export default function NewOutreachCampaignPage() {
                     <p className="text-[11px] text-slate-500 dark:text-slate-400 leading-relaxed">
                       Database eksekutif B2B terverifikasi. Respon cepat (&lt;2 detik) dengan email korporat pengambil keputusan.
                     </p>
+                    <div className="mt-2 pt-2 border-t border-indigo-200/50 dark:border-indigo-800/40 flex items-center justify-between text-[10px] font-semibold text-indigo-700 dark:text-indigo-300">
+                      <span>Est. Batch Cost</span>
+                      <span className="font-mono font-bold">
+                        {formatUsdCost(estimateLeadSearchCost('treg', leadCount))}
+                      </span>
+                    </div>
                   </button>
 
                   {/* Option 2: Outscraper */}
@@ -709,6 +731,12 @@ export default function NewOutreachCampaignPage() {
                     <p className="text-[11px] text-slate-500 dark:text-slate-400 leading-relaxed">
                       Pencarian direktori bisnis lokal, peta usaha, dan domain perusahaan terindeks.
                     </p>
+                    <div className="mt-2 pt-2 border-t border-slate-200/70 dark:border-slate-700 flex items-center justify-between text-[10px] font-semibold text-slate-600 dark:text-slate-400">
+                      <span>Est. Batch Cost</span>
+                      <span className="font-mono font-bold">
+                        ~{formatUsdCost(estimateLeadSearchCost('outscraper', leadCount))}
+                      </span>
+                    </div>
                   </button>
 
                   {/* Option 3: Apify */}
@@ -733,6 +761,12 @@ export default function NewOutreachCampaignPage() {
                     <p className="text-[11px] text-slate-500 dark:text-slate-400 leading-relaxed">
                       Penelusuran multi-sumber untuk analisis jejak profesional dan profil eksekutif.
                     </p>
+                    <div className="mt-2 pt-2 border-t border-slate-200/70 dark:border-slate-700 flex items-center justify-between text-[10px] font-semibold text-slate-600 dark:text-slate-400">
+                      <span>Est. Batch Cost</span>
+                      <span className="font-mono font-bold">
+                        ~{formatUsdCost(estimateLeadSearchCost('apify', leadCount))}
+                      </span>
+                    </div>
                   </button>
                 </div>
               </div>
@@ -754,6 +788,27 @@ export default function NewOutreachCampaignPage() {
                   <option value={500}>500 Leads (Massive Scale Queue)</option>
                   <option value={1000}>1,000 Leads (High Volume Enterprise)</option>
                 </select>
+                {leadProvider === 'treg' && (
+                  <div className={`mt-2 px-3 py-2 rounded-xl border text-[11px] flex flex-wrap items-center justify-between gap-2 ${
+                    engineBalance?.lowBalanceWarning
+                      ? 'bg-amber-50 border-amber-200 text-amber-800'
+                      : 'bg-indigo-50/70 border-indigo-200/80 text-indigo-800'
+                  }`}>
+                    <span>
+                      💳 Estimated Run Cost ({leadCount} leads):{' '}
+                      <b className="font-mono">
+                        {formatUsdCost(estimateLeadSearchCost('treg', leadCount))}
+                      </b>{' '}
+                      <span className="opacity-75">(flat $0.0005 / up to 100 leads)</span>
+                    </span>
+                    {engineBalance?.configured && (
+                      <span className="font-semibold">
+                        Balance: <b className="font-mono">{formatUsdCost(engineBalance.balanceUsd)}</b>
+                        {engineBalance.lowBalanceWarning && ' • ⚠️ Saldo menipis'}
+                      </span>
+                    )}
+                  </div>
+                )}
               </div>
 
               <div>

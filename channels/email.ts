@@ -94,9 +94,14 @@ function extractRecipientEmails(parsed: any): { primaryTo?: string; deliveredTo?
     }
   }
 
+  const toAddress = Array.isArray(parsed.to)
+    ? parsed.to[0]?.value[0]?.address?.toLowerCase().trim()
+    : parsed.to?.value[0]?.address?.toLowerCase().trim();
+
   const allRecipients = Array.from(recipients);
-  // Prefer deliveredTo or specific alias over generic recipient if available
-  const primaryTo = deliveredTo || (allRecipients.length > 0 ? allRecipients[0] : undefined);
+  // Prioritize explicit To: address over generic Delivered-To: so alias mailboxes (e.g. elite@, gold@)
+  // are preserved as the primary recipient instead of being overwritten by the physical mailbox username
+  const primaryTo = toAddress || deliveredTo || (allRecipients.length > 0 ? allRecipients[0] : undefined);
 
   return { primaryTo, deliveredTo, allRecipients };
 }
@@ -112,9 +117,10 @@ export class EmailAdapter implements ChannelAdapter {
 
       const messages: InboundMessage[] = [];
 
-      // Fetch all recent messages in the mailbox (up to last 200 messages or 60 days) to ensure no important client email is missed
+      // Fetch recent messages in the mailbox (up to last 350 messages or 180 days)
+      // to ensure all historical client threads and alias emails are comprehensively synced
       const since = new Date();
-      since.setDate(since.getDate() - 60);
+      since.setDate(since.getDate() - 180);
 
       let uids: number[] = [];
       try {
@@ -127,16 +133,17 @@ export class EmailAdapter implements ChannelAdapter {
         uids = [];
       }
 
-      // If search by date returns empty (e.g. server timezone mismatch or older inbox), fallback to fetching the last 150 messages in the folder
+      // If search by date returns fewer than 200 messages or fails, ensure we capture the most recent
+      // up to 300 messages via sequence range so no emails in Zoho Inbox (e.g. 203 emails) are missed
       let fetchRange: any;
       let fetchOptions: any;
 
-      if (uids.length > 0) {
+      const totalExists = imap.mailbox ? imap.mailbox.exists : 0;
+      if (uids.length > 0 && uids.length >= Math.min(totalExists, 200)) {
         fetchRange = uids;
         fetchOptions = { uid: true };
       } else {
-        const totalExists = imap.mailbox ? imap.mailbox.exists : 0;
-        const startSeq = Math.max(1, totalExists - 150);
+        const startSeq = Math.max(1, totalExists - 300);
         fetchRange = totalExists > 0 ? `${startSeq}:*` : '1:*';
         fetchOptions = { uid: false };
       }

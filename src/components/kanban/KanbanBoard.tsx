@@ -622,11 +622,13 @@ export default function KanbanBoard() {
     // 2. Tally from cards across all columns
     for (const col of columns) {
       for (const card of col.cards) {
+        const meta = (card.metadata as any) || {};
         const cardAlias = (
           card.targetAlias ||
-          (card.metadata as any)?.deliveredTo ||
-          (card.metadata as any)?.toEmail ||
           card.emailConfig?.smtpUser ||
+          meta.toEmail ||
+          (Array.isArray(meta.recipientEmails) && meta.recipientEmails[0]) ||
+          meta.deliveredTo ||
           card.emailConfig?.imapUser ||
           ''
         ).toLowerCase().trim();
@@ -660,6 +662,20 @@ export default function KanbanBoard() {
     return subBoardSenders.filter((s) => s.totalCards > 0).slice(0, 4);
   }, [subBoardSenders]);
 
+  // Helper to test if a card belongs to the active sub-board
+  const cardMatchesSubBoard = useCallback((card: any, target: string) => {
+    if (target === 'all') return true;
+    const norm = target.toLowerCase().trim();
+    if (card.targetAlias && String(card.targetAlias).toLowerCase().trim() === norm) return true;
+    if (card.emailConfig?.smtpUser && String(card.emailConfig.smtpUser).toLowerCase().trim() === norm) return true;
+    if (card.emailConfig?.imapUser && String(card.emailConfig.imapUser).toLowerCase().trim() === norm) return true;
+    const meta = (card.metadata as any) || {};
+    if (meta.toEmail && String(meta.toEmail).toLowerCase().trim() === norm) return true;
+    if (Array.isArray(meta.recipientEmails) && meta.recipientEmails.some((r: any) => String(r).toLowerCase().trim() === norm)) return true;
+    if (meta.deliveredTo && String(meta.deliveredTo).toLowerCase().trim() === norm) return true;
+    return false;
+  }, []);
+
   // Calculate statistics (filtered by active sub-board if set)
   const stats = useMemo(() => {
     let total = 0;
@@ -671,15 +687,7 @@ export default function KanbanBoard() {
     columns.forEach((col) => {
       col.cards.forEach((card) => {
         if (activeSubBoard !== 'all') {
-          const cardAlias = (
-            card.targetAlias ||
-            (card.metadata as any)?.deliveredTo ||
-            (card.metadata as any)?.toEmail ||
-            card.emailConfig?.smtpUser ||
-            card.emailConfig?.imapUser ||
-            ''
-          ).toLowerCase().trim();
-          if (cardAlias !== activeSubBoard.toLowerCase().trim()) return;
+          if (!cardMatchesSubBoard(card, activeSubBoard)) return;
         }
 
         total++;
@@ -690,7 +698,7 @@ export default function KanbanBoard() {
     });
 
     return { total, unread, replied, overdue };
-  }, [columns, activeSubBoard]);
+  }, [columns, activeSubBoard, cardMatchesSubBoard]);
 
   // Client-side search and filtering
   const filteredColumns = useMemo(() => {
@@ -701,15 +709,7 @@ export default function KanbanBoard() {
       const cards = col.cards.filter((card) => {
         // 1. Sub-Board alias filter
         if (activeSubBoard !== 'all') {
-          const cardAlias = (
-            card.targetAlias ||
-            (card.metadata as any)?.deliveredTo ||
-            (card.metadata as any)?.toEmail ||
-            card.emailConfig?.smtpUser ||
-            card.emailConfig?.imapUser ||
-            ''
-          ).toLowerCase().trim();
-          if (cardAlias !== activeSubBoard.toLowerCase().trim()) return false;
+          if (!cardMatchesSubBoard(card, activeSubBoard)) return false;
         }
 
         // 2. Search query filter

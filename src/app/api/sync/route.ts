@@ -23,16 +23,17 @@ export async function GET(req: NextRequest) {
   const where = tenantId ? { tenantId, isActive: true } : { isActive: true };
   const configs = await prisma.emailConfig.findMany({
     where,
-    select: { id: true, tenantId: true, imapUser: true, name: true, authType: true },
+    select: { id: true, tenantId: true, imapUser: true, name: true, authType: true, imapPass: true },
   });
 
   if (configs.length === 0) {
     return NextResponse.json({ message: 'No active email configured', synced: 0 }, { status: 200 });
   }
 
-  // Filter only primary mailboxes (skip Send-Mail-As aliases, as inbound mail is unified in primary Zoho mailbox)
+  // Filter only primary mailboxes (skip Send-Mail-As aliases without direct password, as inbound mail is unified in primary Zoho mailbox)
   const primaryConfigs = configs.filter((c) => {
     if (c.authType === 'oauth2') {
+      if (Boolean(c.imapPass)) return true;
       return c.name?.startsWith('Zoho (') || false;
     }
     return true;

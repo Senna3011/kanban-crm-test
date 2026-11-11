@@ -479,11 +479,12 @@ function parseGoogleOrganicToLead(item: any, params: ApifySearchParams, forcedLo
     .replace(/^LinkedIn\s*[-–—|]\s*/i, '')
     .trim();
 
-  const parts = rawTitle.split(/\s*[-–—|]\s*/);
+  // Split only on delimiters surrounded by whitespace to protect compound words (e.g. Co-Founder, Vice-President, Co-CEO)
+  const parts = rawTitle.split(/\s+[-–—·•]\s+|\s*[|]\s*/);
 
+  // Preserve full name and professional credentials (e.g. Ken Waters CHCIO, FAB) while cleaning non-text emojis
   const fullName = (parts[0] || 'LinkedIn Member')
     .replace(/[\u{1F600}-\u{1F64F}\u{1F300}-\u{1F5FF}\u{1F680}-\u{1F6FF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}]/gu, '')
-    .replace(/,\s*(PhD|MBA|MSc|MD|CPA|PMP|BSc|BA|MA|BEng|MEng|Dr|Ir|SE|MM|ST|SH|S\.Kom|M\.Kom).*$/i, '')
     .trim() || 'LinkedIn Member';
 
   const nameParts = fullName.split(/\s+/);

@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import ConfirmDialog, { type ConfirmDialogVariant } from '@/components/ui/ConfirmDialog';
 import OutreachTrendChart from '@/components/analytics/OutreachTrendChart';
+import { formatUsdCost } from '@/lib/treg-billing';
 import toast, { Toaster } from 'react-hot-toast';
 
 interface CampaignMetrics {
@@ -20,6 +21,23 @@ interface CampaignMetrics {
   verifiedSafe: number;
   dispatched: number;
   converted: number;
+  totalCostUsd?: number;
+}
+
+interface BillingSummary {
+  balance: {
+    configured: boolean;
+    balanceUsd: number;
+    spendUsd?: number;
+    billedCalls?: number;
+    lowBalanceWarning: boolean;
+    criticalBalanceWarning: boolean;
+    error?: string;
+  };
+  tenantSpend: {
+    totalCostUsd: number;
+    totalRuns: number;
+  };
 }
 
 interface CampaignItem {
@@ -39,6 +57,7 @@ interface CampaignItem {
 
 export default function OutreachDashboardPage() {
   const [campaigns, setCampaigns] = useState<CampaignItem[]>([]);
+  const [billing, setBilling] = useState<BillingSummary | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [deletingId, setDeletingId] = useState<string | null>(null);
@@ -62,7 +81,19 @@ export default function OutreachDashboardPage() {
 
   useEffect(() => {
     fetchCampaigns();
+    fetchBilling();
   }, []);
+
+  async function fetchBilling(refresh = false) {
+    try {
+      const res = await fetch(`/api/outreach/billing${refresh ? '?refresh=1' : ''}`);
+      if (res.ok) {
+        setBilling(await res.json());
+      }
+    } catch {
+      // ignore non-blocking billing fetch errors
+    }
+  }
 
   async function fetchCampaigns() {
     setLoading(true);
@@ -116,7 +147,30 @@ export default function OutreachDashboardPage() {
             Discover LinkedIn leads, verify business deliverability, generate AI personalized drafts, and dispatch campaigns.
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          {billing?.balance?.configured && (
+            <button
+              type="button"
+              onClick={() => fetchBilling(true)}
+              title="Click to refresh live B2B Verified Database credit balance"
+              className={`inline-flex items-center gap-2 px-3 py-2 rounded-xl border text-xs font-semibold transition-colors ${
+                billing.balance.criticalBalanceWarning
+                  ? 'bg-rose-50 border-rose-200 text-rose-800 hover:bg-rose-100'
+                  : billing.balance.lowBalanceWarning
+                  ? 'bg-amber-50 border-amber-200 text-amber-800 hover:bg-amber-100'
+                  : 'bg-emerald-50 border-emerald-200 text-emerald-800 hover:bg-emerald-100'
+              }`}
+            >
+              <span>💳</span>
+              <div className="text-left leading-tight">
+                <p className="text-[10px] uppercase tracking-wider opacity-75">Database Balance</p>
+                <p className="font-bold">
+                  {formatUsdCost(billing.balance.balanceUsd)}
+                  {billing.balance.lowBalanceWarning && ' • Low'}
+                </p>
+              </div>
+            </button>
+          )}
           <Link
             href="/dashboard/outreach/settings"
             className="inline-flex items-center justify-center gap-1.5 px-3.5 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-800 text-xs font-semibold rounded-xl transition-colors border border-slate-200/80"
@@ -154,13 +208,14 @@ export default function OutreachDashboardPage() {
           const totalInterested = campaigns.reduce((acc, c) => acc + (c.metrics?.interested ?? c.metrics?.converted ?? 0), 0);
           const totalOpportunities = campaigns.reduce((acc, c) => acc + (c.metrics?.opportunities ?? ((c.metrics?.converted || 0) * 100)), 0);
           const totalBounced = campaigns.reduce((acc, c) => acc + (c.metrics?.bounced ?? 0), 0);
+          const totalCampaignCost = campaigns.reduce((acc, c) => acc + (c.metrics?.totalCostUsd ?? 0), 0);
 
           const sentPct = totalProspects > 0 ? Math.round((totalSent / totalProspects) * 100) : 0;
           const openedPct = totalReached > 0 ? Math.round((totalOpened / totalReached) * 100) : 0;
           const repliedPct = totalSent > 0 ? Math.round((totalReplied / totalSent) * 100) : 0;
 
           return (
-            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-9 gap-3">
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-10 gap-3">
               {/* 1. Prospects */}
               <div className="bg-slate-50/70 dark:bg-[#161A1D] p-3 rounded-xl border border-slate-100 dark:border-[#2C333A] flex flex-col justify-between">
                 <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Prospects</p>
@@ -219,9 +274,15 @@ export default function OutreachDashboardPage() {
               </div>
 
               {/* 9. Bounced */}
-              <div className="bg-slate-50/70 dark:bg-[#161A1D] p-3 rounded-xl border border-slate-100 dark:border-[#2C333A] flex flex-col justify-between col-span-2 sm:col-span-1">
+              <div className="bg-slate-50/70 dark:bg-[#161A1D] p-3 rounded-xl border border-slate-100 dark:border-[#2C333A] flex flex-col justify-between">
                 <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Bounced</p>
                 <p className="text-xl font-bold text-rose-600 dark:text-rose-400 mt-1">{totalBounced}</p>
+              </div>
+
+              {/* 10. Total Run Cost */}
+              <div className="bg-amber-50/70 dark:bg-[#161A1D] p-3 rounded-xl border border-amber-200/70 dark:border-[#2C333A] flex flex-col justify-between col-span-2 sm:col-span-1">
+                <p className="text-[10px] font-bold text-amber-700 uppercase tracking-wider">Total Cost</p>
+                <p className="text-xl font-bold text-amber-800 dark:text-amber-400 mt-1">{formatUsdCost(totalCampaignCost)}</p>
               </div>
             </div>
           );
@@ -283,6 +344,7 @@ export default function OutreachDashboardPage() {
                   <th className="px-3 py-3 text-center">SAFE</th>
                   <th className="px-3 py-3 text-center">DISPATCHED</th>
                   <th className="px-3 py-3 text-center">CONVERTED</th>
+                  <th className="px-3 py-3 text-center">COST</th>
                   <th className="px-4 py-3 text-right">ACTIONS</th>
                 </tr>
               </thead>
@@ -343,6 +405,12 @@ export default function OutreachDashboardPage() {
 
                       <td className="px-3 py-3.5 text-center font-bold text-emerald-800 text-sm">
                         {converted}
+                      </td>
+
+                      <td className="px-3 py-3.5 text-center">
+                        <span className="font-mono font-bold text-amber-800 bg-amber-50 border border-amber-200/80 px-2 py-0.5 rounded-md text-[11px]">
+                          {formatUsdCost(camp.metrics.totalCostUsd || 0)}
+                        </span>
                       </td>
 
                       <td className="px-4 py-3.5 text-right space-x-2 whitespace-nowrap">

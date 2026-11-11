@@ -131,14 +131,6 @@ export async function saveEmailConfig(data: {
 
   if (existing) {
     await prisma.emailConfig.update({ where: { id: existing.id }, data: updateData });
-
-    // Cascade boardId to sibling Zoho SendMailAs aliases if applicable
-    if (existing.zohoAccountId && data.boardId !== undefined) {
-      await prisma.emailConfig.updateMany({
-        where: { tenantId, zohoAccountId: existing.zohoAccountId, id: { not: existing.id } },
-        data: { boardId: data.boardId || null },
-      });
-    }
   } else {
     if (!data.imapPass || !data.smtpPass) throw new Error('Password is required for new email configuration.');
     await prisma.emailConfig.create({

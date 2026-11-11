@@ -121,13 +121,23 @@ async function resolveBoard(
   // Fetch all existing boards in this tenant
   const tenantBoards = await prisma.board.findMany({ where: { tenantId } });
 
-  // 1. PRIORITY 1: Explicit EmailConfig board link configured in Settings
-  if (emailConfigId) {
-    const config = await prisma.emailConfig.findUnique({
-      where: { id: emailConfigId },
+  // 1. PRIORITY 1: Check if any candidate recipient matches an alias EmailConfig that has a specific designated board
+  if (allRecipients.length > 0) {
+    const matchingConfigs = await prisma.emailConfig.findMany({
+      where: {
+        tenantId,
+        isActive: true,
+        OR: [
+          { imapUser: { in: allRecipients, mode: 'insensitive' } },
+          { smtpUser: { in: allRecipients, mode: 'insensitive' } },
+        ],
+        boardId: { not: null },
+      },
       include: { board: true },
     });
-    if (config?.board) return config.board;
+    // Prefer non-Main Board if configured specifically for this alias
+    const specificBoardConfig = matchingConfigs.find((c) => c.board && c.board.title.toLowerCase() !== 'main board');
+    if (specificBoardConfig?.board) return specificBoardConfig.board;
   }
 
   // 2. PRIORITY 2: Check if any candidate recipient matches explicit routing or board title
@@ -138,14 +148,20 @@ async function resolveBoard(
       if (match) return match;
     }
 
-    // 2b. Exact board title match with email or prefix
+    // 2b. Board title matches recipient, prefix, or alias keyword (e.g. jdp-elite-team -> Elite Team)
     const prefix = recipient.split('@')[0];
-    const exactMatch = tenantBoards.find(
-      (b) =>
-        b.title.toLowerCase() === recipient ||
-        b.title.toLowerCase() === prefix ||
-        b.title.toLowerCase() === prefix.replace(/[-_.]+/g, ' ')
-    );
+    const cleanPrefix = prefix.replace(/^jdp[-_.]/i, ''); // Strip jdp- prefix
+    const exactMatch = tenantBoards.find((b) => {
+      const bTitle = b.title.toLowerCase().trim();
+      return (
+        bTitle === recipient ||
+        bTitle === prefix ||
+        bTitle === prefix.replace(/[-_.]+/g, ' ') ||
+        bTitle === cleanPrefix ||
+        bTitle === cleanPrefix.replace(/[-_.]+/g, ' ') ||
+        (cleanPrefix.length >= 4 && bTitle.includes(cleanPrefix.replace(/[-_.]+/g, ' ')))
+      );
+    });
     if (exactMatch) return exactMatch;
   }
 
@@ -167,6 +183,15 @@ async function resolveBoard(
       );
       if (defaultMatch) return defaultMatch;
     }
+  }
+
+  // 4. PRIORITY 4: Explicit EmailConfig board link configured in Settings for polling config
+  if (emailConfigId) {
+    const config = await prisma.emailConfig.findUnique({
+      where: { id: emailConfigId },
+      include: { board: true },
+    });
+    if (config?.board) return config.board;
   }
 
   // 4. PRIORITY 4: Fallback to Main Board or first board in tenant (NEVER auto-create boards)
@@ -395,10 +420,37 @@ async function pollFolder(imapConfig: Record<string, string>, folder: string, te
       }
 
       try {
+        const candidateRecipients = [msg.toEmail, msg.deliveredTo, ...(msg.recipientEmails || [])]
+          .filter(Boolean)
+          .map((e) => e!.toLowerCase().trim());
+
+        let effectiveEmailConfigId = emailConfigId;
+        let identifiedAlias: string | undefined = undefined;
+
+        if (candidateRecipients.length > 0) {
+          const matchingAlias = await prisma.emailConfig.findFirst({
+            where: {
+              tenantId,
+              isActive: true,
+              OR: [
+                { imapUser: { in: candidateRecipients, mode: 'insensitive' } },
+                { smtpUser: { in: candidateRecipients, mode: 'insensitive' } },
+              ],
+            },
+            select: { id: true, smtpUser: true, imapUser: true },
+          });
+
+          if (matchingAlias) {
+            effectiveEmailConfigId = matchingAlias.id;
+            identifiedAlias = matchingAlias.smtpUser || matchingAlias.imapUser || undefined;
+          }
+        }
+
         const cardMetadata: any = {};
         if (msg.toEmail) cardMetadata.toEmail = msg.toEmail;
         if (msg.deliveredTo) cardMetadata.deliveredTo = msg.deliveredTo;
         if (msg.recipientEmails && msg.recipientEmails.length > 0) cardMetadata.recipientEmails = msg.recipientEmails;
+        if (identifiedAlias) cardMetadata.targetAlias = identifiedAlias;
 
         const card = await prisma.card.create({
           data: {
@@ -407,7 +459,7 @@ async function pollFolder(imapConfig: Record<string, string>, folder: string, te
             messageId: msg.messageId, inReplyTo: msg.inReplyTo || null,
             imapUid: msg.uid || null, imapFolder: folder,
             status: msg.isRead ? 'read' : 'unread',
-            channel: 'email', columnId: targetColumn.id, tenantId, emailConfigId: emailConfigId,
+            channel: 'email', columnId: targetColumn.id, tenantId, emailConfigId: effectiveEmailConfigId,
             lastActivityAt: msg.receivedAt || new Date(),
             metadata: Object.keys(cardMetadata).length > 0 ? cardMetadata : undefined,
           },
@@ -418,6 +470,8 @@ async function pollFolder(imapConfig: Record<string, string>, folder: string, te
         await aiProcessQueue.add('classify_email', {
           type: 'classify_email', tenantId, cardId: card.id,
           fromName: msg.fromName || '', fromEmail: msg.fromEmail, subject: msg.subject, body: msg.bodyText,
+        }).catch(() => {
+          // Non-blocking if Redis is unreachable
         });
         created++;
       } catch (createErr: any) {
@@ -456,23 +510,24 @@ export async function processEmailPoll(data: { tenantId: string; emailConfigId: 
     const config = await prisma.emailConfig.findUnique({ where: { id: emailConfigId } });
     if (!config || !config.isActive || config.tenantId !== tenantId) return 0;
 
-    // For Zoho OAuth2, only poll primary account mailbox (Send-Mail-As aliases are incoming-routed via the primary mailbox)
-    if (config.authType === 'oauth2' && !config.name?.startsWith('Zoho (')) {
+    // For Zoho OAuth2, skip separate polling for aliases only if they don't have their own direct imapPass
+    if (config.authType === 'oauth2' && !config.imapPass && !config.name?.startsWith('Zoho (')) {
       console.log(`[IMAP Poller] Skipping separate IMAP poll for alias "${config.name}" (managed via primary Zoho mailbox).`);
       return 0;
     }
 
     let accessToken: string | undefined;
     let password = '';
-    if (config.authType === 'oauth2') {
+    if (config.imapPass) {
+      // Prioritize direct imapPass if configured on this mailbox
+      password = decrypt(config.imapPass);
+    } else if (config.authType === 'oauth2') {
       try {
         accessToken = await getValidZohoAccessToken(config.id);
       } catch (err: any) {
         console.error(`[IMAP Poller] Failed to get valid OAuth token for ${config.imapUser}: ${err.message}`);
         return 0;
       }
-    } else if (config.imapPass) {
-      password = decrypt(config.imapPass);
     }
 
     const imapConfig: Record<string, string> = {

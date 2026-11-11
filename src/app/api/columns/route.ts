@@ -157,21 +157,70 @@ export async function GET(req: NextRequest) {
     }
   }
 
+  // Fetch active alias emails for this tenant to accurately isolate sub-board team aliases
+  const activeAliases = await prisma.emailConfig.findMany({
+    where: { tenantId, isActive: true },
+    select: { id: true, imapUser: true, smtpUser: true, name: true },
+  });
+  const aliasEmailSet = new Set(
+    activeAliases
+      .flatMap((a) => [a.smtpUser, a.imapUser])
+      .filter(Boolean)
+      .map((e) => e!.toLowerCase().trim())
+  );
+
   // Add threadCount and descLen to each card, and sanitize any existing bodyText
   const enriched = sortedColumns.map(col => ({
     ...col,
     cards: col.cards.map(card => {
       const cleanBody = sanitizeEmailBody(card.bodyText);
       const meta = (card.metadata as any) || {};
-      // Extract target recipient alias: prioritize deliveredTo / toEmail so aliases (e.g. grow@, success@)
-      // are accurately isolated instead of being masked by the physical IMAP connection user
-      const targetAlias =
-        meta.deliveredTo ||
-        meta.toEmail ||
-        meta.fromEmail ||
-        card.emailConfig?.smtpUser ||
-        card.emailConfig?.imapUser ||
-        null;
+
+      let targetAlias = meta.targetAlias ? String(meta.targetAlias).toLowerCase().trim() : null;
+
+      if (!targetAlias) {
+        // 1. Check if card.emailConfig is a registered alias
+        const cfgEmail = (card.emailConfig?.smtpUser || card.emailConfig?.imapUser || '').toLowerCase().trim();
+        if (cfgEmail && aliasEmailSet.has(cfgEmail)) {
+          targetAlias = cfgEmail;
+        }
+      }
+
+      if (!targetAlias) {
+        // 2. Check toEmail in metadata
+        const toEmail = (meta.toEmail || '').toLowerCase().trim();
+        if (toEmail && aliasEmailSet.has(toEmail)) {
+          targetAlias = toEmail;
+        }
+      }
+
+      if (!targetAlias && Array.isArray(meta.recipientEmails)) {
+        // 3. Check recipientEmails in metadata
+        for (const r of meta.recipientEmails) {
+          const cleanR = String(r).toLowerCase().trim();
+          if (cleanR && aliasEmailSet.has(cleanR)) {
+            targetAlias = cleanR;
+            break;
+          }
+        }
+      }
+
+      if (!targetAlias) {
+        // 4. Delivered-To fallback
+        const deliveredTo = (meta.deliveredTo || '').toLowerCase().trim();
+        if (deliveredTo && aliasEmailSet.has(deliveredTo)) {
+          targetAlias = deliveredTo;
+        }
+      }
+
+      // 5. Generic fallback (never use fromEmail)
+      if (!targetAlias) {
+        targetAlias =
+          (meta.toEmail || '').toLowerCase().trim() ||
+          (meta.deliveredTo || '').toLowerCase().trim() ||
+          (card.emailConfig?.smtpUser || card.emailConfig?.imapUser || '').toLowerCase().trim() ||
+          null;
+      }
 
       return {
         ...card,

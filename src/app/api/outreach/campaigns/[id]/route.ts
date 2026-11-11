@@ -18,28 +18,48 @@ export async function GET(
   const tenantId = (session.user as any).tenantId;
 
   try {
-    const campaign = await prisma.outreachCampaign.findFirst({
-      where: { id: campaignId, tenantId },
-      include: {
-        account: true,
-        accounts: true,
-        leads: {
-          orderBy: { createdAt: 'desc' },
+    const [campaign, runLogs] = await Promise.all([
+      prisma.outreachCampaign.findFirst({
+        where: { id: campaignId, tenantId },
+        include: {
+          account: true,
+          accounts: true,
+          leads: {
+            orderBy: { createdAt: 'desc' },
+          },
         },
-      },
-    });
+      }),
+      prisma.outreachRunLog.findMany({
+        where: { campaignId, tenantId, step: 'SCRAPE' },
+        orderBy: { startedAt: 'desc' },
+        take: 25,
+      }),
+    ]);
 
     if (!campaign) {
       return NextResponse.json({ error: 'Campaign not found' }, { status: 404 });
     }
 
-    return NextResponse.json(campaign, {
-      headers: {
-        'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
-        Pragma: 'no-cache',
-        Expires: '0',
+    const totalCostUsd = Number(
+      runLogs.reduce((acc, r) => acc + (r.actualCostUsd || 0), 0).toFixed(6)
+    );
+    const activeRun = runLogs.find((r) => r.status === 'RUNNING') || null;
+
+    return NextResponse.json(
+      {
+        ...campaign,
+        totalCostUsd,
+        activeRun,
+        runLogs,
       },
-    });
+      {
+        headers: {
+          'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
+          Pragma: 'no-cache',
+          Expires: '0',
+        },
+      }
+    );
   } catch (error: any) {
     console.error('[API OUTREACH GET CAMPAIGN BY ID ERROR]', error);
     return NextResponse.json({ error: error.message || 'Failed to fetch campaign' }, { status: 500 });

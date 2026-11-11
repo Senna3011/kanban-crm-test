@@ -29,6 +29,7 @@ model Tenant {
   outreachCampaigns OutreachCampaign[]
   outreachAccounts  OutreachAccountConfig[]
   outreachSuppressions OutreachSuppression[]
+  outreachRunLogs   OutreachRunLog[]
 }
 
 model User {
@@ -350,6 +351,7 @@ model OutreachCampaign {
   accounts         OutreachAccountConfig[] @relation("CampaignAccountsPool")
 
   leads            OutreachLead[]
+  runLogs          OutreachRunLog[]
 
   @@index([tenantId])
 }
@@ -409,6 +411,34 @@ model OutreachSuppression {
   tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
   @@unique([tenantId, email])
+}
+
+model OutreachRunLog {
+  id               String    @id @default(cuid())
+  step             String    // SCRAPE, VERIFY, AI_DRAFT, DISPATCH, FIND_EMAILS
+  provider         String    // treg, outscraper, apify, reoon, ai, smtp
+  status           String    @default("RUNNING") // RUNNING, COMPLETED, FAILED
+  itemsRequested   Int       @default(0)
+  itemsProcessed   Int       @default(0)
+  itemsSaved       Int       @default(0)
+  estimatedCostUsd Float     @default(0)
+  actualCostUsd    Float     @default(0)
+  balanceBeforeUsd Float?
+  balanceAfterUsd  Float?
+  costSource       String    @default("catalog_estimate") // verified_ledger, api_header, balance_delta, token_usage, catalog_estimate
+  metadata         Json?
+  startedAt        DateTime  @default(now())
+  completedAt      DateTime?
+
+  campaignId String
+  campaign   OutreachCampaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([campaignId, startedAt])
+  @@index([tenantId, startedAt])
+  @@index([status])
 }
 
 

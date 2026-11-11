@@ -2,9 +2,10 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/server/auth';
 import prisma from '@/lib/prisma';
-import { scrapeApifyLeads } from '@/lib/apify';
+import { scrapeApifyLeads, ApifyScrapedLead } from '@/lib/apify';
 import { scrapeOutscraperLeads } from '@/lib/outscraper';
-import { searchTregLeads } from '@/lib/treg';
+import { searchTregLeadsWithCost, TregSearchResult } from '@/lib/treg';
+import { estimateLeadSearchCost } from '@/lib/treg-billing';
 import { sanitizeOutreachError } from '@/lib/outreach-error';
 import { outreachScrapeQueue } from '@/../queue';
 
@@ -31,6 +32,7 @@ export async function POST(
   }
 
   let activeProvider = 'gateway';
+  let runLogId: string | null = null;
 
   try {
     const body = await req.json().catch(() => ({}));
@@ -49,6 +51,8 @@ export async function POST(
     activeProvider = provider;
     const linkedinUrls = Array.isArray(body.linkedinUrls) ? body.linkedinUrls : undefined;
 
+    const estimatedCostUsd = estimateLeadSearchCost(provider, limit);
+
     // For massive scale (> 30 leads or async requested), enqueue to BullMQ background worker
     if (limit > 30 || body.async === true) {
       if (campaign.status === 'RUNNING') {
@@ -59,6 +63,20 @@ export async function POST(
           message: 'Pencarian leads sedang berjalan di background worker. Data akan ter-update otomatis.',
         });
       }
+
+      const runLog = await prisma.outreachRunLog.create({
+        data: {
+          campaignId: campaign.id,
+          tenantId,
+          step: 'SCRAPE',
+          provider,
+          status: 'RUNNING',
+          itemsRequested: limit,
+          estimatedCostUsd,
+          costSource: provider === 'treg' ? 'verified_ledger' : 'catalog_estimate',
+        },
+      });
+      runLogId = runLog.id;
 
       await prisma.outreachCampaign.update({
         where: { id: campaign.id },
@@ -71,6 +89,7 @@ export async function POST(
           type: 'outreach_scrape',
           tenantId,
           campaignId: campaign.id,
+          runLogId: runLog.id,
           query,
           role,
           location,
@@ -90,26 +109,47 @@ export async function POST(
         success: true,
         queued: true,
         jobId: job.id,
+        runLog,
+        estimatedCostUsd,
         message: `Pencarian ${limit} leads dijadwalkan di background worker.`,
       });
     }
 
     // Fast synchronous scrape for interactive UI (<= 30 items)
+    const runLog = await prisma.outreachRunLog.create({
+      data: {
+        campaignId: campaign.id,
+        tenantId,
+        step: 'SCRAPE',
+        provider,
+        status: 'RUNNING',
+        itemsRequested: limit,
+        estimatedCostUsd,
+        costSource: provider === 'treg' ? 'verified_ledger' : 'catalog_estimate',
+      },
+    });
+    runLogId = runLog.id;
+
     const apiToken = campaign.account?.apifyApiToken || process.env.APIFY_API_TOKEN || process.env.APIFY_API_KEY;
 
-    let scrapedLeads = [];
+    let scrapedLeads: ApifyScrapedLead[] = [];
+    let executedProvider: 'treg' | 'outscraper' | 'apify' = provider;
+    let tregTelemetry: TregSearchResult | null = null;
+
     if (provider === 'treg') {
       try {
-        scrapedLeads = await searchTregLeads({
+        tregTelemetry = await searchTregLeadsWithCost({
           query,
           role,
           location,
           industry,
           limit,
         });
+        scrapedLeads = tregTelemetry.leads;
       } catch (err: any) {
         console.warn(`[Scrape Route] Treg Gateway error: ${err.message}. Trying Outscraper fallback.`);
         try {
+          executedProvider = 'outscraper';
           scrapedLeads = await scrapeOutscraperLeads({
             query,
             role,
@@ -119,6 +159,7 @@ export async function POST(
           });
         } catch (outErr: any) {
           console.warn(`[Scrape Route] Outscraper fallback failed: ${outErr.message}. Trying Apify.`);
+          executedProvider = 'apify';
           scrapedLeads = await scrapeApifyLeads({
             query,
             role,
@@ -131,6 +172,7 @@ export async function POST(
         }
       }
     } else if (provider === 'outscraper') {
+      executedProvider = 'outscraper';
       scrapedLeads = await scrapeOutscraperLeads({
         query,
         role,
@@ -139,6 +181,7 @@ export async function POST(
         limit,
       });
     } else {
+      executedProvider = 'apify';
       scrapedLeads = await scrapeApifyLeads({
         query,
         role,
@@ -189,7 +232,7 @@ export async function POST(
           summary: lead.summary ? String(lead.summary) : undefined,
           source:
             lead.metadata?.source ||
-            (provider === 'treg'
+            (executedProvider === 'treg'
               ? 'on-demand-gateway'
               : 'discovery-live'),
           ...(lead.metadata || {}),
@@ -214,12 +257,62 @@ export async function POST(
       });
     }
 
+    const actualCostUsd = tregTelemetry
+      ? tregTelemetry.actualCostUsd
+      : estimateLeadSearchCost(executedProvider, scrapedLeads.length);
+
+    const completedRunLog = await prisma.outreachRunLog.update({
+      where: { id: runLog.id },
+      data: {
+        provider: executedProvider,
+        status: 'COMPLETED',
+        itemsProcessed: tregTelemetry ? tregTelemetry.rawRecordsReturned : scrapedLeads.length,
+        itemsSaved: leadsToInsert.length,
+        actualCostUsd,
+        balanceBeforeUsd: tregTelemetry ? tregTelemetry.balanceBeforeUsd : null,
+        balanceAfterUsd: tregTelemetry ? tregTelemetry.balanceAfterUsd : null,
+        costSource: tregTelemetry ? tregTelemetry.costSource : 'catalog_estimate',
+        metadata: {
+          skippedDuplicates,
+          ...(tregTelemetry
+            ? {
+                apiCallsMade: tregTelemetry.apiCallsMade,
+                billedCallsCount: tregTelemetry.billedCallsCount,
+                actualCostMicro: tregTelemetry.actualCostMicro,
+                callIds: tregTelemetry.callIds,
+              }
+            : {}),
+        },
+        completedAt: new Date(),
+      },
+    });
+
     return NextResponse.json({
       success: true,
       count: leadsToInsert.length,
       skippedDuplicates,
+      costUsd: actualCostUsd,
+      costSource: completedRunLog.costSource,
+      balanceBeforeUsd: completedRunLog.balanceBeforeUsd,
+      balanceAfterUsd: completedRunLog.balanceAfterUsd,
+      rawRecordsReturned: completedRunLog.itemsProcessed,
+      runLog: completedRunLog,
     });
   } catch (error: any) {
+    if (runLogId) {
+      await prisma.outreachRunLog
+        .update({
+          where: { id: runLogId },
+          data: {
+            status: 'FAILED',
+            actualCostUsd: 0,
+            completedAt: new Date(),
+            metadata: { error: String(error?.message || 'Scrape failed').slice(0, 300) },
+          },
+        })
+        .catch(() => {});
+    }
+
     const sanitized = sanitizeOutreachError(error, {
       provider: activeProvider,
       action: 'scrape',

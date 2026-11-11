@@ -48,6 +48,7 @@ export interface OutreachScrapeJob {
   type: 'outreach_scrape';
   tenantId: string;
   campaignId: string;
+  runLogId?: string;
   query?: string;
   role?: string;
   location?: string;

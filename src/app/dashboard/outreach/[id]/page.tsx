@@ -4,7 +4,26 @@ import { useEffect, useState, use, useRef } from 'react';
 import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import ConfirmDialog, { type ConfirmDialogVariant } from '@/components/ui/ConfirmDialog';
+import { estimateLeadSearchCost, formatUsdCost } from '@/lib/treg-billing';
 import toast, { Toaster } from 'react-hot-toast';
+
+interface OutreachRunLog {
+  id: string;
+  step: string;
+  provider: string;
+  status: string;
+  itemsRequested: number;
+  itemsProcessed: number;
+  itemsSaved: number;
+  estimatedCostUsd: number;
+  actualCostUsd: number;
+  balanceBeforeUsd?: number | null;
+  balanceAfterUsd?: number | null;
+  costSource: string;
+  metadata?: Record<string, any> | null;
+  startedAt: string;
+  completedAt?: string | null;
+}
 
 interface Lead {
   id: string;
@@ -71,6 +90,9 @@ interface CampaignDetail {
     smtpUser?: string;
   };
   leads: Lead[];
+  totalCostUsd?: number;
+  activeRun?: OutreachRunLog | null;
+  runLogs?: OutreachRunLog[];
 }
 
 interface BoardOption {
@@ -193,6 +215,15 @@ export default function CampaignWorkspacePage({
   // Background worker polling state
   const [isPollingWorker, setIsPollingWorker] = useState(false);
 
+  // Live Engine Balance & Cost History state
+  const [engineBalance, setEngineBalance] = useState<{
+    configured: boolean;
+    balanceUsd: number;
+    lowBalanceWarning: boolean;
+    criticalBalanceWarning: boolean;
+  } | null>(null);
+  const [showRunHistory, setShowRunHistory] = useState(true);
+
   // SweetAlert2-styled Confirm Dialog State
   const [confirmDialog, setConfirmDialog] = useState<{
     isOpen: boolean;
@@ -210,6 +241,18 @@ export default function CampaignWorkspacePage({
     onConfirm: () => {},
   });
 
+  async function fetchEngineBalance(refresh = false) {
+    try {
+      const res = await fetch(`/api/outreach/billing${refresh ? '?refresh=1' : ''}`);
+      if (res.ok) {
+        const data = await res.json();
+        if (data?.balance) setEngineBalance(data.balance);
+      }
+    } catch {
+      // ignore non-blocking balance poll error
+    }
+  }
+
   useEffect(() => {
     fetch('/api/outreach/accounts')
       .then((r) => r.json())
@@ -218,6 +261,8 @@ export default function CampaignWorkspacePage({
         setOutreachAccounts(list);
       })
       .catch((e) => console.error('Failed to load accounts:', e));
+
+    fetchEngineBalance();
   }, []);
 
   useEffect(() => {
@@ -250,7 +295,10 @@ export default function CampaignWorkspacePage({
           setCampaign(loaded);
           if (loaded.status !== 'RUNNING') {
             setIsPollingWorker(false);
-            toast.success(`🎉 Pencarian background selesai! Total ${loaded.leads?.length || 0} leads terkumpul.`);
+            const lastRun = loaded.runLogs?.[0];
+            const costSuffix = lastRun ? ` • Run Cost: ${formatUsdCost(lastRun.actualCostUsd)}` : '';
+            toast.success(`🎉 Pencarian background selesai! Total ${loaded.leads?.length || 0} leads terkumpul${costSuffix}.`);
+            fetchEngineBalance(true);
           }
         }
       }, 2500);
@@ -336,13 +384,18 @@ export default function CampaignWorkspacePage({
       if (!res.ok) throw new Error(data.error || 'Failed to source leads');
       if (data.queued) {
         setIsPollingWorker(true);
-        toast.success(data.message || `Pencarian ${customLimit || 10} leads dijadwalkan di background worker.`);
+        const estText = data.estimatedCostUsd !== undefined ? ` (Est. Cost: ${formatUsdCost(data.estimatedCostUsd)})` : '';
+        toast.success(`${data.message || `Pencarian ${customLimit || 10} leads dijadwalkan di background worker.`}${estText}`);
       } else if (data.count === 0 && data.skippedDuplicates > 0) {
-        toast(`ℹ️ Tidak ada leads baru. (${data.skippedDuplicates} leads ditemukan sudah ada di kampanye ini).`, { icon: '🔍' });
+        const costText = data.costUsd !== undefined ? ` • Cost: ${formatUsdCost(data.costUsd)}` : '';
+        toast(`ℹ️ Tidak ada leads baru. (${data.skippedDuplicates} duplikat dilewati)${costText}`, { icon: '🔍' });
       } else {
-        toast.success(`Successfully sourced ${data.count} targeted prospects (${data.skippedDuplicates || 0} duplicates skipped).`);
+        const costInfo = data.costUsd !== undefined ? ` • Cost: ${formatUsdCost(data.costUsd)}` : '';
+        const balInfo = typeof data.balanceAfterUsd === 'number' ? ` • Balance: ${formatUsdCost(data.balanceAfterUsd)}` : '';
+        toast.success(`Successfully sourced ${data.count} targeted prospects (${data.skippedDuplicates || 0} duplicates skipped)${costInfo}${balInfo}.`);
       }
       await fetchCampaign();
+      fetchEngineBalance(true);
     } catch (err: any) {
       const rawMsg = err.message || 'Pencarian prospek gagal';
       const cleanMsg = rawMsg.startsWith('{') || rawMsg.includes('{"') || rawMsg.includes('SyntaxError')
@@ -1175,11 +1228,34 @@ export default function CampaignWorkspacePage({
             >
               ← Back to Outreach Campaigns
             </Link>
-            <div className="flex items-center gap-3">
+            <div className="flex flex-wrap items-center gap-2.5">
               <h1 className="text-xl font-bold text-slate-900 dark:text-slate-100 tracking-tight">{campaign.name}</h1>
               <span className="px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-primary-50 dark:bg-primary-950/60 text-primary-700 dark:text-primary-300 border border-primary-200/60 dark:border-primary-800/60">
                 {campaign.status}
               </span>
+              <span
+                className="px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-amber-50 text-amber-800 border border-amber-200/80 font-mono"
+                title="Total accumulated cost across all progress runs in this campaign"
+              >
+                💳 Campaign Cost: {formatUsdCost(campaign.totalCostUsd || 0)}
+              </span>
+              {engineBalance?.configured && (
+                <button
+                  type="button"
+                  onClick={() => fetchEngineBalance(true)}
+                  title="Click to refresh live B2B Verified Database credit balance"
+                  className={`px-2.5 py-0.5 rounded-full text-[11px] font-bold border font-mono transition-colors ${
+                    engineBalance.criticalBalanceWarning
+                      ? 'bg-rose-50 text-rose-800 border-rose-200 hover:bg-rose-100'
+                      : engineBalance.lowBalanceWarning
+                      ? 'bg-amber-50 text-amber-800 border-amber-200 hover:bg-amber-100'
+                      : 'bg-emerald-50 text-emerald-800 border-emerald-200 hover:bg-emerald-100'
+                  }`}
+                >
+                  Database Balance: {formatUsdCost(engineBalance.balanceUsd)}
+                  {engineBalance.lowBalanceWarning ? ' ⚠️ Low' : ''}
+                </button>
+              )}
             </div>
             <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
               Target: <span className="font-semibold text-slate-700 dark:text-slate-300">{campaign.targetRole || 'Executives'}</span> in{' '}
@@ -1256,6 +1332,12 @@ export default function CampaignWorkspacePage({
                 <option value={100}>+100</option>
                 <option value={500}>+500</option>
               </select>
+              <span
+                className="px-2.5 py-2 bg-amber-50 border-l border-slate-200 text-[11px] font-mono font-bold text-amber-800 flex items-center"
+                title="Estimated run cost for this batch size"
+              >
+                Est. {formatUsdCost(estimateLeadSearchCost(sourceProvider, sourceBatchSize))}
+              </span>
             </div>
 
             <button
@@ -1271,40 +1353,61 @@ export default function CampaignWorkspacePage({
         </div>
       </div>
 
-      {/* Background Scraping Active Live Indicator */}
-      {(Boolean(actionLoading) || isPollingWorker || campaign.status === 'RUNNING') && (
-        <div className="bg-indigo-50 border border-indigo-200 p-4 rounded-2xl flex items-center justify-between shadow-xs animate-pulse">
-          <div className="flex items-center gap-3">
-            <span className="relative flex h-3 w-3">
-              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-indigo-400 opacity-75"></span>
-              <span className="relative inline-flex rounded-full h-3 w-3 bg-indigo-600"></span>
-            </span>
-            <div>
-              <p className="text-xs font-bold text-indigo-900">
-                {actionLoading ? 'Processing outreach request...' : 'Background lead discovery in progress...'}
-              </p>
-              <p className="text-[11px] text-indigo-700">
-                Targeted leads are being extracted and populated automatically (Current: {allLeads.length} leads).
-              </p>
+      {/* Background Scraping / Active Progress Cost Live Indicator */}
+      {(Boolean(actionLoading) || isPollingWorker || campaign.status === 'RUNNING') && (() => {
+        const isDiscoveryRun = actionLoading === 'scrape' || isPollingWorker || campaign.status === 'RUNNING' || Boolean(campaign.activeRun);
+        const runningEstCost =
+          campaign.activeRun?.estimatedCostUsd ??
+          estimateLeadSearchCost(sourceProvider, sourceBatchSize);
+
+        return (
+          <div className="bg-indigo-50 border border-indigo-200 p-4 rounded-2xl flex flex-wrap items-center justify-between gap-3 shadow-xs">
+            <div className="flex items-center gap-3">
+              <span className="relative flex h-3 w-3">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-indigo-400 opacity-75"></span>
+                <span className="relative inline-flex rounded-full h-3 w-3 bg-indigo-600"></span>
+              </span>
+              <div>
+                <div className="flex flex-wrap items-center gap-2">
+                  <p className="text-xs font-bold text-indigo-900">
+                    {actionLoading && actionLoading !== 'scrape'
+                      ? 'Processing outreach request...'
+                      : 'Running Lead Discovery...'}
+                  </p>
+                  {isDiscoveryRun && (
+                    <span className="px-2 py-0.5 rounded-md bg-amber-100 border border-amber-300 text-[11px] font-mono font-bold text-amber-900">
+                      💳 Progress Run Cost: ~{formatUsdCost(runningEstCost)}
+                    </span>
+                  )}
+                  {engineBalance?.configured && (
+                    <span className="px-2 py-0.5 rounded-md bg-white border border-indigo-200 text-[11px] font-mono font-semibold text-indigo-800">
+                      Balance: {formatUsdCost(engineBalance.balanceUsd)}
+                    </span>
+                  )}
+                </div>
+                <p className="text-[11px] text-indigo-700 mt-0.5">
+                  Targeted leads and search engine credit cost are tracked per progress run (Current: {allLeads.length} leads • Total Cost: {formatUsdCost(campaign.totalCostUsd || 0)}).
+                </p>
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={handleResetStatus}
+                className="px-3 py-1.5 text-xs font-bold bg-rose-600 hover:bg-rose-700 text-white rounded-xl shadow-xs transition-colors flex items-center gap-1.5"
+                title="Cancel active lead discovery or force unlock status"
+              >
+                <span>🛑</span>
+                <span>Cancel Discovery</span>
+              </button>
+              <span className="text-[10px] font-bold px-2.5 py-1 rounded-full bg-indigo-100 text-indigo-800 flex items-center gap-1.5">
+                <span className="w-1.5 h-1.5 rounded-full bg-indigo-600 animate-spin" />
+                Live Sync Active
+              </span>
             </div>
           </div>
-          <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={handleResetStatus}
-              className="px-3 py-1.5 text-xs font-bold bg-rose-600 hover:bg-rose-700 text-white rounded-xl shadow-xs transition-colors flex items-center gap-1.5"
-              title="Cancel active lead discovery or force unlock status"
-            >
-              <span>🛑</span>
-              <span>Cancel Discovery</span>
-            </button>
-            <span className="text-[10px] font-bold px-2.5 py-1 rounded-full bg-indigo-100 text-indigo-800 flex items-center gap-1.5">
-              <span className="w-1.5 h-1.5 rounded-full bg-indigo-600 animate-spin" />
-              Live Sync Active
-            </span>
-          </div>
-        </div>
-      )}
+        );
+      })()}
 
       {/* Guided 5-Step Outreach Funnel Wizard */}
       <div className="bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 p-5 sm:p-6 rounded-2xl text-white shadow-lg space-y-5 border border-slate-800">
@@ -1357,7 +1460,12 @@ export default function CampaignWorkspacePage({
                 )}
               </div>
               <p className="text-xs font-semibold text-slate-200 mt-1">Leads Sourced</p>
-              <p className="text-lg font-bold text-blue-400 mt-0.5">{allLeads.length}</p>
+              <div className="flex items-baseline justify-between gap-2 mt-0.5">
+                <p className="text-lg font-bold text-blue-400">{allLeads.length}</p>
+                <span className="text-[10px] font-mono text-amber-300 bg-amber-500/15 border border-amber-400/20 px-1.5 py-0.5 rounded">
+                  {formatUsdCost(campaign.totalCostUsd || 0)}
+                </span>
+              </div>
             </div>
             <div className="flex items-center gap-1.5 mt-2 pt-1.5 border-t border-white/10">
               <button
@@ -1621,6 +1729,114 @@ export default function CampaignWorkspacePage({
         </div>
       )}
 
+      {/* Progress Run Cost History Card */}
+      {(campaign.runLogs && campaign.runLogs.length > 0) && (
+        <div className="bg-white rounded-2xl border border-slate-200/80 shadow-xs overflow-hidden">
+          <div className="px-4 py-3 border-b border-slate-100 flex flex-wrap items-center justify-between gap-2 bg-slate-50/70">
+            <div className="flex items-center gap-2">
+              <span className="text-sm">💳</span>
+              <h2 className="text-xs font-bold text-slate-900 uppercase tracking-wider">Progress Running Cost Log</h2>
+              <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 border border-amber-200 font-mono">
+                Total: {formatUsdCost(campaign.totalCostUsd || 0)}
+              </span>
+              {engineBalance?.lowBalanceWarning && (
+                <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-amber-50 text-amber-800 border border-amber-300">
+                  ⚠️ Database Balance Low ({formatUsdCost(engineBalance.balanceUsd)}) — Monitoring Only
+                </span>
+              )}
+            </div>
+            <button
+              type="button"
+              onClick={() => setShowRunHistory((prev) => !prev)}
+              className="text-[11px] font-semibold text-slate-600 hover:text-slate-900 px-2.5 py-1 rounded-lg border border-slate-200 bg-white"
+            >
+              {showRunHistory ? 'Hide History' : `Show History (${campaign.runLogs.length})`}
+            </button>
+          </div>
+          {showRunHistory && (
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-xs text-slate-600">
+                <thead className="bg-slate-50/60 text-[10px] font-bold text-slate-400 uppercase tracking-wider border-b border-slate-100">
+                  <tr>
+                    <th className="px-4 py-2">PROGRESS STEP</th>
+                    <th className="px-4 py-2">ENGINE MODE</th>
+                    <th className="px-3 py-2 text-center">STATUS</th>
+                    <th className="px-3 py-2 text-center">PROCESSED / SAVED</th>
+                    <th className="px-3 py-2 text-right">RUN COST</th>
+                    <th className="px-3 py-2 text-right">BALANCE AFTER</th>
+                    <th className="px-4 py-2 text-right">TIME</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {campaign.runLogs.slice(0, 10).map((run) => {
+                    const providerLabel =
+                      run.provider === 'treg'
+                        ? 'B2B Verified Database'
+                        : run.provider === 'outscraper'
+                        ? 'Business Directory Search'
+                        : run.provider === 'apify'
+                        ? 'Executive Network Discovery'
+                        : run.provider;
+                    const accuracyTag =
+                      run.costSource === 'verified_ledger'
+                        ? 'Ledger Verified'
+                        : run.costSource === 'balance_delta'
+                        ? 'Balance Delta'
+                        : run.costSource === 'api_header'
+                        ? 'Gateway Header'
+                        : 'Estimated';
+
+                    return (
+                      <tr key={run.id} className="hover:bg-slate-50/70">
+                        <td className="px-4 py-2 font-semibold text-slate-800">Lead Discovery</td>
+                        <td className="px-4 py-2 text-[11px] text-slate-600">{providerLabel}</td>
+                        <td className="px-3 py-2 text-center">
+                          <span
+                            className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                              run.status === 'COMPLETED'
+                                ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                                : run.status === 'RUNNING'
+                                ? 'bg-indigo-50 text-indigo-700 border border-indigo-200 animate-pulse'
+                                : 'bg-rose-50 text-rose-700 border border-rose-200'
+                            }`}
+                          >
+                            {run.status}
+                          </span>
+                        </td>
+                        <td className="px-3 py-2 text-center font-mono text-[11px]">
+                          {run.status === 'RUNNING'
+                            ? `Req: ${run.itemsRequested}`
+                            : `${run.itemsProcessed} / ${run.itemsSaved}`}
+                        </td>
+                        <td className="px-3 py-2 text-right">
+                          <div className="font-mono font-bold text-amber-800">
+                            {run.status === 'RUNNING'
+                              ? `~${formatUsdCost(run.estimatedCostUsd)}`
+                              : formatUsdCost(run.actualCostUsd)}
+                          </div>
+                          <div className="text-[9px] text-slate-400">{accuracyTag}</div>
+                        </td>
+                        <td className="px-3 py-2 text-right font-mono text-[11px] text-slate-700">
+                          {typeof run.balanceAfterUsd === 'number' ? formatUsdCost(run.balanceAfterUsd) : '—'}
+                        </td>
+                        <td className="px-4 py-2 text-right text-[10px] text-slate-400">
+                          {new Date(run.startedAt).toLocaleString('id-ID', {
+                            day: '2-digit',
+                            month: 'short',
+                            hour: '2-digit',
+                            minute: '2-digit',
+                          })}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      )}
+
       {/* Lead Staging Table */}
       <div className="bg-white rounded-2xl border border-slate-200/80 shadow-xs overflow-hidden">
         <div className="p-4 border-b border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
@@ -1723,67 +1939,68 @@ export default function CampaignWorkspacePage({
                         />
                       </td>
 
-                      {/* 4-Line Detailed Lead & Organization Layout */}
-                      <td className="px-5 py-4">
-                        <div className="space-y-1">
-                          {/* Line 1: Full Name & Credentials */}
-                          <div className="font-bold text-slate-900 dark:text-slate-100 text-sm tracking-tight flex items-center gap-2">
-                            <span>{lead.fullName}</span>
-                            {lead.status === 'CONVERTED' && (
-                              <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-950/60 text-emerald-800 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800">
-                                ✓ in CRM
-                              </span>
-                            )}
-                          </div>
+	                      {/* 3-Line Full Uncut Lead & Organization Layout */}
+	                      <td className="px-5 py-4">
+	                        <div className="space-y-1">
+	                          {/* Line 1: Full Name & Credentials (e.g. Ken Waters CHCIO, FAB) */}
+	                          <div className="font-bold text-slate-900 dark:text-slate-100 text-sm tracking-tight flex items-center gap-2 flex-wrap">
+	                            <span className="break-words">{lead.fullName}</span>
+	                            {lead.status === 'CONVERTED' && (
+	                              <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-950/60 text-emerald-800 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800">
+	                                ✓ in CRM
+	                              </span>
+	                            )}
+	                          </div>
 
-                          {/* Line 2: Full Job Title / Role */}
-                          <div className="text-xs font-semibold text-indigo-950 dark:text-indigo-300 leading-snug">
-                            {lead.jobTitle || 'Decision Maker'}
-                          </div>
+	                          {/* Line 2: Full Job Title / Role (Uncut, complete line wrap) */}
+	                          <div className="text-xs font-semibold text-indigo-950 dark:text-indigo-300 leading-snug break-words whitespace-normal">
+	                            {lead.jobTitle || 'Decision Maker'}
+	                          </div>
 
-                          {/* Line 3: Company & Direct Links */}
-                          <div className="text-xs text-slate-700 dark:text-slate-300 flex items-center gap-2.5 flex-wrap pt-0.5">
-                            <span className="font-bold text-slate-900 dark:text-slate-100">{lead.companyName || 'Enterprise'}</span>
-                            {isValidWebsiteDomain(lead.companyDomain) && (
-                              <a
-                                href={lead.companyDomain!.startsWith('http') ? lead.companyDomain! : `https://${lead.companyDomain}`}
-                                target="_blank"
-                                rel="noreferrer"
-                                className="inline-flex items-center gap-1 text-[11px] text-primary-600 dark:text-primary-400 hover:underline font-semibold"
-                                title="Visit Official Company Website"
-                                onClick={(e) => e.stopPropagation()}
-                              >
-                                <span>{lead.companyDomain!.replace(/^https?:\/\//, '').replace(/\/.*$/, '')}</span>
-                                <span className="text-[9px]">↗</span>
-                              </a>
-                            )}
-                            {lead.linkedinUrl && (
-                              <a
-                                href={lead.linkedinUrl.startsWith('http') ? lead.linkedinUrl : `https://${lead.linkedinUrl}`}
-                                target="_blank"
-                                rel="noreferrer"
-                                className="inline-flex items-center gap-1 text-[11px] text-[#0077b5] dark:text-[#3897d3] hover:underline font-semibold"
-                                title="Open Official LinkedIn Profile"
-                                onClick={(e) => e.stopPropagation()}
-                              >
-                                <svg className="w-3.5 h-3.5 fill-current" viewBox="0 0 24 24">
-                                  <path d="M19 3a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h14m-.5 15.5v-5.3a3.26 3.26 0 0 0-3.26-3.26c-.85 0-1.84.52-2.28 1.3v-1.11h-2.79v8.37h2.79v-4.93c0-.77.62-1.4 1.39-1.4a1.4 1.4 0 0 1 1.4 1.4v4.93h2.75M6.46 10.9v8.37H9.2V10.9H6.46M7.83 6.64a1.66 1.66 0 0 0-1.66 1.66 1.66 1.66 0 0 0 1.66 1.66 1.66 1.66 0 0 0 1.66-1.66c0-.92-.74-1.66-1.66-1.66Z" />
-                                </svg>
-                                <span>LinkedIn</span>
-                                <span className="text-[9px]">↗</span>
-                              </a>
-                            )}
-                          </div>
-
-                          {/* Line 4: Location */}
-                          {lead.location && (
-                            <div className="text-[11px] text-slate-500 dark:text-slate-400 flex items-center gap-1 pt-0.5">
-                              <span>📍</span>
-                              <span>{lead.location}</span>
-                            </div>
-                          )}
-                        </div>
-                      </td>
+	                          {/* Line 3: Company • 📍 Location & Direct Links (e.g. Crystal Clinic Orthopaedic Center • 📍 Akron, Ohio, United States) */}
+	                          <div className="text-xs text-slate-700 dark:text-slate-300 flex items-center gap-2 flex-wrap pt-0.5">
+	                            <span className="font-bold text-slate-900 dark:text-slate-100 break-words">{lead.companyName || 'Enterprise'}</span>
+	                            {lead.location && (
+	                              <>
+	                                <span className="text-slate-400 dark:text-slate-500">•</span>
+	                                <span className="inline-flex items-center gap-1 text-slate-600 dark:text-slate-400">
+	                                  <span>📍</span>
+	                                  <span className="break-words">{lead.location}</span>
+	                                </span>
+	                              </>
+	                            )}
+	                            {isValidWebsiteDomain(lead.companyDomain) && (
+	                              <a
+	                                href={lead.companyDomain!.startsWith('http') ? lead.companyDomain! : `https://${lead.companyDomain}`}
+	                                target="_blank"
+	                                rel="noreferrer"
+	                                className="inline-flex items-center gap-1 text-[11px] text-primary-600 dark:text-primary-400 hover:underline font-semibold ml-1"
+	                                title="Visit Official Company Website"
+	                                onClick={(e) => e.stopPropagation()}
+	                              >
+	                                <span>{lead.companyDomain!.replace(/^https?:\/\//, '').replace(/\/.*$/, '')}</span>
+	                                <span className="text-[9px]">↗</span>
+	                              </a>
+	                            )}
+	                            {lead.linkedinUrl && (
+	                              <a
+	                                href={lead.linkedinUrl.startsWith('http') ? lead.linkedinUrl : `https://${lead.linkedinUrl}`}
+	                                target="_blank"
+	                                rel="noreferrer"
+	                                className="inline-flex items-center gap-1 text-[11px] text-[#0077b5] dark:text-[#3897d3] hover:underline font-semibold"
+	                                title="Open Official LinkedIn Profile"
+	                                onClick={(e) => e.stopPropagation()}
+	                              >
+	                                <svg className="w-3.5 h-3.5 fill-current" viewBox="0 0 24 24">
+	                                  <path d="M19 3a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h14m-.5 15.5v-5.3a3.26 3.26 0 0 0-3.26-3.26c-.85 0-1.84.52-2.28 1.3v-1.11h-2.79v8.37h2.79v-4.93c0-.77.62-1.4 1.39-1.4a1.4 1.4 0 0 1 1.4 1.4v4.93h2.75M6.46 10.9v8.37H9.2V10.9H6.46M7.83 6.64a1.66 1.66 0 0 0-1.66 1.66 1.66 1.66 0 0 0 1.66 1.66 1.66 1.66 0 0 0 1.66-1.66c0-.92-.74-1.66-1.66-1.66Z" />
+	                                </svg>
+	                                <span>LinkedIn</span>
+	                                <span className="text-[9px]">↗</span>
+	                              </a>
+	                            )}
+	                          </div>
+	                        </div>
+	                      </td>
 
                       {/* Email Address */}
                       <td className="px-4 py-4 font-mono text-xs text-slate-800 dark:text-slate-200" onClick={(e) => e.stopPropagation()}>
@@ -2031,10 +2248,16 @@ export default function CampaignWorkspacePage({
                       </span>
                     )}
                   </h3>
-                  <p className="text-xs text-slate-500">
-                    {selectedLead.jobTitle || 'Executive'} at{' '}
-                    <span className="font-semibold text-slate-700">{selectedLead.companyName || 'Enterprise'}</span>
-                  </p>
+	                  <p className="text-xs text-slate-500 break-words whitespace-normal mt-0.5">
+	                    <span className="font-semibold text-indigo-950 dark:text-indigo-300">{selectedLead.jobTitle || 'Executive'}</span>
+	                    {' at '}
+	                    <span className="font-bold text-slate-800 dark:text-slate-200">{selectedLead.companyName || 'Enterprise'}</span>
+	                    {selectedLead.location && (
+	                      <span className="ml-1 text-slate-500 dark:text-slate-400">
+	                        • 📍 {selectedLead.location}
+	                      </span>
+	                    )}
+	                  </p>
                 </div>
               </div>
 
