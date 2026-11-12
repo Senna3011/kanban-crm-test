@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { getUserProfile, updateUserProfile } from '@/server/actions/profile';
-import { toast, Toaster } from 'react-hot-toast';
+import { toast } from 'react-hot-toast';
 import { useSession } from 'next-auth/react';
 
 export default function ProfilePage() {
@@ -89,8 +89,6 @@ export default function ProfilePage() {
 
   return (
     <div className="max-w-2xl space-y-6 pb-12">
-      <Toaster position="top-right" />
-
       <div>
         <h1 className="text-xl sm:text-2xl font-bold text-slate-900">My Profile</h1>
         <p className="text-xs sm:text-sm text-slate-500 mt-1">

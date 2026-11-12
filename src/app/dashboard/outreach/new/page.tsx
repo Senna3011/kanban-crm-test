@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import toast, { Toaster } from 'react-hot-toast';
+import toast from 'react-hot-toast';
 import { estimateLeadSearchCost, formatUsdCost } from '@/lib/treg-billing';
 import {
   DatabaseIcon,
@@ -277,8 +277,6 @@ export default function NewOutreachCampaignPage() {
 
   return (
     <div className="p-4 sm:p-6 lg:p-8 max-w-4xl mx-auto space-y-6">
-      <Toaster position="top-right" />
-
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>

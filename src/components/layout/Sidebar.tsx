@@ -6,7 +6,7 @@ import { useEffect, useState } from 'react';
 import { useSession } from 'next-auth/react';
 import clsx from 'clsx';
 import ConfirmDialog from '@/components/ui/ConfirmDialog';
-import toast, { Toaster } from 'react-hot-toast';
+import toast from 'react-hot-toast';
 
 const navItems = [
   { href: '/dashboard', label: 'Board', icon: '📋' },
@@ -344,7 +344,6 @@ export default function Sidebar() {
           }
         }}
       />
-      <Toaster position="top-right" />
     </>
   );
 }

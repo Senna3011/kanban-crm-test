@@ -5,7 +5,7 @@ import type { CardData, ActivityLogData, DraftData } from '@/types';
 import Button from '@/components/ui/Button';
 import ConfirmDialog, { type ConfirmDialogVariant } from '@/components/ui/ConfirmDialog';
 import { sendDraft } from '@/server/actions/draft';
-import toast, { Toaster } from 'react-hot-toast';
+import toast from 'react-hot-toast';
 
 /* ------------------------------------------------------------------ */
 /*  Helpers & Types                                                   */
@@ -814,7 +814,6 @@ export default function CardDetailPanel({ card, onClose }: Props) {
 
   return (
     <div className="fixed inset-0 z-50 flex items-start justify-center pt-2 sm:pt-6 p-2 sm:p-4">
-      <Toaster position="top-right" />
       {/* Backdrop */}
       <div className="absolute inset-0 bg-slate-900/50 backdrop-blur-xs transition-opacity" onClick={onClose} />
 

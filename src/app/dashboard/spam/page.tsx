@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
-import toast, { Toaster } from 'react-hot-toast';
+import toast from 'react-hot-toast';
 
 type SpamLogItem = {
   id: string;
@@ -63,7 +63,6 @@ export default function SpamBoxPage() {
 
   return (
     <div className="max-w-4xl space-y-6">
-      <Toaster />
       <div className="flex items-start justify-between gap-4">
         <div>
           <h1 className="text-xl sm:text-2xl font-bold text-slate-900">Spam Box</h1>

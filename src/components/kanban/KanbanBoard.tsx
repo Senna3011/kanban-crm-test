@@ -10,7 +10,7 @@ import ColumnSettings from './ColumnSettings';
 import SubBoardSelector, { SubBoardSender } from './SubBoardSelector';
 import ConfirmDialog, { type ConfirmDialogVariant } from '@/components/ui/ConfirmDialog';
 import { composeAndSendEmail } from '@/server/actions/compose';
-import toast, { Toaster } from 'react-hot-toast';
+import toast from 'react-hot-toast';
 import type { ColumnData, CardData } from '@/types';
 
 type FilterMode = 'all' | 'unread' | 'replied' | 'overdue';
@@ -821,8 +821,6 @@ export default function KanbanBoard() {
 
   return (
     <div className="h-full flex flex-col">
-      <Toaster position="top-right" />
-
       {/* AI Notice Banner */}
       {aiStatus && !aiStatus.valid && (
         <div className="mb-3 px-4 py-3 rounded-xl border text-xs sm:text-sm flex items-start gap-3 bg-amber-50/90 border-amber-200 text-amber-900 shadow-2xs">

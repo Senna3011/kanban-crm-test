@@ -3,7 +3,7 @@
 import { useState, useEffect, use } from 'react';
 import { useRouter } from 'next/navigation';
 import { getInvitationDetails, acceptInvitation } from '@/server/actions/invitation';
-import { toast, Toaster } from 'react-hot-toast';
+import { toast } from 'react-hot-toast';
 import Link from 'next/link';
 
 export default function AcceptInvitePage({ params }: { params: Promise<{ token: string }> }) {
@@ -99,7 +99,6 @@ export default function AcceptInvitePage({ params }: { params: Promise<{ token: 
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900 px-4 py-8">
-      <Toaster position="top-right" />
       <div className="max-w-md w-full bg-white dark:bg-gray-800 p-8 rounded-xl shadow-md border border-gray-100 dark:border-gray-700">
         <div className="text-center mb-6">
           <div className="inline-flex items-center justify-center w-12 h-12 rounded-full bg-primary-100 text-primary-600 mb-3 text-xl font-bold">

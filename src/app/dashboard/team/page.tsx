@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useSession } from 'next-auth/react';
-import { toast, Toaster } from 'react-hot-toast';
+import { toast } from 'react-hot-toast';
 import ConfirmDialog, { type ConfirmDialogVariant } from '@/components/ui/ConfirmDialog';
 import {
   getTenantUsers,
@@ -264,8 +264,6 @@ export default function TeamPage() {
 
   return (
     <div className="max-w-5xl space-y-6 pb-12">
-      <Toaster position="top-right" />
-
       {/* SweetAlert2 Style Confirm Dialog */}
       <ConfirmDialog
         isOpen={confirmDialog.isOpen}

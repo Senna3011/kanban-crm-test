@@ -5,7 +5,7 @@ import { useParams, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import ConfirmDialog, { type ConfirmDialogVariant } from '@/components/ui/ConfirmDialog';
 import { estimateLeadSearchCost, formatUsdCost } from '@/lib/treg-billing';
-import toast, { Toaster } from 'react-hot-toast';
+import toast from 'react-hot-toast';
 
 interface OutreachRunLog {
   id: string;
@@ -1247,8 +1247,6 @@ export default function CampaignWorkspacePage({
 
   return (
     <div className="p-4 sm:p-6 lg:p-8 space-y-6 max-w-7xl mx-auto">
-      <Toaster position="top-right" />
-
       {/* SweetAlert2 Style Confirm Modal */}
       <ConfirmDialog
         isOpen={confirmDialog.isOpen}
@@ -1511,7 +1509,7 @@ export default function CampaignWorkspacePage({
                 </span>
               </div>
             </div>
-            {allLeads.length === 0 && (
+            {allLeads.length === 0 ? (
               <button
                 onClick={() => handleSourceLeads()}
                 disabled={Boolean(actionLoading) || loading}
@@ -1519,6 +1517,25 @@ export default function CampaignWorkspacePage({
               >
                 <span>🔍 Source Prospects</span>
               </button>
+            ) : (
+              <div className="mt-3 pt-2.5 border-t border-white/10 flex items-center gap-1.5">
+                <button
+                  type="button"
+                  onClick={() => exportStepCsv(allLeads, `${campaign.name}-step1-all-leads`)}
+                  className="flex-1 py-1 px-2 bg-white/10 hover:bg-white/20 text-slate-200 hover:text-white text-[11px] font-semibold rounded-lg transition-colors flex items-center justify-center gap-1 border border-white/10 shadow-2xs"
+                  title="Export all Step 1 sourced leads to CSV"
+                >
+                  <span>📥</span> CSV ({allLeads.length})
+                </button>
+                <button
+                  type="button"
+                  onClick={() => copyLeadsToClipboard(allLeads, 'Step 1: All Sourced Leads')}
+                  className="flex-1 py-1 px-2 bg-white/10 hover:bg-white/20 text-slate-200 hover:text-white text-[11px] font-semibold rounded-lg transition-colors flex items-center justify-center gap-1 border border-white/10 shadow-2xs"
+                  title="Copas all Step 1 leads to clipboard (Ready to paste into Excel/Sheets)"
+                >
+                  <span>📋</span> Copas
+                </button>
+              </div>
             )}
           </div>
 
@@ -1538,20 +1555,42 @@ export default function CampaignWorkspacePage({
                 {leadsWithEmail} <span className="text-xs font-normal text-slate-400">/ {allLeads.length} Discovered</span>
               </p>
             </div>
-            <button
-              onClick={() => handleFindEmails()}
-              disabled={Boolean(actionLoading) || missingEmailCount === 0 || allLeads.length === 0}
-              className="mt-3 w-full py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold rounded-lg transition-colors flex items-center justify-center gap-1.5 shadow-xs disabled:opacity-40"
-              title="Find corporate verified emails for leads without email"
-            >
-              {actionLoading === 'email' ? (
-                <span className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
-              ) : missingEmailCount === 0 && allLeads.length > 0 ? (
-                <span>✓ All Emails Found</span>
-              ) : (
-                <span>📬 Get Lead Emails ({missingEmailCount})</span>
+            <div className="mt-3 space-y-1.5">
+              <button
+                onClick={() => handleFindEmails()}
+                disabled={Boolean(actionLoading) || missingEmailCount === 0 || allLeads.length === 0}
+                className="w-full py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold rounded-lg transition-colors flex items-center justify-center gap-1.5 shadow-xs disabled:opacity-40"
+                title="Find corporate verified emails for leads without email"
+              >
+                {actionLoading === 'email' ? (
+                  <span className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                ) : missingEmailCount === 0 && allLeads.length > 0 ? (
+                  <span>✓ All Emails Found</span>
+                ) : (
+                  <span>📬 Get Lead Emails ({missingEmailCount})</span>
+                )}
+              </button>
+              {leadsWithEmail > 0 && (
+                <div className="pt-2 border-t border-white/10 flex items-center gap-1.5">
+                  <button
+                    type="button"
+                    onClick={() => exportStepCsv(allLeads.filter(l => Boolean(l.email)), `${campaign.name}-step2-corporate-emails`)}
+                    className="flex-1 py-1 px-2 bg-indigo-500/20 hover:bg-indigo-500/30 text-indigo-200 hover:text-white text-[11px] font-semibold rounded-lg transition-colors flex items-center justify-center gap-1 border border-indigo-400/20 shadow-2xs"
+                    title="Export Step 2 leads with discovered emails to CSV"
+                  >
+                    <span>📥</span> CSV ({leadsWithEmail})
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => copyLeadsToClipboard(allLeads.filter(l => Boolean(l.email)), 'Step 2: Corporate Emails')}
+                    className="flex-1 py-1 px-2 bg-indigo-500/20 hover:bg-indigo-500/30 text-indigo-200 hover:text-white text-[11px] font-semibold rounded-lg transition-colors flex items-center justify-center gap-1 border border-indigo-400/20 shadow-2xs"
+                    title="Copas Step 2 leads with emails to clipboard (Ready to paste into Excel/Sheets)"
+                  >
+                    <span>📋</span> Copas
+                  </button>
+                </div>
               )}
-            </button>
+            </div>
           </div>
 
           {/* Step 3: Push to CRM */}
@@ -1560,30 +1599,62 @@ export default function CampaignWorkspacePage({
               <div className="flex items-center justify-between">
                 <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Step 3</span>
                 {uncommittedTotalLeads === 0 && allLeads.length > 0 ? (
-                  <span className="text-emerald-400 text-xs font-bold bg-emerald-500/20 px-2 py-0.5 rounded-md">✓ All Synced</span>
+                  <span className="text-emerald-400 text-xs font-bold bg-emerald-500/20 px-2 py-0.5 rounded-md">✓ Active</span>
                 ) : (
-                  <span className="text-slate-400 text-[11px] font-medium">{uncommittedTotalLeads} Ready to Push</span>
+                  <span className="text-slate-400 text-[11px] font-medium">{uncommittedTotalLeads} Ready</span>
                 )}
               </div>
               <p className="text-xs font-semibold text-slate-200 mt-1.5">CRM Pipeline Bridge</p>
               <p className="text-xl font-bold text-emerald-400 mt-1">
-                {convertedLeads} <span className="text-xs font-normal text-slate-400">/ {allLeads.length} in Kanban CRM</span>
+                {convertedLeads} <span className="text-xs font-normal text-slate-400">/ {allLeads.length} In Pipeline</span>
               </p>
             </div>
-            <button
-              onClick={() => openPushCrmModal()}
-              disabled={Boolean(actionLoading) || uncommittedTotalLeads === 0 || allLeads.length === 0}
-              className="mt-3 w-full py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold rounded-lg transition-colors flex items-center justify-center gap-1.5 shadow-xs disabled:opacity-40"
-              title="Bridge leads into Kanban CRM Fresh leads column"
-            >
-              {actionLoading === 'push-crm' ? (
-                <span className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
-              ) : uncommittedTotalLeads === 0 && allLeads.length > 0 ? (
-                <span>✓ All Synced to CRM</span>
-              ) : (
-                <span>📥 Push to CRM ({uncommittedTotalLeads})</span>
+            <div className="mt-3 space-y-1.5">
+              <button
+                onClick={() => openPushCrmModal()}
+                disabled={Boolean(actionLoading) || uncommittedTotalLeads === 0 || allLeads.length === 0}
+                className="w-full py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold rounded-lg transition-colors flex items-center justify-center gap-1.5 shadow-xs disabled:opacity-40"
+                title="Bridge leads into Kanban CRM Fresh leads column"
+              >
+                {actionLoading === 'push-crm' ? (
+                  <span className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                ) : uncommittedTotalLeads === 0 && allLeads.length > 0 ? (
+                  <span>✓ All Synced to CRM</span>
+                ) : (
+                  <span>📥 Push to CRM ({uncommittedTotalLeads})</span>
+                )}
+              </button>
+              {(convertedLeads > 0 || uncommittedTotalLeads > 0) && (
+                <div className="pt-2 border-t border-white/10 flex items-center gap-1.5">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const targetLeads = convertedLeads > 0
+                        ? allLeads.filter(l => l.status === 'CONVERTED')
+                        : allLeads.filter(l => Boolean(l.email));
+                      exportStepCsv(targetLeads, `${campaign.name}-step3-crm-leads`);
+                    }}
+                    className="flex-1 py-1 px-2 bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-200 hover:text-white text-[11px] font-semibold rounded-lg transition-colors flex items-center justify-center gap-1 border border-emerald-400/20 shadow-2xs"
+                    title="Export Step 3 CRM bridged leads to CSV"
+                  >
+                    <span>📥</span> CSV ({convertedLeads > 0 ? convertedLeads : allLeads.filter(l => Boolean(l.email)).length})
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const targetLeads = convertedLeads > 0
+                        ? allLeads.filter(l => l.status === 'CONVERTED')
+                        : allLeads.filter(l => Boolean(l.email));
+                      copyLeadsToClipboard(targetLeads, 'Step 3: CRM Pipeline Leads');
+                    }}
+                    className="flex-1 py-1 px-2 bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-200 hover:text-white text-[11px] font-semibold rounded-lg transition-colors flex items-center justify-center gap-1 border border-emerald-400/20 shadow-2xs"
+                    title="Copas Step 3 CRM leads to clipboard (Ready to paste into Excel/Sheets)"
+                  >
+                    <span>📋</span> Copas
+                  </button>
+                </div>
               )}
-            </button>
+            </div>
           </div>
         </div>
       </div>

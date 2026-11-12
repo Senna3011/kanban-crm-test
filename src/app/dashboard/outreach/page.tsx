@@ -5,7 +5,7 @@ import { useEffect, useState } from 'react';
 import ConfirmDialog, { type ConfirmDialogVariant } from '@/components/ui/ConfirmDialog';
 import OutreachTrendChart from '@/components/analytics/OutreachTrendChart';
 import { formatUsdCost } from '@/lib/treg-billing';
-import toast, { Toaster } from 'react-hot-toast';
+import toast from 'react-hot-toast';
 
 interface CampaignMetrics {
   prospects?: number;
@@ -192,10 +192,17 @@ export default function OutreachDashboardPage() {
       <OutreachTrendChart />
 
       {/* Overall Stats (Feedback 17 / Image 3) */}
-      <div className="bg-white rounded-2xl border border-slate-200/80 shadow-xs p-5">
-        <div className="mb-4">
-          <h2 className="text-base font-bold text-slate-900">Overall Stats</h2>
-          <p className="text-xs text-slate-500">The data is from the start of campaign until now</p>
+      <div className="bg-white dark:bg-[#1D2125] rounded-2xl border border-slate-200/80 dark:border-[#2C333A] shadow-xs p-5 sm:p-6 transition-colors">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-5 pb-4 border-b border-slate-100 dark:border-[#2C333A]">
+          <div>
+            <div className="flex items-center gap-2">
+              <h2 className="text-base font-bold text-slate-900 dark:text-white">Overall Stats</h2>
+              <span className="text-[10px] font-semibold uppercase tracking-wider px-2 py-0.5 rounded-full bg-primary-50 dark:bg-primary-950/50 text-primary-600 dark:text-primary-400 border border-primary-200/60 dark:border-primary-800/40">
+                Lifetime Aggregated
+              </span>
+            </div>
+            <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">The data is from the start of campaign until now</p>
+          </div>
         </div>
 
         {(() => {
@@ -211,78 +218,162 @@ export default function OutreachDashboardPage() {
           const totalCampaignCost = campaigns.reduce((acc, c) => acc + (c.metrics?.totalCostUsd ?? 0), 0);
 
           const sentPct = totalProspects > 0 ? Math.round((totalSent / totalProspects) * 100) : 0;
+          const reachedPct = totalSent > 0 ? Math.round((totalReached / totalSent) * 100) : 0;
           const openedPct = totalReached > 0 ? Math.round((totalOpened / totalReached) * 100) : 0;
+          const clickedPct = totalOpened > 0 ? Math.round((totalClicked / totalOpened) * 100) : 0;
           const repliedPct = totalSent > 0 ? Math.round((totalReplied / totalSent) * 100) : 0;
+          const bouncePct = totalSent > 0 ? ((totalBounced / totalSent) * 100).toFixed(1) : '0';
 
           return (
-            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-10 gap-3">
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3.5 sm:gap-4">
               {/* 1. Prospects */}
-              <div className="bg-slate-50/70 dark:bg-[#161A1D] p-3 rounded-xl border border-slate-100 dark:border-[#2C333A] flex flex-col justify-between">
-                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Prospects</p>
-                <p className="text-xl font-bold text-slate-900 dark:text-[#B6C2CF] mt-1">{totalProspects}</p>
+              <div className="bg-slate-50/70 dark:bg-[#161A1D] hover:bg-slate-100/60 dark:hover:bg-[#1C2126] transition-all p-4 rounded-xl border border-slate-200/70 dark:border-[#2C333A] flex flex-col justify-between shadow-2xs">
+                <div className="flex items-center justify-between gap-1 mb-2">
+                  <span className="text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Prospects</span>
+                  <span className="w-6 h-6 rounded-lg bg-slate-200/60 dark:bg-slate-800 text-slate-600 dark:text-slate-300 flex items-center justify-center text-xs">👥</span>
+                </div>
+                <div className="space-y-1">
+                  <p className="text-2xl font-black text-slate-900 dark:text-white tracking-tight">{totalProspects.toLocaleString()}</p>
+                  <p className="text-[11px] text-slate-500 dark:text-slate-400 font-medium">Total Audience Pool</p>
+                </div>
               </div>
 
               {/* 2. Sent */}
-              <div className="bg-slate-50/70 dark:bg-[#161A1D] p-3 rounded-xl border border-slate-100 dark:border-[#2C333A] flex flex-col justify-between">
-                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Sent</p>
-                <div className="flex items-baseline gap-1 mt-1">
-                  <span className="text-xl font-bold text-indigo-600 dark:text-indigo-400">{totalSent}</span>
-                  <span className="text-[10px] font-bold text-indigo-500 dark:text-indigo-400">({sentPct}%)</span>
+              <div className="bg-slate-50/70 dark:bg-[#161A1D] hover:bg-slate-100/60 dark:hover:bg-[#1C2126] transition-all p-4 rounded-xl border border-slate-200/70 dark:border-[#2C333A] flex flex-col justify-between shadow-2xs">
+                <div className="flex items-center justify-between gap-1 mb-2">
+                  <span className="text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Sent</span>
+                  <span className="w-6 h-6 rounded-lg bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 flex items-center justify-center text-xs">📤</span>
+                </div>
+                <div className="space-y-1">
+                  <div className="flex items-baseline gap-2">
+                    <span className="text-2xl font-black text-indigo-600 dark:text-indigo-400 tracking-tight">{totalSent.toLocaleString()}</span>
+                    <span className="text-xs font-bold text-indigo-600/80 dark:text-indigo-400/80 bg-indigo-50 dark:bg-indigo-950/60 px-1.5 py-0.5 rounded-md border border-indigo-200/60 dark:border-indigo-800/40">
+                      {sentPct}%
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-slate-500 dark:text-slate-400 font-medium">Dispatched of pool</p>
                 </div>
               </div>
 
               {/* 3. Reached */}
-              <div className="bg-slate-50/70 dark:bg-[#161A1D] p-3 rounded-xl border border-slate-100 dark:border-[#2C333A] flex flex-col justify-between">
-                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Reached</p>
-                <p className="text-xl font-bold text-blue-600 dark:text-blue-400 mt-1">{totalReached}</p>
+              <div className="bg-slate-50/70 dark:bg-[#161A1D] hover:bg-slate-100/60 dark:hover:bg-[#1C2126] transition-all p-4 rounded-xl border border-slate-200/70 dark:border-[#2C333A] flex flex-col justify-between shadow-2xs">
+                <div className="flex items-center justify-between gap-1 mb-2">
+                  <span className="text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Reached</span>
+                  <span className="w-6 h-6 rounded-lg bg-blue-50 dark:bg-blue-950/60 text-blue-600 dark:text-blue-400 flex items-center justify-center text-xs">📬</span>
+                </div>
+                <div className="space-y-1">
+                  <div className="flex items-baseline gap-2">
+                    <span className="text-2xl font-black text-blue-600 dark:text-blue-400 tracking-tight">{totalReached.toLocaleString()}</span>
+                    <span className="text-xs font-bold text-blue-600/80 dark:text-blue-400/80 bg-blue-50 dark:bg-blue-950/60 px-1.5 py-0.5 rounded-md border border-blue-200/60 dark:border-blue-800/40">
+                      {reachedPct}%
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-slate-500 dark:text-slate-400 font-medium">Delivered to inboxes</p>
+                </div>
               </div>
 
               {/* 4. Opened */}
-              <div className="bg-slate-50/70 dark:bg-[#161A1D] p-3 rounded-xl border border-slate-100 dark:border-[#2C333A] flex flex-col justify-between">
-                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Opened</p>
-                <div className="flex items-baseline gap-1 mt-1">
-                  <span className="text-xl font-bold text-cyan-600 dark:text-cyan-400">{totalOpened}</span>
-                  <span className="text-[10px] font-bold text-cyan-500 dark:text-cyan-400">({openedPct}%)</span>
+              <div className="bg-slate-50/70 dark:bg-[#161A1D] hover:bg-slate-100/60 dark:hover:bg-[#1C2126] transition-all p-4 rounded-xl border border-slate-200/70 dark:border-[#2C333A] flex flex-col justify-between shadow-2xs">
+                <div className="flex items-center justify-between gap-1 mb-2">
+                  <span className="text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Opened</span>
+                  <span className="w-6 h-6 rounded-lg bg-cyan-50 dark:bg-cyan-950/60 text-cyan-600 dark:text-cyan-400 flex items-center justify-center text-xs">👁️</span>
+                </div>
+                <div className="space-y-1">
+                  <div className="flex items-baseline gap-2">
+                    <span className="text-2xl font-black text-cyan-600 dark:text-cyan-400 tracking-tight">{totalOpened.toLocaleString()}</span>
+                    <span className="text-xs font-bold text-cyan-600/80 dark:text-cyan-400/80 bg-cyan-50 dark:bg-cyan-950/60 px-1.5 py-0.5 rounded-md border border-cyan-200/60 dark:border-cyan-800/40">
+                      {openedPct}%
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-slate-500 dark:text-slate-400 font-medium">Unique read rate</p>
                 </div>
               </div>
 
               {/* 5. Clicked */}
-              <div className="bg-slate-50/70 dark:bg-[#161A1D] p-3 rounded-xl border border-slate-100 dark:border-[#2C333A] flex flex-col justify-between">
-                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Clicked</p>
-                <p className="text-xl font-bold text-purple-600 dark:text-purple-400 mt-1">{totalClicked}</p>
+              <div className="bg-slate-50/70 dark:bg-[#161A1D] hover:bg-slate-100/60 dark:hover:bg-[#1C2126] transition-all p-4 rounded-xl border border-slate-200/70 dark:border-[#2C333A] flex flex-col justify-between shadow-2xs">
+                <div className="flex items-center justify-between gap-1 mb-2">
+                  <span className="text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Clicked</span>
+                  <span className="w-6 h-6 rounded-lg bg-purple-50 dark:bg-purple-950/60 text-purple-600 dark:text-purple-400 flex items-center justify-center text-xs">🔗</span>
+                </div>
+                <div className="space-y-1">
+                  <div className="flex items-baseline gap-2">
+                    <span className="text-2xl font-black text-purple-600 dark:text-purple-400 tracking-tight">{totalClicked.toLocaleString()}</span>
+                    <span className="text-xs font-bold text-purple-600/80 dark:text-purple-400/80 bg-purple-50 dark:bg-purple-950/60 px-1.5 py-0.5 rounded-md border border-purple-200/60 dark:border-purple-800/40">
+                      {clickedPct}%
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-slate-500 dark:text-slate-400 font-medium">Link CTR engagement</p>
+                </div>
               </div>
 
               {/* 6. Replied */}
-              <div className="bg-slate-50/70 dark:bg-[#161A1D] p-3 rounded-xl border border-slate-100 dark:border-[#2C333A] flex flex-col justify-between">
-                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Replied</p>
-                <div className="flex items-baseline gap-1 mt-1">
-                  <span className="text-xl font-bold text-amber-600 dark:text-amber-400">{totalReplied}</span>
-                  <span className="text-[10px] font-bold text-amber-500 dark:text-amber-400">({repliedPct}%)</span>
+              <div className="bg-slate-50/70 dark:bg-[#161A1D] hover:bg-slate-100/60 dark:hover:bg-[#1C2126] transition-all p-4 rounded-xl border border-slate-200/70 dark:border-[#2C333A] flex flex-col justify-between shadow-2xs">
+                <div className="flex items-center justify-between gap-1 mb-2">
+                  <span className="text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Replied</span>
+                  <span className="w-6 h-6 rounded-lg bg-amber-50 dark:bg-amber-950/60 text-amber-600 dark:text-amber-400 flex items-center justify-center text-xs">💬</span>
+                </div>
+                <div className="space-y-1">
+                  <div className="flex items-baseline gap-2">
+                    <span className="text-2xl font-black text-amber-600 dark:text-amber-400 tracking-tight">{totalReplied.toLocaleString()}</span>
+                    <span className="text-xs font-bold text-amber-600/80 dark:text-amber-400/80 bg-amber-50 dark:bg-amber-950/60 px-1.5 py-0.5 rounded-md border border-amber-200/60 dark:border-amber-800/40">
+                      {repliedPct}%
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-slate-500 dark:text-slate-400 font-medium">Inbound responses</p>
                 </div>
               </div>
 
               {/* 7. Interested */}
-              <div className="bg-slate-50/70 dark:bg-[#161A1D] p-3 rounded-xl border border-slate-100 dark:border-[#2C333A] flex flex-col justify-between">
-                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Interested</p>
-                <p className="text-xl font-bold text-emerald-600 dark:text-emerald-400 mt-1">{totalInterested}</p>
+              <div className="bg-slate-50/70 dark:bg-[#161A1D] hover:bg-slate-100/60 dark:hover:bg-[#1C2126] transition-all p-4 rounded-xl border border-slate-200/70 dark:border-[#2C333A] flex flex-col justify-between shadow-2xs">
+                <div className="flex items-center justify-between gap-1 mb-2">
+                  <span className="text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Interested</span>
+                  <span className="w-6 h-6 rounded-lg bg-emerald-50 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400 flex items-center justify-center text-xs">⭐</span>
+                </div>
+                <div className="space-y-1">
+                  <p className="text-2xl font-black text-emerald-600 dark:text-emerald-400 tracking-tight">{totalInterested.toLocaleString()}</p>
+                  <p className="text-[11px] text-emerald-600/90 dark:text-emerald-400/90 font-medium">Hot prospects qualified</p>
+                </div>
               </div>
 
               {/* 8. Opportunities */}
-              <div className="bg-slate-50/70 dark:bg-[#161A1D] p-3 rounded-xl border border-slate-100 dark:border-[#2C333A] flex flex-col justify-between">
-                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Opportunities</p>
-                <p className="text-xl font-bold text-emerald-700 dark:text-emerald-400 mt-1">${totalOpportunities.toLocaleString()}</p>
+              <div className="bg-slate-50/70 dark:bg-[#161A1D] hover:bg-slate-100/60 dark:hover:bg-[#1C2126] transition-all p-4 rounded-xl border border-slate-200/70 dark:border-[#2C333A] flex flex-col justify-between shadow-2xs">
+                <div className="flex items-center justify-between gap-1 mb-2">
+                  <span className="text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Opportunities</span>
+                  <span className="w-6 h-6 rounded-lg bg-emerald-50 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400 flex items-center justify-center text-xs">💼</span>
+                </div>
+                <div className="space-y-1">
+                  <p className="text-2xl font-black text-emerald-700 dark:text-emerald-300 tracking-tight">${totalOpportunities.toLocaleString()}</p>
+                  <p className="text-[11px] text-slate-500 dark:text-slate-400 font-medium">Est. pipeline value</p>
+                </div>
               </div>
 
               {/* 9. Bounced */}
-              <div className="bg-slate-50/70 dark:bg-[#161A1D] p-3 rounded-xl border border-slate-100 dark:border-[#2C333A] flex flex-col justify-between">
-                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Bounced</p>
-                <p className="text-xl font-bold text-rose-600 dark:text-rose-400 mt-1">{totalBounced}</p>
+              <div className="bg-slate-50/70 dark:bg-[#161A1D] hover:bg-slate-100/60 dark:hover:bg-[#1C2126] transition-all p-4 rounded-xl border border-slate-200/70 dark:border-[#2C333A] flex flex-col justify-between shadow-2xs">
+                <div className="flex items-center justify-between gap-1 mb-2">
+                  <span className="text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Bounced</span>
+                  <span className="w-6 h-6 rounded-lg bg-rose-50 dark:bg-rose-950/60 text-rose-600 dark:text-rose-400 flex items-center justify-center text-xs">⚠️</span>
+                </div>
+                <div className="space-y-1">
+                  <div className="flex items-baseline gap-2">
+                    <span className="text-2xl font-black text-rose-600 dark:text-rose-400 tracking-tight">{totalBounced.toLocaleString()}</span>
+                    <span className="text-xs font-bold text-rose-600/80 dark:text-rose-400/80 bg-rose-50 dark:bg-rose-950/60 px-1.5 py-0.5 rounded-md border border-rose-200/60 dark:border-rose-800/40">
+                      {bouncePct}%
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-slate-500 dark:text-slate-400 font-medium">Email deliverability</p>
+                </div>
               </div>
 
-              {/* 10. Total Run Cost */}
-              <div className="bg-amber-50/70 dark:bg-[#161A1D] p-3 rounded-xl border border-amber-200/70 dark:border-[#2C333A] flex flex-col justify-between col-span-2 sm:col-span-1">
-                <p className="text-[10px] font-bold text-amber-700 uppercase tracking-wider">Total Cost</p>
-                <p className="text-xl font-bold text-amber-800 dark:text-amber-400 mt-1">{formatUsdCost(totalCampaignCost)}</p>
+              {/* 10. Total Cost */}
+              <div className="bg-amber-50/60 dark:bg-[#161A1D] hover:bg-amber-50 dark:hover:bg-[#1C2126] transition-all p-4 rounded-xl border border-amber-200/70 dark:border-[#2C333A] flex flex-col justify-between shadow-2xs">
+                <div className="flex items-center justify-between gap-1 mb-2">
+                  <span className="text-[11px] font-bold text-amber-700 dark:text-amber-400 uppercase tracking-wider">Total Cost</span>
+                  <span className="w-6 h-6 rounded-lg bg-amber-100 dark:bg-amber-950/80 text-amber-700 dark:text-amber-300 flex items-center justify-center text-xs">💳</span>
+                </div>
+                <div className="space-y-1">
+                  <p className="text-2xl font-black text-amber-800 dark:text-amber-400 tracking-tight">{formatUsdCost(totalCampaignCost)}</p>
+                  <p className="text-[11px] text-amber-700/80 dark:text-amber-400/80 font-medium">Outreach billing run</p>
+                </div>
               </div>
             </div>
           );
