@@ -13,7 +13,7 @@ import toast, { Toaster } from 'react-hot-toast';
 
 interface TimelineMessage {
   id: string;
-  type: 'received' | 'sent' | 'activity' | 'draft';
+  type: 'received' | 'sent' | 'activity' | 'draft' | 'dossier';
   title: string;
   sender: string;
   senderEmail?: string;
@@ -171,17 +171,43 @@ function buildTimelineMessages(
 
   // Ensure current card is included in timeline
   if (!shownCardIds.has(currentCard.id)) {
-    items.push({
-      id: `current-${currentCard.id}`,
-      type: 'received',
-      title: 'Inbound Email',
-      sender: currentCard.fromName || currentCard.fromEmail.split('@')[0],
-      senderEmail: currentCard.fromEmail,
-      subject: currentCard.subject || '(No Subject)',
-      body: currentCard.bodyText || '',
-      timestamp: new Date(currentCard.lastActivityAt || Date.now()),
-      isCurrent: true,
-    });
+    const isOutreach = Boolean(
+      (currentCard.metadata as any)?.isOutreachLead ||
+      currentCard.subject?.startsWith('Outreach Lead:') ||
+      currentCard.bodyText?.includes('Prospect sourced from campaign') ||
+      currentCard.bodyText?.includes('[INTERNAL PROSPECT DOSSIER]')
+    );
+
+    if (isOutreach) {
+      // Strip out the AI Cold Email Pitch part from dossier display so it never pollutes the timeline
+      const cleanBody = (currentCard.bodyText || '')
+        .replace(/\n\s*AI Cold Email Pitch:[\s\S]*$/i, '')
+        .trim();
+
+      items.push({
+        id: `current-${currentCard.id}`,
+        type: 'dossier',
+        title: 'Prospect Profile Dossier',
+        sender: 'Outreach Sourced Lead',
+        senderEmail: currentCard.fromEmail,
+        subject: currentCard.subject || '(No Subject)',
+        body: cleanBody || currentCard.bodyText || '',
+        timestamp: new Date(currentCard.lastActivityAt || (currentCard as any).createdAt || Date.now()),
+        isCurrent: true,
+      });
+    } else {
+      items.push({
+        id: `current-${currentCard.id}`,
+        type: 'received',
+        title: 'Inbound Email',
+        sender: currentCard.fromName || currentCard.fromEmail.split('@')[0],
+        senderEmail: currentCard.fromEmail,
+        subject: currentCard.subject || '(No Subject)',
+        body: currentCard.bodyText || '',
+        timestamp: new Date(currentCard.lastActivityAt || Date.now()),
+        isCurrent: true,
+      });
+    }
   }
 
   // Parse and add activity logs (with deduplication to prevent spam/overflow)
@@ -286,6 +312,40 @@ function ChatBubble({ message }: { message: TimelineMessage }) {
     );
   }
 
+  // Prospect Profile Dossier: Clean internal briefing card (NOT a chat bubble)
+  if (message.type === 'dossier') {
+    return (
+      <div className="my-3 w-full bg-gradient-to-br from-indigo-50/80 via-slate-50 to-white dark:from-[#1b222d] dark:via-[#161a1d] dark:to-[#1b222d] border border-indigo-200/90 dark:border-indigo-800/60 rounded-2xl p-4 shadow-2xs">
+        <div className="flex items-center justify-between border-b border-indigo-100/90 dark:border-slate-800 pb-2 mb-2.5">
+          <div className="flex items-center gap-2">
+            <span className="w-6 h-6 rounded-lg bg-indigo-100 dark:bg-indigo-900/60 text-indigo-700 dark:text-indigo-300 flex items-center justify-center text-xs">
+              🎯
+            </span>
+            <div>
+              <p className="text-xs font-bold text-slate-900 dark:text-slate-100">Prospect Profile (Outreach Sourced)</p>
+              <p className="text-[10px] text-slate-500">Internal dossier • Not a chat message</p>
+            </div>
+          </div>
+          <span className="text-[10px] font-semibold text-indigo-700 dark:text-indigo-300 bg-indigo-100/60 dark:bg-indigo-950/80 px-2.5 py-0.5 rounded-full border border-indigo-200/80 dark:border-indigo-800">
+            Internal Note
+          </span>
+        </div>
+
+        <div className="text-xs text-slate-700 dark:text-slate-300 whitespace-pre-line leading-relaxed bg-white/80 dark:bg-slate-900/70 p-3.5 rounded-xl border border-slate-200/60 dark:border-slate-800 font-sans">
+          {message.body}
+        </div>
+
+        <div className="mt-2.5 pt-2 border-t border-indigo-100/80 dark:border-slate-800 flex items-center justify-between text-[11px] text-slate-500">
+          <span className="flex items-center gap-1.5 text-emerald-700 dark:text-emerald-400 font-semibold text-[10px]">
+            <span>🔒</span>
+            <span>Zero Outbound Contact — Prospect has not received any email yet. Review draft below to reach out.</span>
+          </span>
+          <span className="text-[10px] text-slate-400">{formatChatTime(message.timestamp)}</span>
+        </div>
+      </div>
+    );
+  }
+
   const isSent = message.type === 'sent';
   const rawText = message.body || '';
   const isLong = rawText.length > 280;
@@ -377,6 +437,14 @@ export default function CardDetailPanel({ card, onClose }: Props) {
   const [fromAddresses, setFromAddresses] = useState<string[]>([]);
   const [selectedFrom, setSelectedFrom] = useState('');
   const [cardData, setCardData] = useState<any>(card);
+
+  const isOutreachCard = Boolean(
+    (card.metadata as any)?.isOutreachLead ||
+    card.subject?.startsWith('Outreach Lead:') ||
+    card.bodyText?.includes('Prospect sourced from campaign') ||
+    card.bodyText?.includes('[INTERNAL PROSPECT DOSSIER]')
+  );
+
   const [threadCards, setThreadCards] = useState<any[]>([]);
   const [isUnread, setIsUnread] = useState(card.status === 'unread');
   const [showHtml, setShowHtml] = useState(true);
@@ -771,6 +839,13 @@ export default function CardDetailPanel({ card, onClose }: Props) {
                   </span>
                 )}
 
+                {isOutreachCard && (
+                  <span className="inline-flex items-center gap-1 text-[11px] font-bold text-indigo-700 dark:text-indigo-300 bg-indigo-50 dark:bg-indigo-950/60 border border-indigo-200/90 dark:border-indigo-800 px-2.5 py-0.5 rounded-full">
+                    <span>🎯</span>
+                    <span>Outreach Lead</span>
+                  </span>
+                )}
+
                 {Boolean((card.metadata as any)?.toEmail) && (
                   <span className="inline-flex items-center gap-1 text-[11px] font-medium text-indigo-750 bg-indigo-50 border border-indigo-200/80 px-2.5 py-0.5 rounded-full" title="Delivered to team alias">
                     <span>📫</span>
@@ -1127,8 +1202,18 @@ export default function CardDetailPanel({ card, onClose }: Props) {
                   />
                 </div>
               ) : card.bodyText ? (
-                <div className="bg-slate-50 dark:bg-[#161A1D] rounded-xl p-4 text-xs sm:text-sm text-slate-800 dark:text-[#B6C2CF] whitespace-pre-wrap leading-relaxed border border-slate-200/90 dark:border-[#2C333A] font-mono break-words [overflow-wrap:anywhere]">
-                  {card.bodyText}
+                <div className="space-y-2">
+                  {isOutreachCard && (
+                    <div className="flex items-center gap-2.5 p-3 bg-indigo-50/80 dark:bg-indigo-950/40 border border-indigo-200/90 dark:border-indigo-800/80 rounded-xl text-xs text-indigo-900 dark:text-indigo-200">
+                      <span className="text-base flex-shrink-0">📌</span>
+                      <div className="flex-1 min-w-0">
+                        <span className="font-bold">Outreach Prospect Dossier:</span> Sourced lead profile. No email has been sent to this prospect yet.
+                      </div>
+                    </div>
+                  )}
+                  <div className="bg-slate-50 dark:bg-[#161A1D] rounded-xl p-4 text-xs sm:text-sm text-slate-800 dark:text-[#B6C2CF] whitespace-pre-wrap leading-relaxed border border-slate-200/90 dark:border-[#2C333A] font-mono break-words [overflow-wrap:anywhere]">
+                    {isOutreachCard ? (card.bodyText || '').replace(/\n\s*AI Cold Email Pitch:[\s\S]*$/i, '').trim() : card.bodyText}
+                  </div>
                 </div>
               ) : (
                 <p className="text-xs text-slate-400 italic">No description available</p>
@@ -1162,127 +1247,148 @@ export default function CardDetailPanel({ card, onClose }: Props) {
           )}
         </div>
 
-        {/* Collapsible Quick Reply Composer (Maximizes Reading Space) */}
-        {!error && (
-          <div className="border-t border-slate-200 dark:border-[#2C333A] bg-slate-50/90 dark:bg-[#161A1D] px-4 sm:px-6 py-3 flex-shrink-0 transition-all">
-            {!replyExpanded ? (
-              /* Collapsed Compact State */
-              <div className="flex items-center justify-between gap-3">
-                <button
-                  type="button"
-                  onClick={() => setReplyExpanded(true)}
-                  className="flex-1 flex items-center gap-2 px-3.5 py-2 bg-white dark:bg-[#22272B] border border-slate-300 dark:border-[#2C333A] hover:border-primary-400 dark:hover:border-primary-500 rounded-xl text-xs text-slate-400 dark:text-[#8C9BAB] text-left shadow-2xs hover:text-slate-600 dark:hover:text-[#B6C2CF] transition group cursor-pointer"
-                >
-                  <span className="text-slate-400 group-hover:text-primary-600">💬</span>
-                  <span className="font-medium">Click here to write a reply or choose a template...</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setReplyExpanded(true)}
-                  className="px-4 py-2 bg-primary-600 hover:bg-primary-700 text-white text-xs font-bold rounded-xl shadow-2xs transition shrink-0"
-                >
-                  Reply ✍️
-                </button>
-              </div>
-            ) : (
-              /* Expanded State */
-              <div className="space-y-2.5 animate-in fade-in duration-150">
-                <div className="flex items-center justify-between flex-wrap gap-2">
-                  <div className="flex items-center gap-2">
-                    <span className="text-xs font-bold text-slate-700 uppercase tracking-wider">Quick Reply</span>
-                    <button
-                      type="button"
-                      onClick={() => setReplyExpanded(false)}
-                      className="text-[11px] text-slate-400 hover:text-slate-600 hover:underline"
-                    >
-                      (Collapse ↓)
-                    </button>
-                  </div>
+	        {/* Collapsible Quick Reply Composer (Maximizes Reading Space) */}
+	        {!error && (
+	          <div className="border-t border-slate-200 dark:border-[#2C333A] bg-slate-50/90 dark:bg-[#161A1D] px-4 sm:px-6 py-3 flex-shrink-0 transition-all">
+	            {!replyExpanded ? (
+	              /* Collapsed Compact State */
+	              <div className="flex items-center justify-between gap-3">
+	                <button
+	                  type="button"
+	                  onClick={() => setReplyExpanded(true)}
+	                  className="flex-1 flex items-center gap-2 px-3.5 py-2 bg-white dark:bg-[#22272B] border border-slate-300 dark:border-[#2C333A] hover:border-primary-400 dark:hover:border-primary-500 rounded-xl text-xs text-slate-400 dark:text-[#8C9BAB] text-left shadow-2xs hover:text-slate-600 dark:hover:text-[#B6C2CF] transition group cursor-pointer"
+	                >
+	                  <span className="text-slate-400 group-hover:text-primary-600">
+	                    {isOutreachCard && draftBody ? '✍️' : '💬'}
+	                  </span>
+	                  <span className="font-medium">
+	                    {isOutreachCard && draftBody
+	                      ? 'Review & customize AI outreach pitch draft...'
+	                      : 'Click here to write a reply or choose a template...'}
+	                  </span>
+	                </button>
+	                <button
+	                  type="button"
+	                  onClick={() => setReplyExpanded(true)}
+	                  className="px-4 py-2 bg-primary-600 hover:bg-primary-700 text-white text-xs font-bold rounded-xl shadow-2xs transition shrink-0"
+	                >
+	                  {isOutreachCard && draftBody ? 'Review Pitch ✍️' : 'Reply ✍️'}
+	                </button>
+	              </div>
+	            ) : (
+	              /* Expanded State */
+	              <div className="space-y-2.5 animate-in fade-in duration-150">
+	                <div className="flex items-center justify-between flex-wrap gap-2">
+	                  <div className="flex items-center gap-2">
+	                    <span className="text-xs font-bold text-slate-700 uppercase tracking-wider">
+	                      {isOutreachCard ? 'Outreach Email Composer' : 'Quick Reply'}
+	                    </span>
+	                    <button
+	                      type="button"
+	                      onClick={() => setReplyExpanded(false)}
+	                      className="text-[11px] text-slate-400 hover:text-slate-600 hover:underline"
+	                    >
+	                      (Collapse ↓)
+	                    </button>
+	                  </div>
 
-                  {/* Template shortcuts */}
-                  <div className="flex items-center gap-1.5 overflow-x-auto pb-0.5">
-                    <button
-                      type="button"
-                      onClick={() => applyTemplate('meeting')}
-                      className="px-2 py-0.5 text-[11px] font-semibold bg-white border border-slate-200 rounded-lg hover:bg-slate-100 text-slate-700 shadow-2xs transition-all"
-                    >
-                      📅 Meeting
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => applyTemplate('pricing')}
-                      className="px-2 py-0.5 text-[11px] font-semibold bg-white border border-slate-200 rounded-lg hover:bg-slate-100 text-slate-700 shadow-2xs transition-all"
-                    >
-                      💰 Pricing
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => applyTemplate('followup')}
-                      className="px-2 py-0.5 text-[11px] font-semibold bg-white border border-slate-200 rounded-lg hover:bg-slate-100 text-slate-700 shadow-2xs transition-all"
-                    >
-                      ⚡ Follow-up
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => applyTemplate('proposal')}
-                      className="px-2 py-0.5 text-[11px] font-semibold bg-white border border-slate-200 rounded-lg hover:bg-slate-100 text-slate-700 shadow-2xs transition-all"
-                    >
-                      🤝 Proposal
-                    </button>
-                  </div>
-                </div>
+	                  {/* Template shortcuts */}
+	                  <div className="flex items-center gap-1.5 overflow-x-auto pb-0.5">
+	                    <button
+	                      type="button"
+	                      onClick={() => applyTemplate('meeting')}
+	                      className="px-2 py-0.5 text-[11px] font-semibold bg-white border border-slate-200 rounded-lg hover:bg-slate-100 text-slate-700 shadow-2xs transition-all"
+	                    >
+	                      📅 Meeting
+	                    </button>
+	                    <button
+	                      type="button"
+	                      onClick={() => applyTemplate('pricing')}
+	                      className="px-2 py-0.5 text-[11px] font-semibold bg-white border border-slate-200 rounded-lg hover:bg-slate-100 text-slate-700 shadow-2xs transition-all"
+	                    >
+	                      💰 Pricing
+	                    </button>
+	                    <button
+	                      type="button"
+	                      onClick={() => applyTemplate('followup')}
+	                      className="px-2 py-0.5 text-[11px] font-semibold bg-white border border-slate-200 rounded-lg hover:bg-slate-100 text-slate-700 shadow-2xs transition-all"
+	                    >
+	                      ⚡ Follow-up
+	                    </button>
+	                    <button
+	                      type="button"
+	                      onClick={() => applyTemplate('proposal')}
+	                      className="px-2 py-0.5 text-[11px] font-semibold bg-white border border-slate-200 rounded-lg hover:bg-slate-100 text-slate-700 shadow-2xs transition-all"
+	                    >
+	                      🤝 Proposal
+	                    </button>
+	                  </div>
+	                </div>
 
-                {/* Compact Textarea (3-4 lines max default) */}
-                <textarea
-                  className="w-full h-20 sm:h-24 px-3.5 py-2 border border-slate-300 rounded-xl text-xs sm:text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500 resize-none bg-white shadow-2xs transition-all leading-relaxed break-words"
-                  value={draftBody}
-                  onChange={(e) => setDraftBody(e.target.value)}
-                  placeholder="Write your email reply..."
-                  autoFocus
-                />
+	                {/* AI Pitch Draft banner for Outreach leads */}
+	                {isOutreachCard && draftBody && (
+	                  <div className="p-2.5 bg-amber-50/90 dark:bg-amber-950/40 border border-amber-200/90 dark:border-amber-800/80 rounded-xl flex items-center justify-between text-xs text-amber-900 dark:text-amber-200">
+	                    <span className="flex items-center gap-1.5 min-w-0">
+	                      <span>💡</span>
+	                      <span><strong>AI Cold Email Pitch:</strong> Prepared as draft. Review and tailor the copy below before sending manually.</span>
+	                    </span>
+	                    <span className="text-[10px] text-amber-700 dark:text-amber-300 font-bold uppercase tracking-wider bg-amber-100/80 dark:bg-amber-900/60 px-2 py-0.5 rounded-md flex-shrink-0">
+	                      Pending Draft
+	                    </span>
+	                  </div>
+	                )}
 
-                <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2.5">
-                  <div className="flex items-center gap-2">
-                    {fromAddresses.length > 0 ? (
-                      <select
-                        className="w-full sm:w-auto px-2.5 py-1.5 border border-slate-200 rounded-lg text-xs font-medium text-slate-700 focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500 bg-white"
-                        value={selectedFrom}
-                        onChange={(e) => setSelectedFrom(e.target.value)}
-                      >
-                        {fromAddresses.map((addr) => (
-                          <option key={addr} value={addr}>
-                            From: {addr}
-                          </option>
-                        ))}
-                      </select>
-                    ) : (
-                      <span className="text-[11px] text-amber-700 bg-amber-50 px-2 py-1 rounded border border-amber-200 font-semibold">
-                        ⚠️ No sender mailbox assigned to this board
-                      </span>
-                    )}
-                  </div>
+	                {/* Compact Textarea */}
+	                <textarea
+	                  className="w-full h-24 sm:h-28 px-3.5 py-2 border border-slate-300 rounded-xl text-xs sm:text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500 resize-none bg-white shadow-2xs transition-all leading-relaxed break-words"
+	                  value={draftBody}
+	                  onChange={(e) => setDraftBody(e.target.value)}
+	                  placeholder={isOutreachCard ? "Write or customize outreach email..." : "Write your email reply..."}
+	                  autoFocus
+	                />
 
-                  <div className="flex items-center gap-2">
-                    <button
-                      type="button"
-                      onClick={() => setReplyExpanded(false)}
-                      className="px-3 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-200/70 rounded-lg"
-                    >
-                      Cancel
-                    </button>
-                    <Button
-                      size="sm"
-                      onClick={handleSend}
-                      loading={sending}
-                      disabled={fromAddresses.length === 0}
-                      className="w-full sm:w-auto font-bold shadow-xs disabled:opacity-50"
-                    >
-                      Send Reply & Advance Stage →
-                    </Button>
-                  </div>
-                </div>
-              </div>
-            )}
+	                <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2.5">
+	                  <div className="flex items-center gap-2">
+	                    {fromAddresses.length > 0 ? (
+	                      <select
+	                        className="w-full sm:w-auto px-2.5 py-1.5 border border-slate-200 rounded-lg text-xs font-medium text-slate-700 focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500 bg-white"
+	                        value={selectedFrom}
+	                        onChange={(e) => setSelectedFrom(e.target.value)}
+	                      >
+	                        {fromAddresses.map((addr) => (
+	                          <option key={addr} value={addr}>
+	                            From: {addr}
+	                          </option>
+	                        ))}
+	                      </select>
+	                    ) : (
+	                      <span className="text-[11px] text-amber-700 bg-amber-50 px-2 py-1 rounded border border-amber-200 font-semibold">
+	                        ⚠️ No sender mailbox assigned to this board
+	                      </span>
+	                    )}
+	                  </div>
+
+	                  <div className="flex items-center gap-2">
+	                    <button
+	                      type="button"
+	                      onClick={() => setReplyExpanded(false)}
+	                      className="px-3 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-200/70 rounded-lg"
+	                    >
+	                      Cancel
+	                    </button>
+	                    <Button
+	                      size="sm"
+	                      onClick={handleSend}
+	                      loading={sending}
+	                      disabled={fromAddresses.length === 0}
+	                      className="w-full sm:w-auto font-bold shadow-xs disabled:opacity-50"
+	                    >
+	                      {sending ? 'Sending...' : isOutreachCard ? 'Send Outreach Email 🚀' : 'Send Reply & Advance Stage →'}
+	                    </Button>
+	                  </div>
+	                </div>
+	              </div>
+	            )}
           </div>
         )}
 

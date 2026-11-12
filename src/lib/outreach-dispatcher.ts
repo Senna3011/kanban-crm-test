@@ -609,7 +609,9 @@ export async function convertOutreachLeadToKanbanCard(params: {
   });
 
   const subject = params.replySubject || `Outreach Lead: ${lead.fullName} (${lead.companyName || 'Enterprise'})`;
-  const bodyText = params.replyBody || `Prospect sourced from campaign "${lead.campaign.name}".\n\nTitle: ${lead.jobTitle || 'N/A'}\nCompany: ${lead.companyName || 'N/A'}\nLinkedIn: ${lead.linkedinUrl || 'N/A'}\nEmail: ${lead.email || 'N/A'}\nLocation: ${lead.location || 'N/A'}\n\nAI Cold Email Pitch:\nSubject: ${lead.aiDraftSubject || ''}\n\n${lead.aiDraftBody || ''}`;
+  const bodyText =
+    params.replyBody ||
+    `[INTERNAL PROSPECT DOSSIER]\nSourced from Outreach Campaign: "${lead.campaign.name}"\n\n• Full Name: ${lead.fullName}\n• Job Title: ${lead.jobTitle || 'N/A'}\n• Company: ${lead.companyName || 'N/A'}\n• LinkedIn: ${lead.linkedinUrl || 'N/A'}\n• Email: ${lead.email || 'N/A'}\n• Location: ${lead.location || 'N/A'}\n\nNote: Prospect pushed to CRM. No outgoing email has been sent yet. Review the pending draft pitch below before sending.`;
 
   const card = await prisma.card.create({
     data: {
