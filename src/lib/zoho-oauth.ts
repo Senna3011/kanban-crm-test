@@ -64,7 +64,7 @@ export function buildZohoAuthUrl(state: string, customRedirectUri?: string): str
   const { clientId, redirectUri, accountsUrl } = getZohoOAuthConfig();
   const effectiveRedirectUri = normalizeRedirectUri(customRedirectUri || redirectUri);
   const params = new URLSearchParams({
-    scope: 'ZohoMail.messages.ALL,ZohoMail.accounts.READ,email',
+    scope: 'ZohoMail.messages.ALL,ZohoMail.accounts.READ,ZohoMail.folders.READ,ZohoMail.organization.groups.READ,ZohoMail.organization.accounts.READ,email',
     client_id: clientId,
     response_type: 'code',
     access_type: 'offline',
@@ -115,6 +115,67 @@ export interface ZohoMailAccountInfo {
   displayName?: string;
   accountId?: string;
   isPrimary?: boolean;
+  isSharedMailbox?: boolean;
+}
+
+export async function fetchZohoSharedMailboxes(
+  accessToken: string,
+  accountList?: any[]
+): Promise<ZohoMailAccountInfo[]> {
+  const { mailApiUrl } = getZohoOAuthConfig();
+  const baseUrl = mailApiUrl.replace(/\/$/, '');
+  const sharedMailboxes: ZohoMailAccountInfo[] = [];
+
+  try {
+    let dataList = accountList;
+    if (!dataList) {
+      const mailRes = await fetch(`${baseUrl}/api/accounts`, {
+        headers: { Authorization: `Zoho-oauthtoken ${accessToken}` },
+      });
+      if (!mailRes.ok) return [];
+      const json = await mailRes.json();
+      dataList = json.data || [];
+    }
+
+    const zoids = new Set<string>();
+    for (const acc of dataList || []) {
+      const zoid = acc?.policyId?.zoid || acc?.zoid;
+      if (zoid) zoids.add(String(zoid));
+    }
+
+    for (const zoid of zoids) {
+      try {
+        const grpRes = await fetch(`${baseUrl}/api/organization/${zoid}/groups`, {
+          headers: { Authorization: `Zoho-oauthtoken ${accessToken}` },
+        });
+        if (!grpRes.ok) continue;
+        const grpJson = await grpRes.json();
+        const groups = grpJson?.data?.groups || (Array.isArray(grpJson?.data) ? grpJson.data : []);
+        for (const g of groups) {
+          const mailboxId = g?.groupAdminSettings?.mailboxId || g?.mailboxId;
+          const rawEmail = g?.emailId || g?.groupEmailId;
+          if (!mailboxId || typeof rawEmail !== 'string' || !rawEmail.includes('@')) continue;
+
+          const cleanEmail = rawEmail.trim().toLowerCase();
+          if (!sharedMailboxes.some((s) => s.email === cleanEmail)) {
+            sharedMailboxes.push({
+              email: cleanEmail,
+              displayName: g?.groupName || g?.displayName || cleanEmail.split('@')[0],
+              accountId: String(mailboxId),
+              isPrimary: false,
+              isSharedMailbox: true,
+            });
+          }
+        }
+      } catch (grpErr) {
+        console.warn('[Zoho OAuth] Failed to query organization groups for zoid', zoid, grpErr);
+      }
+    }
+  } catch (err) {
+    console.warn('[Zoho OAuth] fetchZohoSharedMailboxes error:', err);
+  }
+
+  return sharedMailboxes;
 }
 
 export async function fetchZohoUserInfo(accessToken: string): Promise<{
@@ -203,6 +264,22 @@ export async function fetchZohoUserInfo(accessToken: string): Promise<{
           } catch (smErr) {
             console.error('[Zoho OAuth] Failed to query /sendmaildetails for account', accountId, smErr);
           }
+        }
+      }
+
+      // Discover Zoho Organization Shared Mailboxes (Groups with mailboxId) and assign their dedicated mailboxId
+      const sharedList = await fetchZohoSharedMailboxes(accessToken, dataList);
+      for (const shared of sharedList) {
+        const existingIdx = accounts.findIndex((a) => a.email === shared.email);
+        if (existingIdx >= 0) {
+          accounts[existingIdx] = {
+            ...accounts[existingIdx],
+            accountId: shared.accountId || accounts[existingIdx].accountId,
+            displayName: accounts[existingIdx].displayName || shared.displayName,
+            isSharedMailbox: true,
+          };
+        } else {
+          accounts.push(shared);
         }
       }
     }
@@ -317,3 +394,175 @@ export async function getValidZohoAccessToken(configId: string): Promise<string>
   refreshLocks.set(configId, refreshPromise);
   return refreshPromise;
 }
+
+export interface ZohoFolder {
+  folderId: string;
+  folderName: string;
+  folderType?: string;
+  path?: string;
+}
+
+export interface ZohoMessageSummary {
+  messageId: string;
+  folderId: string;
+  subject?: string;
+  fromAddress?: string;
+  sender?: string;
+  toAddress?: string;
+  ccAddress?: string;
+  receivedTime?: string | number;
+  sentDateInGMT?: string | number;
+  status?: string | number; // '0' = unread, '1' = read
+  status2?: string | number;
+  summary?: string;
+}
+
+export async function zohoListFolders(
+  accessToken: string,
+  accountId: string
+): Promise<{ folders: ZohoFolder[]; unauthorized: boolean }> {
+  const { mailApiUrl } = getZohoOAuthConfig();
+  const baseUrl = mailApiUrl.replace(/\/$/, '');
+  const res = await fetch(`${baseUrl}/api/accounts/${accountId}/folders`, {
+    headers: { Authorization: `Zoho-oauthtoken ${accessToken}` },
+  });
+  if (res.status === 401 || res.status === 403) {
+    return { folders: [], unauthorized: true };
+  }
+  if (!res.ok) return { folders: [], unauthorized: false };
+  const json = await res.json();
+  const list = Array.isArray(json?.data) ? json.data : [];
+  return {
+    unauthorized: false,
+    folders: list.map((f: any) => ({
+      folderId: String(f.folderId),
+      folderName: String(f.folderName || f.path || ''),
+      folderType: f.folderType ? String(f.folderType) : undefined,
+      path: f.path ? String(f.path) : undefined,
+    })),
+  };
+}
+
+export async function zohoResolveFolderId(
+  accessToken: string,
+  accountId: string,
+  folderName: string
+): Promise<{ folderId?: string; unauthorized: boolean }> {
+  const { folders, unauthorized } = await zohoListFolders(accessToken, accountId);
+  const norm = folderName.toLowerCase().trim();
+  if (!unauthorized) {
+    const match = folders.find((f) => {
+      const fn = f.folderName.toLowerCase().trim();
+      const fp = (f.path || '').replace(/^\/+/, '').toLowerCase().trim();
+      const ft = (f.folderType || '').toLowerCase().trim();
+      return fn === norm || fp === norm || (norm === 'inbox' && ft === 'inbox');
+    });
+    return { folderId: match?.folderId, unauthorized: false };
+  }
+
+  // Fallback for legacy OAuth tokens without ZohoMail.folders.READ:
+  // Use searchKey=in:<folder> (limit=1) to resolve exact folderId cleanly
+  try {
+    const { mailApiUrl } = getZohoOAuthConfig();
+    const baseUrl = mailApiUrl.replace(/\/$/, '');
+    const searchKey = norm === 'inbox' ? 'in:inbox' : `in:${folderName}`;
+    const res = await fetch(
+      `${baseUrl}/api/accounts/${accountId}/messages/search?searchKey=${encodeURIComponent(searchKey)}&limit=1`,
+      { headers: { Authorization: `Zoho-oauthtoken ${accessToken}` } }
+    );
+    if (res.ok) {
+      const json = await res.json();
+      const first = Array.isArray(json?.data) ? json.data[0] : null;
+      if (first?.folderId) {
+        return { folderId: String(first.folderId), unauthorized: true };
+      }
+    }
+  } catch {}
+  return { folderId: undefined, unauthorized: true };
+}
+
+export async function zohoFetchMessages(
+  accessToken: string,
+  accountId: string,
+  opts: { folderId?: string; start?: number; limit?: number; includesent?: boolean } = {}
+): Promise<ZohoMessageSummary[]> {
+  const { mailApiUrl } = getZohoOAuthConfig();
+  const baseUrl = mailApiUrl.replace(/\/$/, '');
+  const params = new URLSearchParams({
+    limit: String(opts.limit ?? 200),
+    start: String(opts.start ?? 1),
+    includeto: 'true',
+  });
+  if (opts.folderId) params.set('folderId', opts.folderId);
+  if (opts.includesent) params.set('includesent', 'true');
+
+  const res = await fetch(`${baseUrl}/api/accounts/${accountId}/messages/view?${params.toString()}`, {
+    headers: { Authorization: `Zoho-oauthtoken ${accessToken}` },
+  });
+  if (!res.ok) {
+    const errText = await res.text().catch(() => '');
+    throw new Error(`Zoho messages/view ${res.status}: ${errText.slice(0, 200)}`);
+  }
+  const json = await res.json();
+  return Array.isArray(json?.data) ? json.data : [];
+}
+
+export async function zohoFetchOriginalMessage(
+  accessToken: string,
+  accountId: string,
+  messageId: string
+): Promise<string | null> {
+  const { mailApiUrl } = getZohoOAuthConfig();
+  const baseUrl = mailApiUrl.replace(/\/$/, '');
+  const res = await fetch(`${baseUrl}/api/accounts/${accountId}/messages/${messageId}/originalmessage`, {
+    headers: { Authorization: `Zoho-oauthtoken ${accessToken}` },
+  });
+  if (!res.ok) return null;
+  const json = await res.json();
+  return typeof json?.data?.content === 'string' ? json.data.content : null;
+}
+
+export async function zohoFetchMessageContentAndDetails(
+  accessToken: string,
+  accountId: string,
+  folderId: string,
+  messageId: string
+): Promise<{ html?: string; details?: any }> {
+  const { mailApiUrl } = getZohoOAuthConfig();
+  const baseUrl = mailApiUrl.replace(/\/$/, '');
+  const [contentRes, detailsRes] = await Promise.all([
+    fetch(`${baseUrl}/api/accounts/${accountId}/folders/${folderId}/messages/${messageId}/content?includeBlockContent=true`, {
+      headers: { Authorization: `Zoho-oauthtoken ${accessToken}` },
+    }).catch(() => null),
+    fetch(`${baseUrl}/api/accounts/${accountId}/folders/${folderId}/messages/${messageId}/details`, {
+      headers: { Authorization: `Zoho-oauthtoken ${accessToken}` },
+    }).catch(() => null),
+  ]);
+  const contentJson = contentRes?.ok ? await contentRes.json().catch(() => null) : null;
+  const detailsJson = detailsRes?.ok ? await detailsRes.json().catch(() => null) : null;
+  return {
+    html: typeof contentJson?.data?.content === 'string' ? contentJson.data.content : undefined,
+    details: detailsJson?.data || undefined,
+  };
+}
+
+export async function zohoUpdateMessages(
+  accessToken: string,
+  accountId: string,
+  mode: 'markAsRead' | 'markAsUnread' | 'archiveMails' | 'moveToTrash',
+  messageIds: string[]
+): Promise<boolean> {
+  if (!accountId || messageIds.length === 0) return false;
+  const { mailApiUrl } = getZohoOAuthConfig();
+  const baseUrl = mailApiUrl.replace(/\/$/, '');
+  const res = await fetch(`${baseUrl}/api/accounts/${accountId}/updatemessage`, {
+    method: 'PUT',
+    headers: {
+      Authorization: `Zoho-oauthtoken ${accessToken}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ mode, messageId: messageIds }),
+  });
+  return res.ok;
+}
+

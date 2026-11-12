@@ -23,42 +23,55 @@ export async function GET(req: NextRequest) {
   const where = tenantId ? { tenantId, isActive: true } : { isActive: true };
   const configs = await prisma.emailConfig.findMany({
     where,
-    select: { id: true, tenantId: true, imapUser: true, name: true, authType: true, imapPass: true },
+    select: { id: true, tenantId: true, imapUser: true, name: true, authType: true, imapPass: true, zohoAccountId: true },
   });
 
   if (configs.length === 0) {
     return NextResponse.json({ message: 'No active email configured', synced: 0 }, { status: 200 });
   }
 
-  // Filter only primary mailboxes (skip Send-Mail-As aliases without direct password, as inbound mail is unified in primary Zoho mailbox)
+  // Filter primary mailboxes + dedicated Zoho Shared Mailboxes (skip pure Send-Mail-As aliases sharing primary zohoAccountId)
+  const primaryZohoIdsByTenant = new Set(
+    configs
+      .filter((c) => c.zohoAccountId && (Boolean(c.imapPass) || c.name?.startsWith('Zoho (')))
+      .map((c) => `${c.tenantId}:${c.zohoAccountId}`)
+  );
+
   const primaryConfigs = configs.filter((c) => {
-    if (c.authType === 'oauth2') {
-      if (Boolean(c.imapPass)) return true;
-      return c.name?.startsWith('Zoho (') || false;
-    }
-    return true;
+    if (c.authType !== 'oauth2') return true;
+    if (Boolean(c.imapPass)) return true;
+    if (c.name?.startsWith('Zoho (')) return true;
+    if (c.zohoAccountId && !primaryZohoIdsByTenant.has(`${c.tenantId}:${c.zohoAccountId}`)) return true;
+    return false;
   });
   const targets = primaryConfigs.length > 0 ? primaryConfigs : configs;
 
   let totalDirectProcessed = 0;
 
-  for (const config of targets) {
-    try {
-      const created = await processEmailPoll({
-        tenantId: config.tenantId,
-        emailConfigId: config.id,
-      });
-      totalDirectProcessed += typeof created === 'number' ? created : 0;
-    } catch (directErr: any) {
-      console.error(`[API /api/sync] Direct poll for ${config.imapUser} failed, queuing job to BullMQ:`, directErr?.message || directErr);
+  const results = await Promise.allSettled(
+    targets.map(async (config) => {
       try {
-        await emailPollQueue.add('poll_inbox', {
-          type: 'poll_inbox',
+        const created = await processEmailPoll({
           tenantId: config.tenantId,
           emailConfigId: config.id,
         });
-      } catch {}
-    }
+        return typeof created === 'number' ? created : 0;
+      } catch (directErr: any) {
+        console.error(`[API /api/sync] Direct poll for ${config.imapUser} failed, queuing job to BullMQ:`, directErr?.message || directErr);
+        try {
+          await emailPollQueue.add('poll_inbox', {
+            type: 'poll_inbox',
+            tenantId: config.tenantId,
+            emailConfigId: config.id,
+          });
+        } catch {}
+        return 0;
+      }
+    })
+  );
+
+  for (const res of results) {
+    if (res.status === 'fulfilled') totalDirectProcessed += res.value;
   }
 
   try {

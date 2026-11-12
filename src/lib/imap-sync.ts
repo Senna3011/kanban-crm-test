@@ -1,7 +1,7 @@
 import prisma from './prisma';
 import { decrypt } from './encryption';
 import { EmailAdapter } from '../../channels/email';
-import { getValidZohoAccessToken } from './zoho-oauth';
+import { getValidZohoAccessToken, zohoUpdateMessages } from './zoho-oauth';
 
 const emailAdapter = new EmailAdapter();
 
@@ -15,6 +15,15 @@ async function getImapConfig(tenantId: string, emailConfigId?: string | null): P
   }
   if (!config) return null;
 
+  if (config.imapPass) {
+    return {
+      host: config.imapHost,
+      port: String(config.imapPort),
+      user: config.imapUser,
+      password: decrypt(config.imapPass),
+    };
+  }
+
   if (config.authType === 'oauth2') {
     try {
       const accessToken = await getValidZohoAccessToken(config.id);
@@ -23,6 +32,7 @@ async function getImapConfig(tenantId: string, emailConfigId?: string | null): P
         port: String(config.imapPort),
         user: config.imapUser,
         accessToken,
+        ...(config.zohoAccountId ? { zohoAccountId: config.zohoAccountId } : {}),
       };
     } catch (err: any) {
       console.error(`[IMAP Sync] Failed to obtain OAuth2 token for config ${config.id}: ${err.message}`);
@@ -30,13 +40,7 @@ async function getImapConfig(tenantId: string, emailConfigId?: string | null): P
     }
   }
 
-  if (!config.imapPass) return null;
-  return {
-    host: config.imapHost,
-    port: String(config.imapPort),
-    user: config.imapUser,
-    password: decrypt(config.imapPass),
-  };
+  return null;
 }
 
 export async function syncMarkAsRead(tenantId: string, cardId: string): Promise<boolean> {
@@ -45,6 +49,11 @@ export async function syncMarkAsRead(tenantId: string, cardId: string): Promise<
 
   const imapConfig = await getImapConfig(tenantId, card.emailConfigId);
   if (!imapConfig) return false;
+
+  const zohoMessageId = (card.metadata as any)?.zohoMessageId;
+  if (!imapConfig.password && imapConfig.accessToken && imapConfig.zohoAccountId && zohoMessageId) {
+    return zohoUpdateMessages(imapConfig.accessToken, imapConfig.zohoAccountId, 'markAsRead', [String(zohoMessageId)]);
+  }
 
   const folder = card.imapFolder || 'INBOX';
   let uid = card.imapUid;
@@ -59,7 +68,7 @@ export async function syncMarkAsRead(tenantId: string, cardId: string): Promise<
 
 export async function syncArchiveEmail(
   tenantId: string,
-  cardIdOrData: string | { messageId?: string | null; imapUid?: number | null; imapFolder?: string | null; emailConfigId?: string | null }
+  cardIdOrData: string | { messageId?: string | null; imapUid?: number | null; imapFolder?: string | null; emailConfigId?: string | null; metadata?: any }
 ): Promise<boolean> {
   const card = typeof cardIdOrData === 'string'
     ? await prisma.card.findUnique({ where: { id: cardIdOrData } })
@@ -69,6 +78,11 @@ export async function syncArchiveEmail(
 
   const imapConfig = await getImapConfig(tenantId, card.emailConfigId);
   if (!imapConfig) return false;
+
+  const zohoMessageId = (card.metadata as any)?.zohoMessageId;
+  if (!imapConfig.password && imapConfig.accessToken && imapConfig.zohoAccountId && zohoMessageId) {
+    return zohoUpdateMessages(imapConfig.accessToken, imapConfig.zohoAccountId, 'archiveMails', [String(zohoMessageId)]);
+  }
 
   const folder = card.imapFolder || 'INBOX';
   let uid = card.imapUid;

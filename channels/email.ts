@@ -4,14 +4,42 @@ import nodemailer from 'nodemailer';
 import type { ChannelAdapter } from './interface';
 import type { InboundMessage, SendParams, SendResult } from '../src/types';
 import { sanitizeEmailBody } from '../src/lib/email-cleaner';
+import {
+  zohoListFolders,
+  zohoResolveFolderId,
+  zohoFetchMessages,
+  zohoFetchOriginalMessage,
+  zohoFetchMessageContentAndDetails,
+  zohoUpdateMessages,
+} from '../src/lib/zoho-oauth';
+
+function isZohoRestOnly(config: Record<string, string>): boolean {
+  return Boolean(!config.password && config.accessToken && config.zohoAccountId);
+}
+
+function parseAddressString(raw?: string): string[] {
+  if (!raw) return [];
+  const matches = raw.match(/[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g);
+  return matches ? Array.from(new Set(matches.map((e) => e.toLowerCase().trim()))) : [];
+}
+
+function decodeHtmlEntities(str?: string): string {
+  if (!str) return '';
+  return str
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/&amp;/g, '&');
+}
 
 function createImapConnection(config: Record<string, string>): ImapFlow {
   const port = parseInt(config.port, 10);
   const authConfig: any = { user: config.user };
-  if (config.accessToken) {
-    authConfig.accessToken = config.accessToken;
-  } else {
+  if (config.password) {
     authConfig.pass = config.password;
+  } else if (config.accessToken) {
+    authConfig.accessToken = config.accessToken;
   }
 
   const rejectUnauthorized = process.env.NODE_ENV === 'production' && process.env.IMAP_ALLOW_SELF_SIGNED !== 'true';
@@ -106,10 +134,191 @@ function extractRecipientEmails(parsed: any): { primaryTo?: string; deliveredTo?
   return { primaryTo, deliveredTo, allRecipients };
 }
 
+export interface PollInboxOptions {
+  knownMessageIds?: Set<string>;
+  knownZohoMessageIds?: Set<string>;
+  knownFingerprintMap?: Map<string, Array<{ messageId: string; receivedAtMs: number }>>;
+}
+
+export function normalizeMessageFingerprint(fromEmail: string, subject: string): string {
+  return `${fromEmail.toLowerCase().trim()}|${subject.replace(/\s+/g, ' ').trim().toLowerCase()}`;
+}
+
+async function pollZohoRestInbox(
+  config: Record<string, string>,
+  folder = 'INBOX',
+  options?: PollInboxOptions
+): Promise<InboundMessage[]> {
+  const accessToken = config.accessToken;
+  const accountId = config.zohoAccountId;
+  if (!accessToken || !accountId) return [];
+
+  const { folderId } = await zohoResolveFolderId(accessToken, accountId, folder);
+  if (!folderId && folder.toUpperCase() !== 'INBOX') {
+    return [];
+  }
+  // If folders API was unauthorized and search in:inbox found nothing (e.g. empty inbox), only try unfiltered on INBOX
+  const summaries: any[] = [];
+  const cutoffMs = Date.now() - 180 * 24 * 60 * 60 * 1000;
+
+  for (let start = 1; start <= 201; start += 200) {
+    const batch = await zohoFetchMessages(accessToken, accountId, {
+      folderId: folderId || undefined,
+      start,
+      limit: 200,
+    });
+    if (batch.length === 0) break;
+
+    summaries.push(...batch);
+
+    const lastTime = Number(batch[batch.length - 1]?.receivedTime || batch[batch.length - 1]?.sentDateInGMT || 0);
+    if (batch.length < 200 || (lastTime > 0 && lastTime < cutoffMs && summaries.length >= 200)) {
+      break;
+    }
+  }
+
+  const messages: InboundMessage[] = [];
+  const toFetchFull: any[] = [];
+
+  for (const m of summaries) {
+    const zohoMessageId = String(m.messageId || '');
+    if (!zohoMessageId) continue;
+    const zohoFolderId = String(m.folderId || folderId || '');
+    const isRead = String(m.status) === '1';
+    const isReplied = String(m.status2) === '1';
+    const receivedAtMs = Number(m.receivedTime || m.sentDateInGMT) || Date.now();
+    const receivedAt = new Date(receivedAtMs);
+    const fromEmail = parseAddressString(decodeHtmlEntities(m.fromAddress || m.sender || ''))[0] || 'unknown';
+    const toEmails = parseAddressString(decodeHtmlEntities(m.toAddress || ''));
+    const ccEmails = parseAddressString(decodeHtmlEntities(m.ccAddress || ''));
+    const allRecip = Array.from(new Set([...toEmails, ...ccEmails]));
+    const subject = decodeHtmlEntities(m.subject) || '(No subject)';
+
+    let matchedExistingMsgId = '';
+    let isAlreadyKnown = Boolean(options?.knownZohoMessageIds?.has(zohoMessageId));
+    if (!isAlreadyKnown && options?.knownFingerprintMap) {
+      const fpKey = normalizeMessageFingerprint(fromEmail, subject);
+      const candidates = options.knownFingerprintMap.get(fpKey);
+      if (candidates) {
+        const hit = candidates.find((c) => Math.abs(c.receivedAtMs - receivedAtMs) <= 15 * 60 * 1000);
+        if (hit) {
+          isAlreadyKnown = true;
+          matchedExistingMsgId = hit.messageId;
+        }
+      }
+    }
+
+    if (isAlreadyKnown) {
+      messages.push({
+        messageId: matchedExistingMsgId,
+        zohoMessageId,
+        zohoFolderId,
+        isRead,
+        isReplied,
+        skipBody: true,
+        fromEmail,
+        toEmail: toEmails[0],
+        recipientEmails: allRecip,
+        subject,
+        bodyText: decodeHtmlEntities(m.summary || ''),
+        receivedAt,
+      });
+    } else {
+      toFetchFull.push({ m, zohoMessageId, zohoFolderId, isRead, isReplied, receivedAt, fromEmail, toEmails, allRecip, subject });
+    }
+  }
+
+  // Fetch full RFC822 content only for new/unlinked messages (concurrency = 10)
+  const CONCURRENCY = 10;
+  for (let i = 0; i < toFetchFull.length; i += CONCURRENCY) {
+    const chunk = toFetchFull.slice(i, i + CONCURRENCY);
+    const parsedChunk = await Promise.all(
+      chunk.map(async (item): Promise<InboundMessage | null> => {
+        try {
+          const raw = await zohoFetchOriginalMessage(accessToken, accountId, item.zohoMessageId);
+          if (raw) {
+            const parsed = await simpleParser(raw);
+            const messageId = parsed.messageId?.trim() || `<zoho-${item.zohoMessageId}@mail.zoho.com>`;
+            const cleanText = sanitizeEmailBody(parsed.text, parsed.html || undefined);
+            const { primaryTo, deliveredTo, allRecipients } = extractRecipientEmails(parsed);
+            const mergedRecipients = Array.from(new Set([...allRecipients, ...item.allRecip]));
+            const toEmail =
+              primaryTo ||
+              (Array.isArray(parsed.to) ? parsed.to[0]?.value[0]?.address : parsed.to?.value[0]?.address) ||
+              item.toEmails[0];
+
+            return {
+              messageId,
+              zohoMessageId: item.zohoMessageId,
+              zohoFolderId: item.zohoFolderId,
+              isRead: item.isRead,
+              isReplied: item.isReplied,
+              inReplyTo: parsed.inReplyTo || undefined,
+              fromEmail: parsed.from?.value[0]?.address || item.fromEmail,
+              fromName: parsed.from?.value[0]?.name || undefined,
+              toEmail,
+              recipientEmails: mergedRecipients,
+              deliveredTo,
+              subject: parsed.subject || item.subject,
+              bodyText: cleanText,
+              bodyHtml: parsed.html || undefined,
+              receivedAt: parsed.date || item.receivedAt,
+            };
+          }
+
+          // Fallback to /details + /content if /originalmessage is unavailable
+          const { html, details } = await zohoFetchMessageContentAndDetails(
+            accessToken,
+            accountId,
+            item.zohoFolderId,
+            item.zohoMessageId
+          );
+          const headerContent = details?.headerContent || {};
+          const rawMsgId = headerContent['Message-ID'] || headerContent['Message-Id'] || details?.messageId;
+          const messageId = typeof rawMsgId === 'string' && rawMsgId.includes('@')
+            ? rawMsgId.trim()
+            : `<zoho-${item.zohoMessageId}@mail.zoho.com>`;
+          const inReplyTo = typeof headerContent['In-Reply-To'] === 'string' ? headerContent['In-Reply-To'].trim() : undefined;
+          const cleanText = sanitizeEmailBody(decodeHtmlEntities(item.m.summary || ''), html);
+
+          return {
+            messageId,
+            zohoMessageId: item.zohoMessageId,
+            zohoFolderId: item.zohoFolderId,
+            isRead: item.isRead,
+            isReplied: item.isReplied,
+            inReplyTo,
+            fromEmail: item.fromEmail,
+            toEmail: item.toEmails[0],
+            recipientEmails: item.allRecip,
+            subject: item.subject,
+            bodyText: cleanText,
+            bodyHtml: html,
+            receivedAt: item.receivedAt,
+          };
+        } catch (err: any) {
+          console.log('[Zoho REST] Failed to parse message', item.zohoMessageId, err?.message);
+          return null;
+        }
+      })
+    );
+
+    for (const msg of parsedChunk) {
+      if (msg) messages.push(msg);
+    }
+  }
+
+  return messages;
+}
+
 export class EmailAdapter implements ChannelAdapter {
   readonly channel = 'email';
 
-  async pollInbox(config: Record<string, string>, folder = 'INBOX'): Promise<InboundMessage[]> {
+  async pollInbox(config: Record<string, string>, folder = 'INBOX', options?: PollInboxOptions): Promise<InboundMessage[]> {
+    if (isZohoRestOnly(config)) {
+      return pollZohoRestInbox(config, folder, options);
+    }
+
     const imap = createImapConnection(config);
     try {
       await imap.connect();
@@ -128,7 +337,7 @@ export class EmailAdapter implements ChannelAdapter {
         if (Array.isArray(searchResult) && searchResult.length > 0) {
           uids = searchResult;
         }
-      } catch (searchErr) {
+      } catch {
         console.log(`[IMAP] Search by date failed, fetching by sequence range in ${folder}`);
         uids = [];
       }
@@ -148,6 +357,41 @@ export class EmailAdapter implements ChannelAdapter {
         fetchOptions = { uid: false };
       }
 
+      if (options?.knownMessageIds && options.knownMessageIds.size > 0) {
+        // Fast pass: fetch only envelope + flags + uid to skip downloading bodies of already-known cards
+        const newUids: number[] = [];
+        for await (const headerMsg of imap.fetch(fetchRange, { envelope: true, uid: true, flags: true }, fetchOptions)) {
+          const uid = headerMsg.uid;
+          if (!uid) continue;
+          const flags = headerMsg.flags instanceof Set ? [...headerMsg.flags] : [];
+          const isRead = flags.some((f) => f.endsWith('Seen'));
+          const isReplied = flags.some((f) => f.endsWith('Answered'));
+          const msgId = headerMsg.envelope?.messageId?.trim();
+
+          if (msgId && options.knownMessageIds.has(msgId)) {
+            messages.push({
+              messageId: msgId,
+              uid,
+              isRead,
+              isReplied,
+              skipBody: true,
+              fromEmail: headerMsg.envelope?.from?.[0]?.address || 'unknown',
+              subject: headerMsg.envelope?.subject || '(No subject)',
+              bodyText: '',
+              receivedAt: headerMsg.envelope?.date || new Date(),
+            });
+          } else {
+            newUids.push(uid);
+          }
+        }
+
+        if (newUids.length === 0) {
+          return messages;
+        }
+        fetchRange = newUids;
+        fetchOptions = { uid: true };
+      }
+
       for await (const message of imap.fetch(fetchRange, { source: true, uid: true, flags: true }, fetchOptions)) {
         if (!message.source) continue;
         const uid = message.uid;
@@ -157,7 +401,9 @@ export class EmailAdapter implements ChannelAdapter {
           const parsed = await simpleParser(message.source);
           const messageId = parsed.messageId?.trim() || `<uid-${uid}-${folder}@local>`;
 
-          const isRead = message.flags instanceof Set && [...message.flags].some(f => f.endsWith('Seen'));
+          const flags = message.flags instanceof Set ? [...message.flags] : [];
+          const isRead = flags.some(f => f.endsWith('Seen'));
+          const isReplied = flags.some(f => f.endsWith('Answered'));
           const cleanText = sanitizeEmailBody(parsed.text, parsed.html || undefined);
           const { primaryTo, deliveredTo, allRecipients } = extractRecipientEmails(parsed);
           const toEmail = primaryTo || (Array.isArray(parsed.to) ? parsed.to[0]?.value[0]?.address : parsed.to?.value[0]?.address || undefined);
@@ -166,6 +412,7 @@ export class EmailAdapter implements ChannelAdapter {
             messageId,
             uid,
             isRead,
+            isReplied,
             inReplyTo: parsed.inReplyTo || undefined,
             fromEmail: parsed.from?.value[0]?.address || 'unknown',
             fromName: parsed.from?.value[0]?.name || undefined,
@@ -191,6 +438,16 @@ export class EmailAdapter implements ChannelAdapter {
   }
 
   async getAvailableFolders(config: Record<string, string>): Promise<string[]> {
+    if (isZohoRestOnly(config)) {
+      try {
+        const { folders, unauthorized } = await zohoListFolders(config.accessToken, config.zohoAccountId);
+        if (!unauthorized && folders.length > 0) {
+          return folders.map((f) => f.folderName || (f.path || '').replace(/^\/+/, '')).filter(Boolean);
+        }
+      } catch {}
+      return ['INBOX'];
+    }
+
     const imap = createImapConnection(config);
     try {
       await imap.connect();
@@ -206,6 +463,7 @@ export class EmailAdapter implements ChannelAdapter {
   }
 
   async markAsRead(config: Record<string, string>, uid: number, folder = 'INBOX'): Promise<boolean> {
+    if (isZohoRestOnly(config)) return false;
     const imap = createImapConnection(config);
     try {
       await imap.connect();
@@ -220,6 +478,7 @@ export class EmailAdapter implements ChannelAdapter {
   }
 
   async findUidByMessageId(config: Record<string, string>, messageId: string, folder = 'INBOX'): Promise<number | null> {
+    if (isZohoRestOnly(config)) return null;
     const imap = createImapConnection(config);
     try {
       await imap.connect();
@@ -236,6 +495,27 @@ export class EmailAdapter implements ChannelAdapter {
 
   async syncReadStatus(config: Record<string, string>, folder = 'INBOX'): Promise<Map<string, { isRead: boolean; isReplied: boolean }>> {
     const statusMap = new Map<string, { isRead: boolean; isReplied: boolean }>();
+    if (isZohoRestOnly(config)) {
+      try {
+        const { folderId } = await zohoResolveFolderId(config.accessToken, config.zohoAccountId, folder);
+        if (!folderId && folder.toUpperCase() !== 'INBOX') return statusMap;
+        const list = await zohoFetchMessages(config.accessToken, config.zohoAccountId, {
+          folderId: folderId || undefined,
+          start: 1,
+          limit: 200,
+        });
+        for (const m of list) {
+          if (m.messageId) {
+            statusMap.set(`zoho:${m.messageId}`, {
+              isRead: String(m.status) === '1',
+              isReplied: String(m.status2) === '1',
+            });
+          }
+        }
+      } catch {}
+      return statusMap;
+    }
+
     const imap = createImapConnection(config);
     try {
       await imap.connect();
@@ -279,6 +559,7 @@ export class EmailAdapter implements ChannelAdapter {
   }
 
   async moveToFolder(config: Record<string, string>, uid: number, targetFolder: string, sourceFolder = 'INBOX'): Promise<boolean> {
+    if (isZohoRestOnly(config)) return false;
     const imap = createImapConnection(config);
     try {
       await imap.connect();

@@ -623,8 +623,17 @@ export default function KanbanBoard() {
     for (const col of columns) {
       for (const card of col.cards) {
         const meta = (card.metadata as any) || {};
+        const primaryConfigUser = (card.emailConfig?.imapUser || '').toLowerCase().trim();
+        const recipientMatch = Array.isArray(meta.recipientEmails)
+          ? meta.recipientEmails
+              .map((r: any) => String(r).toLowerCase().trim())
+              .find((r: string) => senderMap.has(r) && r !== primaryConfigUser)
+          : undefined;
+        const rawTarget = (card.targetAlias || '').toLowerCase().trim();
         const cardAlias = (
-          card.targetAlias ||
+          (rawTarget && rawTarget !== primaryConfigUser ? rawTarget : '') ||
+          recipientMatch ||
+          rawTarget ||
           card.emailConfig?.smtpUser ||
           meta.toEmail ||
           (Array.isArray(meta.recipientEmails) && meta.recipientEmails[0]) ||

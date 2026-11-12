@@ -140,13 +140,23 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
 
         for (const config of configs) {
           try {
+            const zohoMessageId = (card.metadata as any)?.zohoMessageId;
+            if (!config.imapPass && config.authType === 'oauth2' && config.zohoAccountId && zohoMessageId) {
+              const { getValidZohoAccessToken, zohoUpdateMessages } = await import('@/lib/zoho-oauth');
+              const accessToken = await getValidZohoAccessToken(config.id);
+              const mode = body.status === 'unread' ? 'markAsUnread' : 'markAsRead';
+              const ok = await zohoUpdateMessages(accessToken, config.zohoAccountId, mode, [String(zohoMessageId)]);
+              if (ok) break;
+              continue;
+            }
+
             let authConfig: any = { user: config.imapUser };
-            if (config.authType === 'oauth2') {
-              const { getValidZohoAccessToken } = await import('@/lib/zoho-oauth');
-              authConfig.accessToken = await getValidZohoAccessToken(config.id);
-            } else if (config.imapPass) {
+            if (config.imapPass) {
               const { decrypt } = await import('@/lib/encryption');
               authConfig.pass = decrypt(config.imapPass);
+            } else if (config.authType === 'oauth2') {
+              const { getValidZohoAccessToken } = await import('@/lib/zoho-oauth');
+              authConfig.accessToken = await getValidZohoAccessToken(config.id);
             } else {
               continue;
             }

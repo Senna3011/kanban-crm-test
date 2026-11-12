@@ -86,6 +86,10 @@ export interface InboundMessage {
   messageId: string;
   uid?: number;
   isRead?: boolean;
+  isReplied?: boolean;
+  skipBody?: boolean;
+  zohoMessageId?: string;
+  zohoFolderId?: string;
   inReplyTo?: string;
   fromEmail: string;
   fromName?: string;

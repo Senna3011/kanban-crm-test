@@ -47,15 +47,24 @@ export function startSchedulers() {
   async function pollAllTenants() {
     console.log('[Scheduler] Starting email poll for all tenants...');
     try {
-      const configs = await prisma.emailConfig.findMany({
-        where: {
-          isActive: true,
-          OR: [
-            { authType: { not: 'oauth2' } },
-            { name: { startsWith: 'Zoho (' } },
-          ],
-        },
-        select: { tenantId: true, id: true },
+      const allConfigs = await prisma.emailConfig.findMany({
+        where: { isActive: true },
+        select: { tenantId: true, id: true, name: true, authType: true, imapPass: true, zohoAccountId: true },
+      });
+
+      const primaryZohoIdsByTenant = new Set(
+        allConfigs
+          .filter((c) => c.zohoAccountId && (Boolean(c.imapPass) || c.name?.startsWith('Zoho (')))
+          .map((c) => `${c.tenantId}:${c.zohoAccountId}`)
+      );
+
+      const configs = allConfigs.filter((c) => {
+        if (c.authType !== 'oauth2') return true;
+        if (Boolean(c.imapPass)) return true;
+        if (c.name?.startsWith('Zoho (')) return true;
+        // Poll dedicated Zoho Shared Mailboxes whose mailboxId differs from primary Zoho accountId
+        if (c.zohoAccountId && !primaryZohoIdsByTenant.has(`${c.tenantId}:${c.zohoAccountId}`)) return true;
+        return false;
       });
 
       for (const config of configs) {
