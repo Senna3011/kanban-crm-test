@@ -121,16 +121,27 @@ export async function GET(
     },
   });
 
+  // Check if current card is an outreach-sourced lead
+  const isOutreach = Boolean(
+    (card.metadata as any)?.isOutreachLead ||
+    card.subject?.startsWith('Outreach Lead:') ||
+    card.bodyText?.includes('Prospect sourced from campaign') ||
+    card.bodyText?.includes('[INTERNAL PROSPECT DOSSIER]')
+  );
+
   // Combine: current card (always included) + other thread cards + sent emails
   // Most recent first (Trello-style)
   const allMessages = [
-    // Current card — always first (this email)
+    // Current card — always first (lead profile dossier if outreach, otherwise inbound email)
     {
       id: card.id,
-      type: 'received' as const,
+      type: isOutreach ? ('dossier' as const) : ('received' as const),
       subject: card.subject,
-      from: card.fromName || card.fromEmail,
-      body: sanitizeEmailBody(card.bodyText, card.bodyHtml),
+      from: isOutreach ? 'Outreach Sourced Lead' : (card.fromName || card.fromEmail),
+      fromEmail: card.fromEmail,
+      body: isOutreach
+        ? (card.bodyText || '').replace(/\n\s*AI Cold Email Pitch:[\s\S]*$/i, '').trim()
+        : sanitizeEmailBody(card.bodyText, card.bodyHtml),
       timestamp: card.lastActivityAt,
       isCurrent: true,
     },

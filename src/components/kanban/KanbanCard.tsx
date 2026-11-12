@@ -88,6 +88,13 @@ export default function KanbanCard({
   const followUpDate = card.nextFollowUpAt ? new Date(card.nextFollowUpAt) : null;
   const isOverdue = followUpDate ? followUpDate < new Date() : false;
 
+  const isOutreach = Boolean(
+    (card.metadata as any)?.isOutreachLead ||
+    card.subject?.startsWith('Outreach Lead:') ||
+    card.bodyText?.includes('Prospect sourced from campaign') ||
+    card.bodyText?.includes('[INTERNAL PROSPECT DOSSIER]')
+  );
+
   const senderDisplay = card.fromName || card.fromEmail.split('@')[0] || 'Unknown';
   const initial = senderDisplay.charAt(0).toUpperCase();
   const avatarGradient = getAvatarColor(card.fromEmail || senderDisplay);
@@ -180,6 +187,12 @@ export default function KanbanCard({
           {card.contactRole && (
             <span className="inline-flex items-center text-[9px] font-semibold px-1 py-0.5 rounded bg-purple-50 text-purple-700 border border-purple-200/80">
               {card.contactRole}
+            </span>
+          )}
+          {isOutreach && (
+            <span className="inline-flex items-center gap-1 text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-indigo-50 dark:bg-indigo-950/70 text-indigo-700 dark:text-indigo-300 border border-indigo-200/80 dark:border-indigo-800 shadow-2xs">
+              <span>🎯</span>
+              PROSPECT
             </span>
           )}
           {isUnread && (

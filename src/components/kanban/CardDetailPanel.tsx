@@ -139,6 +139,13 @@ function buildTimelineMessages(
   const shownCardIds = new Set<string>();
   const shownDraftIds = new Set<string>();
 
+  const isCurrentOutreach = Boolean(
+    (currentCard.metadata as any)?.isOutreachLead ||
+    currentCard.subject?.startsWith('Outreach Lead:') ||
+    currentCard.bodyText?.includes('Prospect sourced from campaign') ||
+    currentCard.bodyText?.includes('[INTERNAL PROSPECT DOSSIER]')
+  );
+
   // Add all thread cards as message bubbles
   for (const tc of threadCards) {
     shownCardIds.add(tc.id);
@@ -153,6 +160,21 @@ function buildTimelineMessages(
         subject: tc.subject || '(No Subject)',
         body: tc.body || '',
         timestamp: new Date(tc.timestamp || Date.now()),
+      });
+    } else if (tc.type === 'dossier' || (tc.id === currentCard.id && isCurrentOutreach)) {
+      const cleanBody = (tc.body || currentCard.bodyText || '')
+        .replace(/\n\s*AI Cold Email Pitch:[\s\S]*$/i, '')
+        .trim();
+      items.push({
+        id: `thread-${tc.id}`,
+        type: 'dossier',
+        title: 'Prospect Profile Dossier',
+        sender: 'Outreach Sourced Lead',
+        senderEmail: tc.fromEmail || currentCard.fromEmail,
+        subject: tc.subject || currentCard.subject || '(No Subject)',
+        body: cleanBody || currentCard.bodyText || '',
+        timestamp: new Date(tc.timestamp || currentCard.lastActivityAt || (currentCard as any).createdAt || Date.now()),
+        isCurrent: tc.id === currentCard.id,
       });
     } else {
       items.push({
@@ -822,7 +844,13 @@ export default function CardDetailPanel({ card, onClose }: Props) {
                   className="inline-flex items-center gap-1 text-xs text-slate-600 hover:text-primary-600 transition-colors group"
                   title="Click to copy email"
                 >
-                  <span className="font-semibold">{card.fromName ? `${card.fromName} (${card.fromEmail})` : card.fromEmail}</span>
+	                  <span className="font-semibold">
+	                    {isOutreachCard
+	                      ? `Prospect: ${card.fromName ? `${card.fromName} (${card.fromEmail})` : card.fromEmail}`
+	                      : card.fromName
+	                      ? `${card.fromName} (${card.fromEmail})`
+	                      : card.fromEmail}
+	                  </span>
                   {copiedEmail ? (
                     <span className="text-[10px] text-emerald-600 font-bold">✓ Copied</span>
                   ) : (
@@ -1152,7 +1180,7 @@ export default function CardDetailPanel({ card, onClose }: Props) {
                 : 'border-transparent text-slate-500 hover:text-slate-800'
             }`}
           >
-            Email Content
+            {isOutreachCard ? 'Lead Profile & Notes' : 'Email Content'}
           </button>
           <button
             onClick={() => setActiveTab('activity')}
@@ -1162,7 +1190,7 @@ export default function CardDetailPanel({ card, onClose }: Props) {
                 : 'border-transparent text-slate-500 hover:text-slate-800'
             }`}
           >
-            Thread & Activity
+            {isOutreachCard ? 'Timeline & Activity' : 'Thread & Activity'}
             {timelineMessages.length > 0 && (
               <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-slate-100 text-slate-600 font-bold">
                 {timelineMessages.length}
@@ -1224,7 +1252,7 @@ export default function CardDetailPanel({ card, onClose }: Props) {
             <div className="space-y-2 w-full">
               <div className="flex items-center justify-between mb-2">
                 <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">
-                  Conversation & Activity History
+                  {isOutreachCard ? 'Lead Dossier & Activity Timeline' : 'Conversation & Activity History'}
                 </span>
                 {backgroundLoading && (
                   <span className="text-[11px] text-slate-400 flex items-center gap-1">
