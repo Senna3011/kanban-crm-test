@@ -1796,7 +1796,7 @@ export default function CampaignWorkspacePage({
             <table className="w-full text-left text-xs text-slate-600 dark:text-slate-300">
               <thead className="bg-slate-50/80 dark:bg-slate-900/60 text-[11px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider border-b border-slate-100 dark:border-slate-800">
                 <tr>
-                  <th className="px-3 py-3.5 w-12 text-center">
+                  <th className="px-3 py-3 w-10 text-center">
                     <input
                       type="checkbox"
                       checked={isAllSelected}
@@ -1805,10 +1805,10 @@ export default function CampaignWorkspacePage({
                       title="Select / Deselect All on this page"
                     />
                   </th>
-                  <th className="px-5 py-3.5 min-w-[380px] md:min-w-[460px]">Lead & Organization Profile</th>
-                  <th className="px-5 py-3.5 min-w-[280px]">Corporate Email</th>
-                  <th className="px-4 py-3.5 text-center min-w-[150px]">ICP Match Score</th>
-                  <th className="px-4 py-3.5 text-right min-w-[140px]">CRM Pipeline</th>
+                  <th className="px-4 py-3">Lead & Organization Profile</th>
+                  <th className="px-4 py-3 w-[260px]">Corporate Email</th>
+                  <th className="px-3 py-3 text-center w-[130px]">ICP Match</th>
+                  <th className="px-4 py-3 text-right w-[140px]">CRM Pipeline</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
@@ -1826,7 +1826,7 @@ export default function CampaignWorkspacePage({
                       }`}
                     >
                       {/* Checkbox */}
-                      <td className="px-3 py-4 text-center" onClick={(e) => e.stopPropagation()}>
+                      <td className="px-3 py-3.5 text-center" onClick={(e) => e.stopPropagation()}>
                         <input
                           type="checkbox"
                           checked={isChecked}
@@ -1835,129 +1835,116 @@ export default function CampaignWorkspacePage({
                         />
                       </td>
 
-                      {/* Lead & Organization Profile Layout */}
-                      <td className="px-5 py-4">
-                        <div className="flex items-start gap-3.5">
-                          {/* Sleek Gradient Avatar with Initials */}
-                          <div
-                            className={`w-10 h-10 rounded-xl bg-gradient-to-br ${getAvatarGradient(
-                              lead.fullName
-                            )} text-white font-bold text-xs flex items-center justify-center shrink-0 shadow-xs border border-white/20 select-none mt-0.5`}
-                            title={lead.fullName}
-                          >
-                            {getLeadInitials(lead.fullName)}
+                      {/* Lead & Organization Profile (No Avatar Logo: Maximum Content Width) */}
+                      <td className="px-4 py-3.5">
+                        <div className="space-y-1.5 min-w-0">
+                          {/* Line 1: Full Name, CRM Status, LinkedIn Pill */}
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="font-bold text-slate-900 dark:text-slate-100 text-[13px] tracking-tight">
+                              {lead.fullName}
+                            </span>
+                            {lead.status === 'CONVERTED' && (
+                              <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-950/60 text-emerald-800 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800">
+                                ✓ in CRM
+                              </span>
+                            )}
+                            {lead.linkedinUrl && (
+                              <a
+                                href={lead.linkedinUrl.startsWith('http') ? lead.linkedinUrl : `https://${lead.linkedinUrl}`}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="inline-flex items-center gap-1 text-[11px] font-semibold text-[#0077b5] dark:text-[#3897d3] bg-[#0077b5]/10 dark:bg-[#0077b5]/20 hover:bg-[#0077b5]/20 px-2 py-0.5 rounded-md border border-[#0077b5]/20 transition-colors"
+                                title="Open Official LinkedIn Profile"
+                                onClick={(e) => e.stopPropagation()}
+                              >
+                                <svg className="w-3 h-3 fill-current" viewBox="0 0 24 24">
+                                  <path d="M19 3a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h14m-.5 15.5v-5.3a3.26 3.26 0 0 0-3.26-3.26c-.85 0-1.84.52-2.28 1.3v-1.11h-2.79v8.37h2.79v-4.93c0-.77.62-1.4 1.39-1.4a1.4 1.4 0 0 1 1.4 1.4v4.93h2.75M6.46 10.9v8.37H9.2V10.9H6.46M7.83 6.64a1.66 1.66 0 0 0-1.66 1.66 1.66 1.66 0 0 0 1.66 1.66 1.66 1.66 0 0 0 1.66-1.66c0-.92-.74-1.66-1.66-1.66Z" />
+                                </svg>
+                                <span>LinkedIn</span>
+                                <span className="text-[9px]">↗</span>
+                              </a>
+                            )}
                           </div>
 
-                          {/* Profile Details */}
-                          <div className="space-y-1.5 flex-1 min-w-0">
-                            {/* Line 1: Full Name, CRM Status, LinkedIn Pill */}
-                            <div className="flex items-center gap-2 flex-wrap">
-                              <span className="font-bold text-slate-900 dark:text-slate-100 text-[13px] tracking-tight break-words">
-                                {lead.fullName}
-                              </span>
-                              {lead.status === 'CONVERTED' && (
-                                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-950/60 text-emerald-800 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800">
-                                  ✓ in CRM
-                                </span>
-                              )}
-                              {lead.linkedinUrl && (
+                          {/* Line 2: Full Job Title / Role */}
+                          <div className="text-xs font-semibold text-indigo-700 dark:text-indigo-300 leading-snug break-words whitespace-normal flex items-start gap-1">
+                            <span className="text-indigo-500/80 dark:text-indigo-400 text-[11px] shrink-0 mt-0.5">👔</span>
+                            <span>{lead.jobTitle || 'Executive Decision Maker'}</span>
+                          </div>
+
+                          {/* Line 3: Badges for Company and Location */}
+                          <div className="text-xs flex items-center gap-2 flex-wrap pt-0.5">
+                            {/* Company Badge Chip */}
+                            <div className="inline-flex items-center gap-1.5 text-slate-800 dark:text-slate-200 font-bold bg-slate-100 dark:bg-slate-800/80 px-2 py-0.5 rounded-md border border-slate-200/80 dark:border-slate-700/80 max-w-full">
+                              <span className="text-slate-400 dark:text-slate-500 text-[11px] shrink-0">🏢</span>
+                              <span>{sanitizeLeadCompany(lead.companyName)}</span>
+                              {isValidWebsiteDomain(lead.companyDomain) && (
                                 <a
-                                  href={lead.linkedinUrl.startsWith('http') ? lead.linkedinUrl : `https://${lead.linkedinUrl}`}
+                                  href={lead.companyDomain!.startsWith('http') ? lead.companyDomain! : `https://${lead.companyDomain}`}
                                   target="_blank"
                                   rel="noreferrer"
-                                  className="inline-flex items-center gap-1 text-[11px] font-semibold text-[#0077b5] dark:text-[#3897d3] bg-[#0077b5]/10 dark:bg-[#0077b5]/20 hover:bg-[#0077b5]/20 px-2 py-0.5 rounded-md border border-[#0077b5]/20 transition-colors"
-                                  title="Open Official LinkedIn Profile"
+                                  className="inline-flex items-center gap-0.5 text-primary-600 dark:text-primary-400 hover:underline font-semibold ml-0.5 text-[10px]"
+                                  title={`Visit ${lead.companyDomain}`}
                                   onClick={(e) => e.stopPropagation()}
                                 >
-                                  <svg className="w-3 h-3 fill-current" viewBox="0 0 24 24">
-                                    <path d="M19 3a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h14m-.5 15.5v-5.3a3.26 3.26 0 0 0-3.26-3.26c-.85 0-1.84.52-2.28 1.3v-1.11h-2.79v8.37h2.79v-4.93c0-.77.62-1.4 1.39-1.4a1.4 1.4 0 0 1 1.4 1.4v4.93h2.75M6.46 10.9v8.37H9.2V10.9H6.46M7.83 6.64a1.66 1.66 0 0 0-1.66 1.66 1.66 1.66 0 0 0 1.66 1.66 1.66 1.66 0 0 0 1.66-1.66c0-.92-.74-1.66-1.66-1.66Z" />
-                                  </svg>
-                                  <span>LinkedIn</span>
+                                  <span>{lead.companyDomain!.replace(/^https?:\/\//, '').replace(/\/.*$/, '')}</span>
                                   <span className="text-[9px]">↗</span>
                                 </a>
                               )}
                             </div>
 
-                            {/* Line 2: Full Job Title / Role */}
-                            <div className="text-xs font-semibold text-indigo-700 dark:text-indigo-300 leading-snug break-words whitespace-normal flex items-start gap-1.5">
-                              <span className="text-indigo-500/80 dark:text-indigo-400 text-[11px] shrink-0 mt-0.5">👔</span>
-                              <span className="break-words">{lead.jobTitle || 'Executive Decision Maker'}</span>
-                            </div>
-
-                            {/* Line 3: Distinct Badges for Company and Location */}
-                            <div className="text-xs flex items-center gap-2 flex-wrap pt-0.5">
-                              {/* Company Badge Chip */}
-                              <div className="inline-flex items-center gap-1.5 text-slate-800 dark:text-slate-200 font-bold bg-slate-100 dark:bg-slate-800/80 px-2.5 py-1 rounded-md border border-slate-200/80 dark:border-slate-700/80 max-w-full">
-                                <span className="text-slate-400 dark:text-slate-500 text-[11px] shrink-0">🏢</span>
-                                <span className="break-words">{sanitizeLeadCompany(lead.companyName)}</span>
-                                {isValidWebsiteDomain(lead.companyDomain) && (
-                                  <a
-                                    href={lead.companyDomain!.startsWith('http') ? lead.companyDomain! : `https://${lead.companyDomain}`}
-                                    target="_blank"
-                                    rel="noreferrer"
-                                    className="inline-flex items-center gap-0.5 text-primary-600 dark:text-primary-400 hover:underline font-semibold ml-0.5 text-[10px]"
-                                    title={`Visit ${lead.companyDomain}`}
-                                    onClick={(e) => e.stopPropagation()}
-                                  >
-                                    <span>{lead.companyDomain!.replace(/^https?:\/\//, '').replace(/\/.*$/, '')}</span>
-                                    <span className="text-[9px]">↗</span>
-                                  </a>
-                                )}
+                            {/* Location Badge Chip */}
+                            {lead.location && (
+                              <div className="inline-flex items-center gap-1 text-[11px] font-medium text-slate-600 dark:text-slate-300 bg-slate-50 dark:bg-slate-850 px-2 py-0.5 rounded-md border border-slate-200/60 dark:border-slate-800 max-w-full">
+                                <span className="text-[10px] shrink-0">📍</span>
+                                <span>{lead.location}</span>
                               </div>
+                            )}
+                          </div>
 
-                              {/* Location Badge Chip */}
-                              {lead.location && (
-                                <div className="inline-flex items-center gap-1 text-[11px] font-medium text-slate-600 dark:text-slate-300 bg-slate-50 dark:bg-slate-850 px-2 py-1 rounded-md border border-slate-200/60 dark:border-slate-800 max-w-full">
-                                  <span className="text-[10px] shrink-0">📍</span>
-                                  <span className="break-words">{lead.location}</span>
-                                </div>
-                              )}
-                            </div>
+                          {/* Line 4: Unique Profile Highlights & Bio */}
+                          {(() => {
+                            const { shortSnippet, fullBio } = extractLeadBioSummary(lead);
+                            if (!fullBio) return null;
+                            const isExpanded = Boolean(expandedBioIds[lead.id]);
 
-                            {/* Line 4: Unique Profile Highlights & Bio (Pak Nell's requirement: complete without cut off, punchy key points) */}
-                            {(() => {
-                              const { shortSnippet, fullBio } = extractLeadBioSummary(lead);
-                              if (!fullBio) return null;
-                              const isExpanded = Boolean(expandedBioIds[lead.id]);
-
-                              return (
-                                <div className="mt-1.5 p-2 rounded-lg bg-slate-50/90 dark:bg-slate-850/80 border border-slate-200/70 dark:border-slate-700/60 text-[11px] text-slate-600 dark:text-slate-300">
-                                  <div className="flex items-start gap-1.5">
-                                    <span className="text-[11px] shrink-0 mt-0.5 text-amber-500">✨</span>
-                                    <div className="flex-1 leading-relaxed">
-                                      <span className="font-semibold text-slate-800 dark:text-slate-200 mr-1">Unique Profile:</span>
-                                      <span>{isExpanded ? fullBio : shortSnippet}</span>
-                                      {fullBio.length > 135 && (
-                                        <button
-                                          type="button"
-                                          onClick={(e) => {
-                                            e.stopPropagation();
-                                            setExpandedBioIds((prev) => ({ ...prev, [lead.id]: !prev[lead.id] }));
-                                          }}
-                                          className="ml-1.5 text-primary-600 dark:text-primary-400 font-bold hover:underline inline-flex items-center text-[10px] cursor-pointer"
-                                        >
-                                          {isExpanded ? 'Show less' : 'View full bio'}
-                                        </button>
-                                      )}
-                                    </div>
+                            return (
+                              <div className="mt-1 p-2 rounded-lg bg-slate-50/90 dark:bg-slate-850/80 border border-slate-200/70 dark:border-slate-700/60 text-[11px] text-slate-600 dark:text-slate-300">
+                                <div className="flex items-start gap-1.5">
+                                  <span className="text-[11px] shrink-0 mt-0.5 text-amber-500">✨</span>
+                                  <div className="flex-1 leading-relaxed">
+                                    <span className="font-semibold text-slate-800 dark:text-slate-200 mr-1">Unique Profile:</span>
+                                    <span>{isExpanded ? fullBio : shortSnippet}</span>
+                                    {fullBio.length > 135 && (
+                                      <button
+                                        type="button"
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          setExpandedBioIds((prev) => ({ ...prev, [lead.id]: !prev[lead.id] }));
+                                        }}
+                                        className="ml-1.5 text-primary-600 dark:text-primary-400 font-bold hover:underline inline-flex items-center text-[10px] cursor-pointer"
+                                      >
+                                        {isExpanded ? 'Show less' : 'View full bio'}
+                                      </button>
+                                    )}
                                   </div>
                                 </div>
-                              );
-                            })()}
-                          </div>
+                              </div>
+                            );
+                          })()}
                         </div>
                       </td>
 
-                      {/* Corporate Email */}
-                      <td className="px-5 py-4 text-xs text-slate-800 dark:text-slate-200" onClick={(e) => e.stopPropagation()}>
+                      {/* Corporate Email: Clean Full Address Display */}
+                      <td className="px-4 py-3.5 text-xs text-slate-800 dark:text-slate-200" onClick={(e) => e.stopPropagation()}>
                         {lead.email ? (
-                          <div className="space-y-1.5 min-w-[260px]">
+                          <div className="space-y-1.5 w-full max-w-[260px]">
                             <div className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-400 border border-emerald-200/60 dark:border-emerald-800 text-[10px] font-bold">
                               <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
                               <span>Corporate Email</span>
                             </div>
                             <div className="flex items-center justify-between gap-1.5 bg-slate-50 dark:bg-slate-800/80 px-2.5 py-1.5 rounded-lg border border-slate-200/80 dark:border-slate-700 font-mono text-[11px] group">
-                              <span className="font-semibold text-slate-900 dark:text-slate-100 select-all whitespace-nowrap overflow-hidden text-ellipsis max-w-[210px]" title={lead.email}>
+                              <span className="font-semibold text-slate-900 dark:text-slate-100 select-all break-all leading-tight" title={lead.email}>
                                 {lead.email}
                               </span>
                               <button
@@ -1973,7 +1960,7 @@ export default function CampaignWorkspacePage({
                             </div>
                           </div>
                         ) : (
-                          <div className="space-y-1.5 min-w-[260px]">
+                          <div className="space-y-1 w-full max-w-[260px]">
                             <button
                               onClick={() => handleFindEmails([lead.id])}
                               disabled={isFinding}
@@ -1991,29 +1978,29 @@ export default function CampaignWorkspacePage({
                                 </>
                               )}
                             </button>
-                            <p className="text-[10px] text-slate-400 dark:text-slate-500">Corporate email not discovered</p>
+                            <p className="text-[10px] text-slate-400 dark:text-slate-500">Email not discovered</p>
                           </div>
                         )}
                       </td>
 
                       {/* ICP Match Score */}
-                      <td className="px-4 py-4 text-center" onClick={(e) => e.stopPropagation()}>
+                      <td className="px-3 py-3.5 text-center whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
                         {(() => {
                           const { score, label, badgeClass, matchFactors } = computeLeadIcpScore(lead);
                           return (
-                            <div className="inline-flex flex-col items-center gap-1.5 min-w-[140px]">
+                            <div className="inline-flex flex-col items-center gap-1">
                               <span className={`px-2.5 py-0.5 rounded-full text-[11px] border font-bold ${badgeClass}`}>
                                 {score}% Match
                               </span>
-                              <div className="w-20 h-1.5 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden border border-slate-200 dark:border-slate-700">
+                              <div className="w-16 h-1.5 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden border border-slate-200 dark:border-slate-700">
                                 <div
                                   className={`h-full rounded-full transition-all duration-300 ${score >= 85 ? 'bg-emerald-500' : score >= 70 ? 'bg-indigo-500' : 'bg-blue-400'}`}
                                   style={{ width: `${score}%` }}
                                 />
                               </div>
-                              <div className="flex items-center justify-center gap-1 flex-wrap text-[9px] text-slate-500 dark:text-slate-400 font-medium max-w-[150px]">
-                                {matchFactors.map((factor, i) => (
-                                  <span key={i} className="bg-slate-100 dark:bg-slate-800/80 px-1.5 py-0.5 rounded border border-slate-200/60 dark:border-slate-700">
+                              <div className="flex items-center justify-center gap-1 flex-wrap text-[9px] text-slate-500 dark:text-slate-400 font-medium max-w-[125px]">
+                                {matchFactors.slice(0, 2).map((factor, i) => (
+                                  <span key={i} className="bg-slate-100 dark:bg-slate-800/80 px-1 py-0.2 rounded border border-slate-200/60 dark:border-slate-700">
                                     ✓ {factor}
                                   </span>
                                 ))}
@@ -2024,11 +2011,11 @@ export default function CampaignWorkspacePage({
                       </td>
 
                       {/* CRM Status / Action */}
-                      <td className="px-4 py-4 text-right whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
+                      <td className="px-4 py-3.5 text-right whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
                         {lead.status === 'CONVERTED' && lead.convertedCardId ? (
                           <Link
                             href={`/dashboard?cardId=${lead.convertedCardId}`}
-                            className="px-3.5 py-1.5 bg-emerald-50 text-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800 text-xs font-bold rounded-xl hover:bg-emerald-100 dark:hover:bg-emerald-900/40 transition-colors inline-flex items-center gap-1.5 shadow-2xs"
+                            className="px-3 py-1.5 bg-emerald-50 text-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800 text-xs font-bold rounded-xl hover:bg-emerald-100 dark:hover:bg-emerald-900/40 transition-colors inline-flex items-center gap-1 shadow-2xs"
                             title="View Card on Kanban CRM Board"
                           >
                             <span className="text-emerald-600 dark:text-emerald-400">✓</span>
@@ -2039,7 +2026,7 @@ export default function CampaignWorkspacePage({
                           <button
                             onClick={() => openPushCrmModal([lead.id])}
                             disabled={isPushing}
-                            className="px-3.5 py-1.5 bg-primary-600 hover:bg-primary-700 text-white text-xs font-bold rounded-xl transition-colors inline-flex items-center gap-1.5 shadow-xs disabled:opacity-40 cursor-pointer"
+                            className="px-3 py-1.5 bg-primary-600 hover:bg-primary-700 text-white text-xs font-bold rounded-xl transition-colors inline-flex items-center gap-1 shadow-xs disabled:opacity-40 cursor-pointer"
                             title="Push directly into Kanban CRM Fresh leads column"
                           >
                             {isPushing ? (
