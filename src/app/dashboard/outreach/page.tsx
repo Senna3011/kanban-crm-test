@@ -225,154 +225,154 @@ export default function OutreachDashboardPage() {
           const bouncePct = totalSent > 0 ? ((totalBounced / totalSent) * 100).toFixed(1) : '0';
 
           return (
-            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3.5 sm:gap-4">
+            <div className="grid grid-cols-2 md:grid-cols-5 gap-3 sm:gap-4">
               {/* 1. Prospects */}
-              <div className="bg-slate-50/70 dark:bg-[#161A1D] hover:bg-slate-100/60 dark:hover:bg-[#1C2126] transition-all p-4 rounded-xl border border-slate-200/70 dark:border-[#2C333A] flex flex-col justify-between shadow-2xs">
+              <div className="min-w-0 overflow-hidden bg-slate-50/70 dark:bg-[#161A1D] hover:bg-slate-100/60 dark:hover:bg-[#1C2126] transition-all p-3.5 sm:p-4 rounded-xl border border-slate-200/70 dark:border-[#2C333A] flex flex-col justify-between shadow-2xs">
                 <div className="flex items-center justify-between gap-1 mb-2">
-                  <span className="text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Prospects</span>
-                  <span className="w-6 h-6 rounded-lg bg-slate-200/60 dark:bg-slate-800 text-slate-600 dark:text-slate-300 flex items-center justify-center text-xs">👥</span>
+                  <span className="text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider truncate">Prospects</span>
+                  <span className="w-6 h-6 rounded-lg bg-slate-200/60 dark:bg-slate-800 text-slate-600 dark:text-slate-300 flex items-center justify-center text-xs shrink-0">👥</span>
                 </div>
-                <div className="space-y-1">
-                  <p className="text-2xl font-black text-slate-900 dark:text-white tracking-tight">{totalProspects.toLocaleString()}</p>
-                  <p className="text-[11px] text-slate-500 dark:text-slate-400 font-medium">Total Audience Pool</p>
+                <div className="space-y-1 min-w-0">
+                  <p className="text-xl sm:text-2xl font-black text-slate-900 dark:text-white tracking-tight truncate">{totalProspects.toLocaleString()}</p>
+                  <p className="text-[11px] text-slate-500 dark:text-slate-400 font-medium truncate">Total Audience Pool</p>
                 </div>
               </div>
 
               {/* 2. Sent */}
-              <div className="bg-slate-50/70 dark:bg-[#161A1D] hover:bg-slate-100/60 dark:hover:bg-[#1C2126] transition-all p-4 rounded-xl border border-slate-200/70 dark:border-[#2C333A] flex flex-col justify-between shadow-2xs">
+              <div className="min-w-0 overflow-hidden bg-slate-50/70 dark:bg-[#161A1D] hover:bg-slate-100/60 dark:hover:bg-[#1C2126] transition-all p-3.5 sm:p-4 rounded-xl border border-slate-200/70 dark:border-[#2C333A] flex flex-col justify-between shadow-2xs">
                 <div className="flex items-center justify-between gap-1 mb-2">
-                  <span className="text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Sent</span>
-                  <span className="w-6 h-6 rounded-lg bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 flex items-center justify-center text-xs">📤</span>
+                  <span className="text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider truncate">Sent</span>
+                  <span className="w-6 h-6 rounded-lg bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 flex items-center justify-center text-xs shrink-0">📤</span>
                 </div>
-                <div className="space-y-1">
-                  <div className="flex items-baseline gap-2">
-                    <span className="text-2xl font-black text-indigo-600 dark:text-indigo-400 tracking-tight">{totalSent.toLocaleString()}</span>
-                    <span className="text-xs font-bold text-indigo-600/80 dark:text-indigo-400/80 bg-indigo-50 dark:bg-indigo-950/60 px-1.5 py-0.5 rounded-md border border-indigo-200/60 dark:border-indigo-800/40">
+                <div className="space-y-1 min-w-0">
+                  <div className="flex items-baseline gap-1.5 flex-wrap">
+                    <span className="text-xl sm:text-2xl font-black text-indigo-600 dark:text-indigo-400 tracking-tight truncate">{totalSent.toLocaleString()}</span>
+                    <span className="text-xs font-bold text-indigo-600/80 dark:text-indigo-400/80 bg-indigo-50 dark:bg-indigo-950/60 px-1.5 py-0.5 rounded-md border border-indigo-200/60 dark:border-indigo-800/40 shrink-0">
                       {sentPct}%
                     </span>
                   </div>
-                  <p className="text-[11px] text-slate-500 dark:text-slate-400 font-medium">Dispatched of pool</p>
+                  <p className="text-[11px] text-slate-500 dark:text-slate-400 font-medium truncate">Dispatched of pool</p>
                 </div>
               </div>
 
               {/* 3. Reached */}
-              <div className="bg-slate-50/70 dark:bg-[#161A1D] hover:bg-slate-100/60 dark:hover:bg-[#1C2126] transition-all p-4 rounded-xl border border-slate-200/70 dark:border-[#2C333A] flex flex-col justify-between shadow-2xs">
+              <div className="min-w-0 overflow-hidden bg-slate-50/70 dark:bg-[#161A1D] hover:bg-slate-100/60 dark:hover:bg-[#1C2126] transition-all p-3.5 sm:p-4 rounded-xl border border-slate-200/70 dark:border-[#2C333A] flex flex-col justify-between shadow-2xs">
                 <div className="flex items-center justify-between gap-1 mb-2">
-                  <span className="text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Reached</span>
-                  <span className="w-6 h-6 rounded-lg bg-blue-50 dark:bg-blue-950/60 text-blue-600 dark:text-blue-400 flex items-center justify-center text-xs">📬</span>
+                  <span className="text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider truncate">Reached</span>
+                  <span className="w-6 h-6 rounded-lg bg-blue-50 dark:bg-blue-950/60 text-blue-600 dark:text-blue-400 flex items-center justify-center text-xs shrink-0">📬</span>
                 </div>
-                <div className="space-y-1">
-                  <div className="flex items-baseline gap-2">
-                    <span className="text-2xl font-black text-blue-600 dark:text-blue-400 tracking-tight">{totalReached.toLocaleString()}</span>
-                    <span className="text-xs font-bold text-blue-600/80 dark:text-blue-400/80 bg-blue-50 dark:bg-blue-950/60 px-1.5 py-0.5 rounded-md border border-blue-200/60 dark:border-blue-800/40">
+                <div className="space-y-1 min-w-0">
+                  <div className="flex items-baseline gap-1.5 flex-wrap">
+                    <span className="text-xl sm:text-2xl font-black text-blue-600 dark:text-blue-400 tracking-tight truncate">{totalReached.toLocaleString()}</span>
+                    <span className="text-xs font-bold text-blue-600/80 dark:text-blue-400/80 bg-blue-50 dark:bg-blue-950/60 px-1.5 py-0.5 rounded-md border border-blue-200/60 dark:border-blue-800/40 shrink-0">
                       {reachedPct}%
                     </span>
                   </div>
-                  <p className="text-[11px] text-slate-500 dark:text-slate-400 font-medium">Delivered to inboxes</p>
+                  <p className="text-[11px] text-slate-500 dark:text-slate-400 font-medium truncate">Delivered to inboxes</p>
                 </div>
               </div>
 
               {/* 4. Opened */}
-              <div className="bg-slate-50/70 dark:bg-[#161A1D] hover:bg-slate-100/60 dark:hover:bg-[#1C2126] transition-all p-4 rounded-xl border border-slate-200/70 dark:border-[#2C333A] flex flex-col justify-between shadow-2xs">
+              <div className="min-w-0 overflow-hidden bg-slate-50/70 dark:bg-[#161A1D] hover:bg-slate-100/60 dark:hover:bg-[#1C2126] transition-all p-3.5 sm:p-4 rounded-xl border border-slate-200/70 dark:border-[#2C333A] flex flex-col justify-between shadow-2xs">
                 <div className="flex items-center justify-between gap-1 mb-2">
-                  <span className="text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Opened</span>
-                  <span className="w-6 h-6 rounded-lg bg-cyan-50 dark:bg-cyan-950/60 text-cyan-600 dark:text-cyan-400 flex items-center justify-center text-xs">👁️</span>
+                  <span className="text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider truncate">Opened</span>
+                  <span className="w-6 h-6 rounded-lg bg-cyan-50 dark:bg-cyan-950/60 text-cyan-600 dark:text-cyan-400 flex items-center justify-center text-xs shrink-0">👁️</span>
                 </div>
-                <div className="space-y-1">
-                  <div className="flex items-baseline gap-2">
-                    <span className="text-2xl font-black text-cyan-600 dark:text-cyan-400 tracking-tight">{totalOpened.toLocaleString()}</span>
-                    <span className="text-xs font-bold text-cyan-600/80 dark:text-cyan-400/80 bg-cyan-50 dark:bg-cyan-950/60 px-1.5 py-0.5 rounded-md border border-cyan-200/60 dark:border-cyan-800/40">
+                <div className="space-y-1 min-w-0">
+                  <div className="flex items-baseline gap-1.5 flex-wrap">
+                    <span className="text-xl sm:text-2xl font-black text-cyan-600 dark:text-cyan-400 tracking-tight truncate">{totalOpened.toLocaleString()}</span>
+                    <span className="text-xs font-bold text-cyan-600/80 dark:text-cyan-400/80 bg-cyan-50 dark:bg-cyan-950/60 px-1.5 py-0.5 rounded-md border border-cyan-200/60 dark:border-cyan-800/40 shrink-0">
                       {openedPct}%
                     </span>
                   </div>
-                  <p className="text-[11px] text-slate-500 dark:text-slate-400 font-medium">Unique read rate</p>
+                  <p className="text-[11px] text-slate-500 dark:text-slate-400 font-medium truncate">Unique read rate</p>
                 </div>
               </div>
 
               {/* 5. Clicked */}
-              <div className="bg-slate-50/70 dark:bg-[#161A1D] hover:bg-slate-100/60 dark:hover:bg-[#1C2126] transition-all p-4 rounded-xl border border-slate-200/70 dark:border-[#2C333A] flex flex-col justify-between shadow-2xs">
+              <div className="min-w-0 overflow-hidden bg-slate-50/70 dark:bg-[#161A1D] hover:bg-slate-100/60 dark:hover:bg-[#1C2126] transition-all p-3.5 sm:p-4 rounded-xl border border-slate-200/70 dark:border-[#2C333A] flex flex-col justify-between shadow-2xs">
                 <div className="flex items-center justify-between gap-1 mb-2">
-                  <span className="text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Clicked</span>
-                  <span className="w-6 h-6 rounded-lg bg-purple-50 dark:bg-purple-950/60 text-purple-600 dark:text-purple-400 flex items-center justify-center text-xs">🔗</span>
+                  <span className="text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider truncate">Clicked</span>
+                  <span className="w-6 h-6 rounded-lg bg-purple-50 dark:bg-purple-950/60 text-purple-600 dark:text-purple-400 flex items-center justify-center text-xs shrink-0">🔗</span>
                 </div>
-                <div className="space-y-1">
-                  <div className="flex items-baseline gap-2">
-                    <span className="text-2xl font-black text-purple-600 dark:text-purple-400 tracking-tight">{totalClicked.toLocaleString()}</span>
-                    <span className="text-xs font-bold text-purple-600/80 dark:text-purple-400/80 bg-purple-50 dark:bg-purple-950/60 px-1.5 py-0.5 rounded-md border border-purple-200/60 dark:border-purple-800/40">
+                <div className="space-y-1 min-w-0">
+                  <div className="flex items-baseline gap-1.5 flex-wrap">
+                    <span className="text-xl sm:text-2xl font-black text-purple-600 dark:text-purple-400 tracking-tight truncate">{totalClicked.toLocaleString()}</span>
+                    <span className="text-xs font-bold text-purple-600/80 dark:text-purple-400/80 bg-purple-50 dark:bg-purple-950/60 px-1.5 py-0.5 rounded-md border border-purple-200/60 dark:border-purple-800/40 shrink-0">
                       {clickedPct}%
                     </span>
                   </div>
-                  <p className="text-[11px] text-slate-500 dark:text-slate-400 font-medium">Link CTR engagement</p>
+                  <p className="text-[11px] text-slate-500 dark:text-slate-400 font-medium truncate">Link CTR engagement</p>
                 </div>
               </div>
 
               {/* 6. Replied */}
-              <div className="bg-slate-50/70 dark:bg-[#161A1D] hover:bg-slate-100/60 dark:hover:bg-[#1C2126] transition-all p-4 rounded-xl border border-slate-200/70 dark:border-[#2C333A] flex flex-col justify-between shadow-2xs">
+              <div className="min-w-0 overflow-hidden bg-slate-50/70 dark:bg-[#161A1D] hover:bg-slate-100/60 dark:hover:bg-[#1C2126] transition-all p-3.5 sm:p-4 rounded-xl border border-slate-200/70 dark:border-[#2C333A] flex flex-col justify-between shadow-2xs">
                 <div className="flex items-center justify-between gap-1 mb-2">
-                  <span className="text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Replied</span>
-                  <span className="w-6 h-6 rounded-lg bg-amber-50 dark:bg-amber-950/60 text-amber-600 dark:text-amber-400 flex items-center justify-center text-xs">💬</span>
+                  <span className="text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider truncate">Replied</span>
+                  <span className="w-6 h-6 rounded-lg bg-amber-50 dark:bg-amber-950/60 text-amber-600 dark:text-amber-400 flex items-center justify-center text-xs shrink-0">💬</span>
                 </div>
-                <div className="space-y-1">
-                  <div className="flex items-baseline gap-2">
-                    <span className="text-2xl font-black text-amber-600 dark:text-amber-400 tracking-tight">{totalReplied.toLocaleString()}</span>
-                    <span className="text-xs font-bold text-amber-600/80 dark:text-amber-400/80 bg-amber-50 dark:bg-amber-950/60 px-1.5 py-0.5 rounded-md border border-amber-200/60 dark:border-amber-800/40">
+                <div className="space-y-1 min-w-0">
+                  <div className="flex items-baseline gap-1.5 flex-wrap">
+                    <span className="text-xl sm:text-2xl font-black text-amber-600 dark:text-amber-400 tracking-tight truncate">{totalReplied.toLocaleString()}</span>
+                    <span className="text-xs font-bold text-amber-600/80 dark:text-amber-400/80 bg-amber-50 dark:bg-amber-950/60 px-1.5 py-0.5 rounded-md border border-amber-200/60 dark:border-amber-800/40 shrink-0">
                       {repliedPct}%
                     </span>
                   </div>
-                  <p className="text-[11px] text-slate-500 dark:text-slate-400 font-medium">Inbound responses</p>
+                  <p className="text-[11px] text-slate-500 dark:text-slate-400 font-medium truncate">Inbound responses</p>
                 </div>
               </div>
 
               {/* 7. Interested */}
-              <div className="bg-slate-50/70 dark:bg-[#161A1D] hover:bg-slate-100/60 dark:hover:bg-[#1C2126] transition-all p-4 rounded-xl border border-slate-200/70 dark:border-[#2C333A] flex flex-col justify-between shadow-2xs">
+              <div className="min-w-0 overflow-hidden bg-slate-50/70 dark:bg-[#161A1D] hover:bg-slate-100/60 dark:hover:bg-[#1C2126] transition-all p-3.5 sm:p-4 rounded-xl border border-slate-200/70 dark:border-[#2C333A] flex flex-col justify-between shadow-2xs">
                 <div className="flex items-center justify-between gap-1 mb-2">
-                  <span className="text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Interested</span>
-                  <span className="w-6 h-6 rounded-lg bg-emerald-50 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400 flex items-center justify-center text-xs">⭐</span>
+                  <span className="text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider truncate">Interested</span>
+                  <span className="w-6 h-6 rounded-lg bg-emerald-50 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400 flex items-center justify-center text-xs shrink-0">⭐</span>
                 </div>
-                <div className="space-y-1">
-                  <p className="text-2xl font-black text-emerald-600 dark:text-emerald-400 tracking-tight">{totalInterested.toLocaleString()}</p>
-                  <p className="text-[11px] text-emerald-600/90 dark:text-emerald-400/90 font-medium">Hot prospects qualified</p>
+                <div className="space-y-1 min-w-0">
+                  <p className="text-xl sm:text-2xl font-black text-emerald-600 dark:text-emerald-400 tracking-tight truncate">{totalInterested.toLocaleString()}</p>
+                  <p className="text-[11px] text-emerald-600/90 dark:text-emerald-400/90 font-medium truncate">Hot prospects qualified</p>
                 </div>
               </div>
 
               {/* 8. Opportunities */}
-              <div className="bg-slate-50/70 dark:bg-[#161A1D] hover:bg-slate-100/60 dark:hover:bg-[#1C2126] transition-all p-4 rounded-xl border border-slate-200/70 dark:border-[#2C333A] flex flex-col justify-between shadow-2xs">
+              <div className="min-w-0 overflow-hidden bg-slate-50/70 dark:bg-[#161A1D] hover:bg-slate-100/60 dark:hover:bg-[#1C2126] transition-all p-3.5 sm:p-4 rounded-xl border border-slate-200/70 dark:border-[#2C333A] flex flex-col justify-between shadow-2xs">
                 <div className="flex items-center justify-between gap-1 mb-2">
-                  <span className="text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Opportunities</span>
-                  <span className="w-6 h-6 rounded-lg bg-emerald-50 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400 flex items-center justify-center text-xs">💼</span>
+                  <span className="text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider truncate">Opportunities</span>
+                  <span className="w-6 h-6 rounded-lg bg-emerald-50 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400 flex items-center justify-center text-xs shrink-0">💼</span>
                 </div>
-                <div className="space-y-1">
-                  <p className="text-2xl font-black text-emerald-700 dark:text-emerald-300 tracking-tight">${totalOpportunities.toLocaleString()}</p>
-                  <p className="text-[11px] text-slate-500 dark:text-slate-400 font-medium">Est. pipeline value</p>
+                <div className="space-y-1 min-w-0">
+                  <p className="text-xl sm:text-2xl font-black text-emerald-700 dark:text-emerald-300 tracking-tight truncate">${totalOpportunities.toLocaleString()}</p>
+                  <p className="text-[11px] text-slate-500 dark:text-slate-400 font-medium truncate">Est. pipeline value</p>
                 </div>
               </div>
 
               {/* 9. Bounced */}
-              <div className="bg-slate-50/70 dark:bg-[#161A1D] hover:bg-slate-100/60 dark:hover:bg-[#1C2126] transition-all p-4 rounded-xl border border-slate-200/70 dark:border-[#2C333A] flex flex-col justify-between shadow-2xs">
+              <div className="min-w-0 overflow-hidden bg-slate-50/70 dark:bg-[#161A1D] hover:bg-slate-100/60 dark:hover:bg-[#1C2126] transition-all p-3.5 sm:p-4 rounded-xl border border-slate-200/70 dark:border-[#2C333A] flex flex-col justify-between shadow-2xs">
                 <div className="flex items-center justify-between gap-1 mb-2">
-                  <span className="text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Bounced</span>
-                  <span className="w-6 h-6 rounded-lg bg-rose-50 dark:bg-rose-950/60 text-rose-600 dark:text-rose-400 flex items-center justify-center text-xs">⚠️</span>
+                  <span className="text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider truncate">Bounced</span>
+                  <span className="w-6 h-6 rounded-lg bg-rose-50 dark:bg-rose-950/60 text-rose-600 dark:text-rose-400 flex items-center justify-center text-xs shrink-0">⚠️</span>
                 </div>
-                <div className="space-y-1">
-                  <div className="flex items-baseline gap-2">
-                    <span className="text-2xl font-black text-rose-600 dark:text-rose-400 tracking-tight">{totalBounced.toLocaleString()}</span>
-                    <span className="text-xs font-bold text-rose-600/80 dark:text-rose-400/80 bg-rose-50 dark:bg-rose-950/60 px-1.5 py-0.5 rounded-md border border-rose-200/60 dark:border-rose-800/40">
+                <div className="space-y-1 min-w-0">
+                  <div className="flex items-baseline gap-1.5 flex-wrap">
+                    <span className="text-xl sm:text-2xl font-black text-rose-600 dark:text-rose-400 tracking-tight truncate">{totalBounced.toLocaleString()}</span>
+                    <span className="text-xs font-bold text-rose-600/80 dark:text-rose-400/80 bg-rose-50 dark:bg-rose-950/60 px-1.5 py-0.5 rounded-md border border-rose-200/60 dark:border-rose-800/40 shrink-0">
                       {bouncePct}%
                     </span>
                   </div>
-                  <p className="text-[11px] text-slate-500 dark:text-slate-400 font-medium">Email deliverability</p>
+                  <p className="text-[11px] text-slate-500 dark:text-slate-400 font-medium truncate">Email deliverability</p>
                 </div>
               </div>
 
               {/* 10. Total Cost */}
-              <div className="bg-amber-50/60 dark:bg-[#161A1D] hover:bg-amber-50 dark:hover:bg-[#1C2126] transition-all p-4 rounded-xl border border-amber-200/70 dark:border-[#2C333A] flex flex-col justify-between shadow-2xs">
+              <div className="min-w-0 overflow-hidden bg-amber-50/60 dark:bg-[#161A1D] hover:bg-amber-50 dark:hover:bg-[#1C2126] transition-all p-3.5 sm:p-4 rounded-xl border border-amber-200/70 dark:border-[#2C333A] flex flex-col justify-between shadow-2xs">
                 <div className="flex items-center justify-between gap-1 mb-2">
-                  <span className="text-[11px] font-bold text-amber-700 dark:text-amber-400 uppercase tracking-wider">Total Cost</span>
-                  <span className="w-6 h-6 rounded-lg bg-amber-100 dark:bg-amber-950/80 text-amber-700 dark:text-amber-300 flex items-center justify-center text-xs">💳</span>
+                  <span className="text-[11px] font-bold text-amber-700 dark:text-amber-400 uppercase tracking-wider truncate">Total Cost</span>
+                  <span className="w-6 h-6 rounded-lg bg-amber-100 dark:bg-amber-950/80 text-amber-700 dark:text-amber-300 flex items-center justify-center text-xs shrink-0">💳</span>
                 </div>
-                <div className="space-y-1">
-                  <p className="text-2xl font-black text-amber-800 dark:text-amber-400 tracking-tight">{formatUsdCost(totalCampaignCost)}</p>
-                  <p className="text-[11px] text-amber-700/80 dark:text-amber-400/80 font-medium">Outreach billing run</p>
+                <div className="space-y-1 min-w-0">
+                  <p className="text-xl sm:text-2xl font-black text-amber-800 dark:text-amber-400 tracking-tight truncate">{formatUsdCost(totalCampaignCost)}</p>
+                  <p className="text-[11px] text-amber-700/80 dark:text-amber-400/80 font-medium truncate">Outreach billing run</p>
                 </div>
               </div>
             </div>
