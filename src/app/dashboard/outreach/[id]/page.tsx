@@ -1,7 +1,7 @@
 'use client';
 
-import { useEffect, useState, use, useRef } from 'react';
-import { useSearchParams } from 'next/navigation';
+import { useEffect, useState, useRef } from 'react';
+import { useParams, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import ConfirmDialog, { type ConfirmDialogVariant } from '@/components/ui/ConfirmDialog';
 import { estimateLeadSearchCost, formatUsdCost } from '@/lib/treg-billing';
@@ -153,24 +153,40 @@ function getAvatarGradient(name: string): string {
 function sanitizeLeadCompany(company?: string | null): string {
   if (!company) return 'Independent';
   const clean = company.trim();
-  if (
-    clean.includes('/') ||
-    clean.includes('Computer Software') ||
-    clean.includes('Information Technology') ||
-    clean.length > 35
-  ) {
-    return 'Independent / Stealth';
+  // Strip trailing ellipsis or web protocol prefixes, but retain actual company name
+  const formatted = clean.replace(/\.{2,}$/, '').replace(/^https?:\/\//i, '').trim();
+  return formatted || 'Independent';
+}
+
+function extractLeadBioSummary(lead: { fullName: string; jobTitle?: string | null; companyName?: string | null; metadata?: any }) {
+  const summary = (lead.metadata as any)?.summary || '';
+  if (!summary) return { shortSnippet: '', fullBio: '' };
+
+  let clean = summary
+    .replace(/\.{2,}\s*Read more/gi, '')
+    .replace(/Read more/gi, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+  // Strip leading repetitive name if bio starts with it
+  if (lead.fullName && clean.toLowerCase().startsWith(lead.fullName.toLowerCase())) {
+    clean = clean.slice(lead.fullName.length).replace(/^[.\s·|:-]+/, '').trim();
   }
-  return clean;
+
+  const shortSnippet = clean.length > 135 
+    ? clean.slice(0, 130).replace(/\s+\S*$/, '') + '...' 
+    : clean;
+
+  return { shortSnippet, fullBio: clean };
 }
 
 export default function CampaignWorkspacePage({
   params,
 }: {
-  params: Promise<{ id: string }> | { id: string };
+  params?: { id?: string } | Promise<{ id?: string }>;
 }) {
-  const resolvedParams = use(params as any) as { id: string };
-  const campaignId = resolvedParams.id;
+  const routeParams = useParams();
+  const campaignId = (routeParams?.id as string) || (params as any)?.id || '';
   const searchParams = useSearchParams();
   const autoSourceTriggered = useRef(false);
 
@@ -185,6 +201,7 @@ export default function CampaignWorkspacePage({
 
   // Selection state for Checkboxes
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [expandedBioIds, setExpandedBioIds] = useState<Record<string, boolean>>({});
 
   // Pagination & Filtering
   const [currentPage, setCurrentPage] = useState(1);
@@ -242,7 +259,7 @@ export default function CampaignWorkspacePage({
   const [settingsSearchQuery, setSettingsSearchQuery] = useState('');
   const [settingsPromptInstructions, setSettingsPromptInstructions] = useState('');
   const [settingsDripEnabled, setSettingsDripEnabled] = useState(false);
-  const [settingsDripDelayDays, setSettingsDripDelayDays] = useState(3);
+  const [settingsDripDelayDays, setSettingsDripDelayDays] = useState(7);
   const [settingsDripSubject, setSettingsDripSubject] = useState('');
   const [savingSettings, setSavingSettings] = useState(false);
   const [outreachAccounts, setOutreachAccounts] = useState<any[]>([]);
@@ -947,7 +964,7 @@ export default function CampaignWorkspacePage({
     setSettingsSearchQuery(campaign.searchQuery || '');
     setSettingsPromptInstructions(campaign.promptInstructions || '');
     setSettingsDripEnabled((campaign as any).dripEnabled || false);
-    setSettingsDripDelayDays((campaign as any).dripDelayDays || 3);
+    setSettingsDripDelayDays((campaign as any).dripDelayDays || 7);
     setSettingsDripSubject((campaign as any).dripSubject || '');
     setIsSettingsModalOpen(true);
   }
@@ -1033,8 +1050,16 @@ export default function CampaignWorkspacePage({
   const uncommittedSafeDrafts = allLeads.filter((l) => l.status !== 'CONVERTED' && l.verifyStatus === 'SAFE' && Boolean(l.aiDraftSubject)).length;
   const uncommittedTotalLeads = allLeads.filter((l) => l.status !== 'CONVERTED').length;
 
-  function computeLeadIcpScore(lead: Lead): { score: number; label: string; badgeClass: string } {
-    if (!campaign) return { score: 60, label: 'Moderate Match', badgeClass: 'bg-blue-50 text-blue-700 border-blue-200' };
+  function computeLeadIcpScore(lead: Lead): { score: number; label: string; badgeClass: string; matchFactors: string[] } {
+    const matchFactors: string[] = [];
+    if (!campaign) {
+      return {
+        score: 60,
+        label: 'Moderate Match',
+        badgeClass: 'bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-950/40 dark:text-blue-300 dark:border-blue-800',
+        matchFactors: ['Profile Verified'],
+      };
+    }
 
     let score = 50; // Base score
     const targetRole = (campaign.targetRole || '').toLowerCase();
@@ -1048,11 +1073,17 @@ export default function CampaignWorkspacePage({
       const matched = roles.some((r) => r.length > 2 && leadRole.includes(r));
       if (matched || leadRole.includes('founder') || leadRole.includes('owner') || leadRole.includes('ceo') || leadRole.includes('chief') || leadRole.includes('cto')) {
         score += 30;
+        matchFactors.push('Executive Role');
       } else if (leadRole.includes('director') || leadRole.includes('vp') || leadRole.includes('head') || leadRole.includes('lead')) {
         score += 20;
+        matchFactors.push('Leadership');
       } else {
         score += 10;
+        matchFactors.push('Role Match');
       }
+    } else if (leadRole) {
+      score += 15;
+      matchFactors.push('Role Verified');
     }
 
     // 2. Location Match (+10 pts)
@@ -1060,12 +1091,17 @@ export default function CampaignWorkspacePage({
       const locs = targetLocation.split(/[,/|]/).map((l) => l.trim().toLowerCase());
       if (locs.some((l) => l.length > 2 && leadLocation.includes(l))) {
         score += 10;
+        matchFactors.push('Target Geo');
       }
+    } else if (leadLocation) {
+      score += 5;
+      matchFactors.push('Geo Verified');
     }
 
     // 3. Email presence (+10 pts)
     if (lead.email) {
       score += 10;
+      matchFactors.push('Corporate Email');
     }
 
     score = Math.min(score, 100);
@@ -1080,7 +1116,7 @@ export default function CampaignWorkspacePage({
       badgeClass = 'bg-indigo-50 text-indigo-700 border-indigo-200 dark:bg-indigo-950/40 dark:text-indigo-300 dark:border-indigo-800 font-semibold';
     }
 
-    return { score, label, badgeClass };
+    return { score, label, badgeClass, matchFactors };
   }
 
   function copyLeadsToClipboard(leads: Lead[], stepTitle: string) {
@@ -1135,9 +1171,8 @@ export default function CampaignWorkspacePage({
 
   const filteredLeads = allLeads
     .filter((l) => {
+      if (filterStatus === 'WITH_EMAIL') return Boolean(l.email);
       if (filterStatus === 'MISSING_EMAIL') return !l.email;
-      if (filterStatus === 'SAFE') return l.verifyStatus === 'SAFE';
-      if (filterStatus === 'DRAFT_READY') return Boolean(l.aiDraftSubject);
       if (filterStatus === 'DISPATCHED') return l.status === 'DISPATCHED' || l.status === 'CONVERTED';
       return true;
     })
@@ -1154,13 +1189,11 @@ export default function CampaignWorkspacePage({
   // Selection metrics
   const selectedLeadsList = allLeads.filter((l) => selectedIds.includes(l.id));
   const selectedMissingEmail = selectedLeadsList.filter((l) => !l.email).length;
-  const selectedUnverified = selectedLeadsList.filter((l) => Boolean(l.email) && (!l.verifyStatus || l.verifyStatus === 'UNVERIFIED')).length;
-  const selectedNeedDraft = selectedLeadsList.filter((l) => l.verifyStatus === 'SAFE' && !l.aiDraftSubject).length;
   const selectedUncommittedSafe = selectedLeadsList.filter((l) => l.status !== 'CONVERTED' && l.verifyStatus !== 'INVALID').length;
 
-  // Determine current active wizard step & Next-Best-Action (NBA) button
+  // Determine current active wizard step & Next-Best-Action (NBA) button (3 sleek steps)
   let currentStepNumber = 1;
-  let nextActionPrompt = 'Sourced leads ready. Click "Get Lead Emails" to discover corporate addresses.';
+  let nextActionPrompt = 'Sourced leads ready. Click "Get Corporate Emails" to discover business addresses.';
   let nextActionLabel = 'Get Lead Emails';
   let nextActionHandler: () => void | Promise<void> = async () => { await handleFindEmails(); };
   let nextActionColor = 'bg-indigo-600 hover:bg-indigo-700';
@@ -1169,34 +1202,22 @@ export default function CampaignWorkspacePage({
     // Selection-specific contextual action
     if (selectedMissingEmail > 0) {
       currentStepNumber = 2;
-      nextActionPrompt = `Selected Batch: ${selectedMissingEmail} of ${selectedIds.length} checked leads need email discovery.`;
-      nextActionLabel = `Get Emails (${selectedIds.length} Selected)`;
+      nextActionPrompt = `Selected Batch: ${selectedMissingEmail} of ${selectedIds.length} checked leads need corporate email discovery.`;
+      nextActionLabel = `Get Corporate Emails (${selectedIds.length} Selected)`;
       nextActionHandler = async () => { await handleFindEmails(selectedIds); };
       nextActionColor = 'bg-indigo-600 hover:bg-indigo-700';
-    } else if (selectedUnverified > 0) {
-      currentStepNumber = 3;
-      nextActionPrompt = `Selected Batch: ${selectedUnverified} of ${selectedIds.length} checked leads need deliverability verification.`;
-      nextActionLabel = `Verify (${selectedIds.length} Selected)`;
-      nextActionHandler = async () => { await handleVerifyEmails(selectedIds); };
-      nextActionColor = 'bg-emerald-600 hover:bg-emerald-700';
-    } else if (selectedNeedDraft > 0) {
-      currentStepNumber = 4;
-      nextActionPrompt = `Selected Batch: ${selectedNeedDraft} checked safe leads need personalized AI cold copy.`;
-      nextActionLabel = `Generate AI (${selectedIds.length} Selected)`;
-      nextActionHandler = async () => { await handleGenerateDrafts(selectedIds); };
-      nextActionColor = 'bg-purple-600 hover:bg-purple-700';
     } else {
-      currentStepNumber = 5;
-      nextActionPrompt = `Selected Batch: Ready to push ${selectedUncommittedSafe} verified leads to Kanban CRM.`;
-      nextActionLabel = `Push ${selectedUncommittedSafe} Selected to CRM`;
+      currentStepNumber = 3;
+      nextActionPrompt = `Selected Batch: Ready to push ${selectedIds.length} leads directly into Kanban CRM.`;
+      nextActionLabel = `Push ${selectedIds.length} Selected to CRM`;
       nextActionHandler = () => { openPushCrmModal(selectedIds); };
-      nextActionColor = 'bg-amber-500 hover:bg-amber-600 text-slate-950';
+      nextActionColor = 'bg-emerald-600 hover:bg-emerald-700 text-white';
     }
   } else {
     // Global Pipeline Progression
     if (allLeads.length === 0) {
       currentStepNumber = 1;
-      nextActionPrompt = 'Start by sourcing targeted prospects from LinkedIn.';
+      nextActionPrompt = 'Start by sourcing targeted prospects from LinkedIn matching your ICP criteria.';
       nextActionLabel = 'Source Target Leads';
       nextActionHandler = async () => { await handleSourceLeads(); };
       nextActionColor = 'bg-blue-600 hover:bg-blue-700';
@@ -1206,26 +1227,14 @@ export default function CampaignWorkspacePage({
       nextActionLabel = `Get Lead Emails (${missingEmailCount})`;
       nextActionHandler = async () => { await handleFindEmails(); };
       nextActionColor = 'bg-indigo-600 hover:bg-indigo-700';
-    } else if (unverifiedCount > 0) {
+    } else if (uncommittedTotalLeads > 0) {
       currentStepNumber = 3;
-      nextActionPrompt = `Step 3: ${unverifiedCount} lead emails need deliverability verification.`;
-      nextActionLabel = `Verify Deliverability (${unverifiedCount})`;
-      nextActionHandler = async () => { await handleVerifyEmails(); };
-      nextActionColor = 'bg-emerald-600 hover:bg-emerald-700';
-    } else if (safeLeads > 0 && readyDrafts < safeLeads) {
-      currentStepNumber = 4;
-      nextActionPrompt = `Step 4: ${safeLeads} safe inboxes verified. Generate personalized AI cold copy.`;
-      nextActionLabel = `Generate AI Drafts (${safeLeads - readyDrafts} remaining)`;
-      nextActionHandler = async () => { await handleGenerateDrafts(); };
-      nextActionColor = 'bg-purple-600 hover:bg-purple-700';
-    } else if (uncommittedSafeDrafts > 0) {
-      currentStepNumber = 5;
-      nextActionPrompt = `Step 5: ${uncommittedSafeDrafts} verified AI drafts ready! Push to Kanban CRM for pipeline tracking.`;
-      nextActionLabel = `Push ${uncommittedSafeDrafts} Leads to CRM`;
+      nextActionPrompt = `Step 3: ${uncommittedTotalLeads} leads ready. Push into Kanban CRM pipeline.`;
+      nextActionLabel = `Push ${uncommittedTotalLeads} Leads to CRM`;
       nextActionHandler = () => { openPushCrmModal(); };
-      nextActionColor = 'bg-amber-500 hover:bg-amber-600 text-slate-950';
+      nextActionColor = 'bg-emerald-600 hover:bg-emerald-700 text-white';
     } else if (convertedLeads > 0 && convertedLeads === allLeads.length) {
-      currentStepNumber = 5;
+      currentStepNumber = 3;
       nextActionPrompt = 'Pipeline fully executed! All leads are active in Kanban CRM.';
       nextActionLabel = 'View Kanban CRM Board';
       nextActionHandler = () => { window.location.assign('/dashboard'); };
@@ -1444,15 +1453,15 @@ export default function CampaignWorkspacePage({
         );
       })()}
 
-      {/* Guided 5-Step Outreach Funnel Wizard */}
+      {/* Guided 3-Step Outreach Funnel Wizard */}
       <div className="bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 p-5 sm:p-6 rounded-2xl text-white shadow-lg space-y-5 border border-slate-800">
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 border-b border-slate-800 pb-4">
           <div>
             <div className="flex items-center gap-2">
               <span className="text-xl">⚡</span>
               <h2 className="text-base font-bold tracking-tight">Outreach Pipeline Flow</h2>
-              <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">
-                Step {currentStepNumber} of 5
+              <span className="text-[10px] font-bold uppercase tracking-wider px-2.5 py-0.5 rounded-full bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">
+                Step {currentStepNumber} of 3
               </span>
             </div>
             <p className="text-xs text-slate-300 mt-1">
@@ -1481,284 +1490,137 @@ export default function CampaignWorkspacePage({
           </div>
         </div>
 
-        {/* Step Progression Grid */}
-        <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+        {/* Step Progression Grid: 3 Clean Steps */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3.5">
           {/* Step 1: Leads Sourced */}
-          <div className={`p-3.5 rounded-xl border transition-all ${currentStepNumber === 1 ? 'bg-white/15 border-amber-400 ring-2 ring-amber-400/30' : allLeads.length > 0 ? 'bg-emerald-950/30 border-emerald-500/30' : 'bg-white/5 border-white/10'} flex flex-col justify-between`}>
+          <div className={`p-4 rounded-xl border transition-all ${currentStepNumber === 1 ? 'bg-white/15 border-amber-400 ring-2 ring-amber-400/30' : allLeads.length > 0 ? 'bg-emerald-950/30 border-emerald-500/30' : 'bg-white/5 border-white/10'} flex flex-col justify-between`}>
             <div>
               <div className="flex items-center justify-between">
                 <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Step 1</span>
                 {allLeads.length > 0 ? (
-                  <span className="text-emerald-400 text-xs font-bold bg-emerald-500/20 px-1.5 py-0.5 rounded-md">✓ Done</span>
+                  <span className="text-emerald-400 text-xs font-bold bg-emerald-500/20 px-2 py-0.5 rounded-md">✓ Done</span>
                 ) : (
                   <span className="text-slate-500 text-[10px]">Pending</span>
                 )}
               </div>
-              <p className="text-xs font-semibold text-slate-200 mt-1">Leads Sourced</p>
-              <div className="flex items-baseline justify-between gap-2 mt-0.5">
-                <p className="text-lg font-bold text-blue-400">{allLeads.length}</p>
+              <p className="text-xs font-semibold text-slate-200 mt-1.5">Leads Sourced</p>
+              <div className="flex items-baseline justify-between gap-2 mt-1">
+                <p className="text-xl font-bold text-blue-400">{allLeads.length}</p>
                 <span className="text-[10px] font-mono text-amber-300 bg-amber-500/15 border border-amber-400/20 px-1.5 py-0.5 rounded">
                   {formatUsdCost(campaign.totalCostUsd || 0)}
                 </span>
               </div>
             </div>
-            <div className="flex items-center gap-1.5 mt-2 pt-1.5 border-t border-white/10">
+            {allLeads.length === 0 && (
               <button
-                onClick={() => exportStepCsv(allLeads, `${campaign.name}_step1_sourced_leads`)}
-                className="text-[10px] text-slate-300 hover:text-white px-1.5 py-0.5 rounded bg-white/5 hover:bg-white/10 flex items-center gap-1"
-                title="Export Step 1 leads to CSV"
+                onClick={() => handleSourceLeads()}
+                disabled={Boolean(actionLoading) || loading}
+                className="mt-3 w-full py-1.5 bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold rounded-lg transition-colors flex items-center justify-center gap-1.5 shadow-xs"
               >
-                <span>📥 CSV</span>
+                <span>🔍 Source Prospects</span>
               </button>
-              <button
-                onClick={() => copyLeadsToClipboard(allLeads, 'Step 1: Leads Sourced')}
-                className="text-[10px] text-slate-300 hover:text-white px-1.5 py-0.5 rounded bg-white/5 hover:bg-white/10 flex items-center gap-1"
-                title="Copy Step 1 leads to clipboard"
-              >
-                <span>📋 Copy</span>
-              </button>
-            </div>
+            )}
           </div>
 
-          {/* Step 2: Lead Emails */}
-          <div className={`p-3.5 rounded-xl border transition-all ${currentStepNumber === 2 ? 'bg-white/15 border-amber-400 ring-2 ring-amber-400/30' : missingEmailCount === 0 && allLeads.length > 0 ? 'bg-emerald-950/30 border-emerald-500/30' : 'bg-white/5 border-white/10'} flex flex-col justify-between`}>
+          {/* Step 2: Corporate Emails */}
+          <div className={`p-4 rounded-xl border transition-all ${currentStepNumber === 2 ? 'bg-white/15 border-amber-400 ring-2 ring-amber-400/30' : missingEmailCount === 0 && allLeads.length > 0 ? 'bg-emerald-950/30 border-emerald-500/30' : 'bg-white/5 border-white/10'} flex flex-col justify-between`}>
             <div>
               <div className="flex items-center justify-between">
                 <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Step 2</span>
                 {missingEmailCount === 0 && allLeads.length > 0 ? (
-                  <span className="text-emerald-400 text-xs font-bold bg-emerald-500/20 px-1.5 py-0.5 rounded-md">✓ Done</span>
+                  <span className="text-emerald-400 text-xs font-bold bg-emerald-500/20 px-2 py-0.5 rounded-md">✓ Complete</span>
                 ) : (
-                  <span className="text-slate-500 text-[10px]">{missingEmailCount} Missing</span>
+                  <span className="text-slate-400 text-[11px] font-medium">{missingEmailCount} Missing</span>
                 )}
               </div>
-              <p className="text-xs font-semibold text-slate-200 mt-1">Lead Emails</p>
-              <p className="text-lg font-bold text-indigo-300 mt-0.5">{leadsWithEmail} <span className="text-xs font-normal text-slate-400">/ {allLeads.length}</span></p>
+              <p className="text-xs font-semibold text-slate-200 mt-1.5">Corporate Emails</p>
+              <p className="text-xl font-bold text-indigo-300 mt-1">
+                {leadsWithEmail} <span className="text-xs font-normal text-slate-400">/ {allLeads.length} Discovered</span>
+              </p>
             </div>
-            <div>
-              <button
-                onClick={() => handleFindEmails()}
-                disabled={Boolean(actionLoading) || missingEmailCount === 0 || allLeads.length === 0}
-                className="mt-2 w-full py-1 bg-indigo-600 hover:bg-indigo-500 text-white text-[11px] font-semibold rounded-lg transition-colors flex items-center justify-center gap-1 disabled:opacity-40"
-                title="Run pattern generator & domain lookup to find lead emails"
-              >
-                {actionLoading === 'find-emails' ? (
-                  <span className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                ) : missingEmailCount === 0 && allLeads.length > 0 ? (
-                  <span>✓ All Found</span>
-                ) : (
-                  <span>📬 Get Emails</span>
-                )}
-              </button>
-              <div className="flex items-center gap-1.5 mt-1.5 pt-1 border-t border-white/10">
-                <button
-                  onClick={() => exportStepCsv(allLeads.filter((l) => Boolean(l.email)), `${campaign.name}_step2_emails`)}
-                  className="text-[10px] text-slate-300 hover:text-white px-1.5 py-0.5 rounded bg-white/5 hover:bg-white/10 flex items-center gap-1"
-                  title="Export discovered emails to CSV"
-                >
-                  <span>📥 CSV</span>
-                </button>
-                <button
-                  onClick={() => copyLeadsToClipboard(allLeads.filter((l) => Boolean(l.email)), 'Step 2: Lead Emails')}
-                  className="text-[10px] text-slate-300 hover:text-white px-1.5 py-0.5 rounded bg-white/5 hover:bg-white/10 flex items-center gap-1"
-                  title="Copy discovered emails to clipboard"
-                >
-                  <span>📋 Copy</span>
-                </button>
-              </div>
-            </div>
+            <button
+              onClick={() => handleFindEmails()}
+              disabled={Boolean(actionLoading) || missingEmailCount === 0 || allLeads.length === 0}
+              className="mt-3 w-full py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold rounded-lg transition-colors flex items-center justify-center gap-1.5 shadow-xs disabled:opacity-40"
+              title="Find corporate verified emails for leads without email"
+            >
+              {actionLoading === 'email' ? (
+                <span className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+              ) : missingEmailCount === 0 && allLeads.length > 0 ? (
+                <span>✓ All Emails Found</span>
+              ) : (
+                <span>📬 Get Lead Emails ({missingEmailCount})</span>
+              )}
+            </button>
           </div>
 
-          {/* Step 3: Verify Emails */}
-          <div className={`p-3.5 rounded-xl border transition-all ${currentStepNumber === 3 ? 'bg-white/15 border-amber-400 ring-2 ring-amber-400/30' : unverifiedCount === 0 && leadsWithEmail > 0 ? 'bg-emerald-950/30 border-emerald-500/30' : 'bg-white/5 border-white/10'} flex flex-col justify-between`}>
+          {/* Step 3: Push to CRM */}
+          <div className={`p-4 rounded-xl border transition-all ${currentStepNumber === 3 ? 'bg-white/15 border-amber-400 ring-2 ring-amber-400/30' : uncommittedTotalLeads === 0 && allLeads.length > 0 ? 'bg-emerald-950/30 border-emerald-500/30' : 'bg-white/5 border-white/10'} flex flex-col justify-between`}>
             <div>
               <div className="flex items-center justify-between">
                 <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Step 3</span>
-                {unverifiedCount === 0 && leadsWithEmail > 0 ? (
-                  <span className="text-emerald-400 text-xs font-bold bg-emerald-500/20 px-1.5 py-0.5 rounded-md">✓ Done</span>
-                ) : (
-                  <span className="text-slate-500 text-[10px]">{unverifiedCount} Unverified</span>
-                )}
-              </div>
-              <p className="text-xs font-semibold text-slate-200 mt-1">Deliverability</p>
-              <p className="text-lg font-bold text-emerald-400 mt-0.5">{safeLeads} <span className="text-xs font-normal text-emerald-300/70">Safe</span></p>
-            </div>
-            <div>
-              <button
-                onClick={() => handleVerifyEmails()}
-                disabled={Boolean(actionLoading) || unverifiedCount === 0 || leadsWithEmail === 0}
-                className="mt-2 w-full py-1 bg-emerald-600 hover:bg-emerald-500 text-white text-[11px] font-semibold rounded-lg transition-colors flex items-center justify-center gap-1 disabled:opacity-40"
-                title="Verify mailbox deliverability and safety score"
-              >
-                {actionLoading === 'verify' ? (
-                  <span className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                ) : unverifiedCount === 0 && leadsWithEmail > 0 ? (
-                  <span>✓ Verified</span>
-                ) : (
-                  <span>🛡️ Verify</span>
-                )}
-              </button>
-              <div className="flex items-center gap-1.5 mt-1.5 pt-1 border-t border-white/10">
-                <button
-                  onClick={() => exportStepCsv(allLeads.filter((l) => l.verifyStatus === 'SAFE'), `${campaign.name}_step3_safe_leads`)}
-                  className="text-[10px] text-slate-300 hover:text-white px-1.5 py-0.5 rounded bg-white/5 hover:bg-white/10 flex items-center gap-1"
-                  title="Export safe verified leads to CSV"
-                >
-                  <span>📥 CSV</span>
-                </button>
-                <button
-                  onClick={() => copyLeadsToClipboard(allLeads.filter((l) => l.verifyStatus === 'SAFE'), 'Step 3: Safe Leads')}
-                  className="text-[10px] text-slate-300 hover:text-white px-1.5 py-0.5 rounded bg-white/5 hover:bg-white/10 flex items-center gap-1"
-                  title="Copy safe leads to clipboard"
-                >
-                  <span>📋 Copy</span>
-                </button>
-              </div>
-            </div>
-          </div>
-
-          {/* Step 4: AI Drafts */}
-          <div className={`p-3.5 rounded-xl border transition-all ${currentStepNumber === 4 ? 'bg-white/15 border-amber-400 ring-2 ring-amber-400/30' : readyDrafts >= safeLeads && safeLeads > 0 ? 'bg-emerald-950/30 border-emerald-500/30' : 'bg-white/5 border-white/10'} flex flex-col justify-between`}>
-            <div>
-              <div className="flex items-center justify-between">
-                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Step 4</span>
-                {readyDrafts >= safeLeads && safeLeads > 0 ? (
-                  <span className="text-emerald-400 text-xs font-bold bg-emerald-500/20 px-1.5 py-0.5 rounded-md">✓ Done</span>
-                ) : (
-                  <span className="text-slate-500 text-[10px]">{Math.max(safeLeads - readyDrafts, 0)} Needed</span>
-                )}
-              </div>
-              <p className="text-xs font-semibold text-slate-200 mt-1">AI Pitch Copy</p>
-              <p className="text-lg font-bold text-purple-400 mt-0.5">{readyDrafts} <span className="text-xs font-normal text-purple-300/70">Ready</span></p>
-            </div>
-            <div>
-              <button
-                onClick={() => handleGenerateDrafts()}
-                disabled={Boolean(actionLoading) || safeLeads === 0 || (readyDrafts >= safeLeads && safeLeads > 0)}
-                className="mt-2 w-full py-1 bg-purple-600 hover:bg-purple-500 text-white text-[11px] font-semibold rounded-lg transition-colors flex items-center justify-center gap-1 disabled:opacity-40"
-                title="Generate personalized cold pitches with JetDigitalPro AI"
-              >
-                {actionLoading === 'draft' ? (
-                  <span className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                ) : readyDrafts >= safeLeads && safeLeads > 0 ? (
-                  <span>✓ All Drafted</span>
-                ) : (
-                  <span>🤖 AI Drafts</span>
-                )}
-              </button>
-              <div className="flex items-center gap-1.5 mt-1.5 pt-1 border-t border-white/10">
-                <button
-                  onClick={() => exportStepCsv(allLeads.filter((l) => Boolean(l.aiDraftSubject)), `${campaign.name}_step4_drafts`)}
-                  className="text-[10px] text-slate-300 hover:text-white px-1.5 py-0.5 rounded bg-white/5 hover:bg-white/10 flex items-center gap-1"
-                  title="Export drafted leads to CSV"
-                >
-                  <span>📥 CSV</span>
-                </button>
-                <button
-                  onClick={() => copyLeadsToClipboard(allLeads.filter((l) => Boolean(l.aiDraftSubject)), 'Step 4: AI Drafts')}
-                  className="text-[10px] text-slate-300 hover:text-white px-1.5 py-0.5 rounded bg-white/5 hover:bg-white/10 flex items-center gap-1"
-                  title="Copy drafted leads to clipboard"
-                >
-                  <span>📋 Copy</span>
-                </button>
-              </div>
-            </div>
-          </div>
-
-          {/* Step 5: Push to CRM & Dispatch */}
-          <div className={`p-3.5 rounded-xl border transition-all ${currentStepNumber === 5 ? 'bg-white/15 border-amber-400 ring-2 ring-amber-400/30' : uncommittedTotalLeads === 0 && allLeads.length > 0 ? 'bg-emerald-950/30 border-emerald-500/30' : 'bg-white/5 border-white/10'} col-span-2 md:col-span-1 flex flex-col justify-between`}>
-            <div>
-              <div className="flex items-center justify-between">
-                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Step 5</span>
                 {uncommittedTotalLeads === 0 && allLeads.length > 0 ? (
-                  <span className="text-emerald-400 text-xs font-bold bg-emerald-500/20 px-1.5 py-0.5 rounded-md">✓ Done</span>
+                  <span className="text-emerald-400 text-xs font-bold bg-emerald-500/20 px-2 py-0.5 rounded-md">✓ All Synced</span>
                 ) : (
-                  <span className="text-slate-500 text-[10px]">{uncommittedSafeDrafts} Ready</span>
+                  <span className="text-slate-400 text-[11px] font-medium">{uncommittedTotalLeads} Ready to Push</span>
                 )}
               </div>
-              <p className="text-xs font-semibold text-slate-200 mt-1">CRM Bridge</p>
-              <p className="text-lg font-bold text-amber-400 mt-0.5">{convertedLeads} <span className="text-xs font-normal text-amber-300/70">in CRM</span></p>
+              <p className="text-xs font-semibold text-slate-200 mt-1.5">CRM Pipeline Bridge</p>
+              <p className="text-xl font-bold text-emerald-400 mt-1">
+                {convertedLeads} <span className="text-xs font-normal text-slate-400">/ {allLeads.length} in Kanban CRM</span>
+              </p>
             </div>
-            <div>
-              <button
-                onClick={() => openPushCrmModal()}
-                disabled={Boolean(actionLoading) || uncommittedSafeDrafts === 0 || allLeads.length === 0}
-                className="mt-2 w-full py-1 bg-amber-500 hover:bg-amber-400 text-slate-950 text-[11px] font-bold rounded-lg transition-colors flex items-center justify-center gap-1 disabled:opacity-40"
-                title="Bridge verified leads into Kanban CRM Fresh leads column"
-              >
-                {actionLoading === 'push-crm' ? (
-                  <span className="w-3 h-3 border-2 border-slate-900 border-t-transparent rounded-full animate-spin" />
-                ) : uncommittedTotalLeads === 0 && allLeads.length > 0 ? (
-                  <span>✓ All in CRM</span>
-                ) : (
-                  <span>📋 Push CRM</span>
-                )}
-              </button>
-              <div className="flex items-center gap-1.5 mt-1.5 pt-1 border-t border-white/10">
-                <button
-                  onClick={() => exportStepCsv(allLeads.filter((l) => l.status === 'CONVERTED'), `${campaign.name}_step5_crm_leads`)}
-                  className="text-[10px] text-slate-300 hover:text-white px-1.5 py-0.5 rounded bg-white/5 hover:bg-white/10 flex items-center gap-1"
-                  title="Export CRM leads to CSV"
-                >
-                  <span>📥 CSV</span>
-                </button>
-                <button
-                  onClick={() => copyLeadsToClipboard(allLeads.filter((l) => l.status === 'CONVERTED'), 'Step 5: CRM Leads')}
-                  className="text-[10px] text-slate-300 hover:text-white px-1.5 py-0.5 rounded bg-white/5 hover:bg-white/10 flex items-center gap-1"
-                  title="Copy CRM leads to clipboard"
-                >
-                  <span>📋 Copy</span>
-                </button>
-              </div>
-            </div>
+            <button
+              onClick={() => openPushCrmModal()}
+              disabled={Boolean(actionLoading) || uncommittedTotalLeads === 0 || allLeads.length === 0}
+              className="mt-3 w-full py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold rounded-lg transition-colors flex items-center justify-center gap-1.5 shadow-xs disabled:opacity-40"
+              title="Bridge leads into Kanban CRM Fresh leads column"
+            >
+              {actionLoading === 'push-crm' ? (
+                <span className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+              ) : uncommittedTotalLeads === 0 && allLeads.length > 0 ? (
+                <span>✓ All Synced to CRM</span>
+              ) : (
+                <span>📥 Push to CRM ({uncommittedTotalLeads})</span>
+              )}
+            </button>
           </div>
         </div>
       </div>
 
-      {/* Floating Selection Bar */}
+      {/* Top Selection Bar */}
       {selectedIds.length > 0 && (
-        <div className="bg-primary-900 text-white p-3.5 rounded-2xl flex flex-wrap items-center justify-between gap-3 shadow-lg border border-primary-700 animate-in fade-in slide-in-from-top-2">
+        <div className="bg-slate-900 text-white p-3.5 rounded-2xl flex flex-wrap items-center justify-between gap-3 shadow-lg border border-slate-700 animate-in fade-in slide-in-from-top-2">
           <div className="flex items-center gap-2">
-            <span className="bg-primary-700 px-2 py-0.5 rounded-md font-bold text-xs">
+            <span className="bg-primary-600 px-2.5 py-0.5 rounded-md font-bold text-xs">
               {selectedIds.length} Selected
             </span>
-            <span className="text-xs text-primary-100">
-              Apply actions specifically to checked prospects:
+            <span className="text-xs text-slate-300">
+              Apply actions to selected prospects:
             </span>
           </div>
           <div className="flex flex-wrap items-center gap-2">
             <button
               onClick={() => handleFindEmails(selectedIds)}
               disabled={Boolean(actionLoading)}
-              className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold rounded-xl transition-colors flex items-center gap-1"
+              className="px-3.5 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold rounded-xl transition-colors flex items-center gap-1.5 cursor-pointer shadow-xs disabled:opacity-50"
             >
-              <span>📬 Get Emails ({selectedIds.length})</span>
-            </button>
-            <button
-              onClick={() => handleVerifyEmails(selectedIds)}
-              disabled={Boolean(actionLoading)}
-              className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold rounded-xl transition-colors flex items-center gap-1"
-            >
-              <span>🛡️ Verify ({selectedIds.length})</span>
-            </button>
-            <button
-              onClick={() => handleGenerateDrafts(selectedIds)}
-              disabled={Boolean(actionLoading)}
-              className="px-3 py-1.5 bg-purple-600 hover:bg-purple-500 text-white text-xs font-bold rounded-xl transition-colors flex items-center gap-1"
-            >
-              <span>🤖 AI Draft ({selectedIds.length})</span>
+              <span>📬</span>
+              <span>Get Emails ({selectedIds.length})</span>
             </button>
             <button
               onClick={() => openPushCrmModal(selectedIds)}
-              disabled={Boolean(actionLoading) || selectedUncommittedSafe === 0}
-              className="px-3 py-1.5 bg-amber-500 hover:bg-amber-400 text-slate-950 text-xs font-bold rounded-xl transition-colors flex items-center gap-1 disabled:opacity-50"
+              disabled={Boolean(actionLoading)}
+              className="px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold rounded-xl transition-colors flex items-center gap-1.5 cursor-pointer shadow-xs disabled:opacity-50"
             >
-              <span>📋 Push to CRM ({selectedUncommittedSafe})</span>
+              <span>📥</span>
+              <span>Push to CRM ({selectedIds.length})</span>
             </button>
             <button
               onClick={clearSelection}
-              className="px-2.5 py-1.5 bg-white/10 hover:bg-white/20 text-white text-xs font-semibold rounded-xl transition-colors"
+              className="px-3 py-1.5 bg-white/10 hover:bg-white/20 text-white text-xs font-semibold rounded-xl transition-colors cursor-pointer"
             >
-              ✕ Deselect All
+              ✕ Deselect
             </button>
           </div>
         </div>
@@ -1872,13 +1734,13 @@ export default function CampaignWorkspacePage({
         </div>
       )}
 
-      {/* Lead Staging Table */}
-      <div className="bg-white rounded-2xl border border-slate-200/80 shadow-xs overflow-hidden">
-        <div className="p-4 border-b border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+      {/* Prospect Qualification Table */}
+      <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-xs overflow-hidden">
+        <div className="p-4 border-b border-slate-100 dark:border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div>
-            <h2 className="text-sm font-bold text-slate-900">Lead Staging & Deliverability Matrix</h2>
-            <p className="text-[11px] text-slate-400 mt-0.5">
-              Select leads to perform bulk email finding, verification, AI drafting, or push into Kanban CRM.
+            <h2 className="text-sm font-bold text-slate-900 dark:text-slate-100">Prospect Roster & Qualification Matrix</h2>
+            <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
+              Review enriched profiles, discover corporate emails, and bridge high-fit leads into your Kanban pipeline.
             </p>
           </div>
 
@@ -1887,13 +1749,12 @@ export default function CampaignWorkspacePage({
             <select
               value={filterStatus}
               onChange={(e) => { setFilterStatus(e.target.value); setCurrentPage(1); }}
-              className="px-3 py-1.5 border border-slate-300 rounded-xl text-xs font-semibold text-slate-700 bg-white"
+              className="px-3 py-1.5 border border-slate-300 dark:border-slate-700 rounded-xl text-xs font-semibold text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-primary-500"
             >
               <option value="ALL">All Leads ({allLeads.length})</option>
+              <option value="WITH_EMAIL">Has Email ({leadsWithEmail})</option>
               <option value="MISSING_EMAIL">Missing Email ({missingEmailCount})</option>
-              <option value="SAFE">Verified Safe ({safeLeads})</option>
-              <option value="DRAFT_READY">AI Drafts Ready ({readyDrafts})</option>
-              <option value="DISPATCHED">Dispatched / In CRM ({dispatchedLeads})</option>
+              <option value="DISPATCHED">In CRM Pipeline ({dispatchedLeads})</option>
             </select>
 
             <button
@@ -1932,190 +1793,230 @@ export default function CampaignWorkspacePage({
           </div>
         ) : (
           <div className="overflow-x-auto">
-	            <table className="w-full text-left text-xs text-slate-600">
-	              <thead className="bg-slate-50/80 dark:bg-slate-900/60 text-[11px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider border-b border-slate-100 dark:border-slate-800">
-	                <tr>
-	                  <th className="px-3 py-3 w-10 text-center">
-	                    <input
-	                      type="checkbox"
-	                      checked={isAllSelected}
-	                      onChange={() => toggleSelectAll(paginatedLeads)}
-	                      className="rounded border-slate-300 dark:border-slate-600 text-primary-600 focus:ring-primary-500 w-4 h-4 cursor-pointer"
-	                      title="Select / Deselect All on this page"
-	                    />
-	                  </th>
-	                  <th className="px-5 py-3 min-w-[340px] md:min-w-[420px]">Lead & Organization Profile</th>
-	                  <th className="px-4 py-3 min-w-[220px]">Corporate Email</th>
-	                  <th className="px-4 py-3 text-center min-w-[120px]">ICP Match Score</th>
-	                  <th className="px-4 py-3 text-right min-w-[150px]">CRM Pipeline</th>
-	                </tr>
-	              </thead>
-	              <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-	                {paginatedLeads.map((lead) => {
-	                  const isChecked = selectedIds.includes(lead.id);
-	                  const isFinding = rowLoading[`${lead.id}-find`];
-	                  const isPushing = rowLoading[`${lead.id}-push`];
+            <table className="w-full text-left text-xs text-slate-600 dark:text-slate-300">
+              <thead className="bg-slate-50/80 dark:bg-slate-900/60 text-[11px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider border-b border-slate-100 dark:border-slate-800">
+                <tr>
+                  <th className="px-3 py-3.5 w-12 text-center">
+                    <input
+                      type="checkbox"
+                      checked={isAllSelected}
+                      onChange={() => toggleSelectAll(paginatedLeads)}
+                      className="rounded border-slate-300 dark:border-slate-600 text-primary-600 focus:ring-primary-500 w-4 h-4 cursor-pointer"
+                      title="Select / Deselect All on this page"
+                    />
+                  </th>
+                  <th className="px-5 py-3.5 min-w-[380px] md:min-w-[460px]">Lead & Organization Profile</th>
+                  <th className="px-5 py-3.5 min-w-[280px]">Corporate Email</th>
+                  <th className="px-4 py-3.5 text-center min-w-[150px]">ICP Match Score</th>
+                  <th className="px-4 py-3.5 text-right min-w-[140px]">CRM Pipeline</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                {paginatedLeads.map((lead) => {
+                  const isChecked = selectedIds.includes(lead.id);
+                  const isFinding = rowLoading[`${lead.id}-find`];
+                  const isPushing = rowLoading[`${lead.id}-push`];
 
-	                  return (
-	                    <tr
-	                      key={lead.id}
-	                      onClick={() => toggleSelectLead(lead.id)}
-	                      className={`transition-colors cursor-pointer border-b border-slate-100 dark:border-slate-800 ${
-	                        isChecked ? 'bg-primary-50/50 dark:bg-primary-950/40' : 'hover:bg-slate-50/70 dark:hover:bg-slate-850/60'
-	                      }`}
-	                    >
-	                      {/* Checkbox */}
-	                      <td className="px-3 py-4 text-center" onClick={(e) => e.stopPropagation()}>
-	                        <input
-	                          type="checkbox"
-	                          checked={isChecked}
-	                          onChange={() => toggleSelectLead(lead.id)}
-	                          className="rounded border-slate-300 dark:border-slate-600 text-primary-600 focus:ring-primary-500 w-4 h-4 cursor-pointer"
-	                        />
-	                      </td>
+                  return (
+                    <tr
+                      key={lead.id}
+                      onClick={() => toggleSelectLead(lead.id)}
+                      className={`transition-colors cursor-pointer border-b border-slate-100 dark:border-slate-800 ${
+                        isChecked ? 'bg-primary-50/50 dark:bg-primary-950/40' : 'hover:bg-slate-50/70 dark:hover:bg-slate-850/60'
+                      }`}
+                    >
+                      {/* Checkbox */}
+                      <td className="px-3 py-4 text-center" onClick={(e) => e.stopPropagation()}>
+                        <input
+                          type="checkbox"
+                          checked={isChecked}
+                          onChange={() => toggleSelectLead(lead.id)}
+                          className="rounded border-slate-300 dark:border-slate-600 text-primary-600 focus:ring-primary-500 w-4 h-4 cursor-pointer"
+                        />
+                      </td>
 
-	                      {/* Executive Avatar + Lead & Organization Profile Layout */}
-	                      <td className="px-5 py-4">
-	                        <div className="flex items-start gap-3.5">
-	                          {/* Sleek Gradient Avatar with Initials */}
-	                          <div
-	                            className={`w-10 h-10 rounded-xl bg-gradient-to-br ${getAvatarGradient(
-	                              lead.fullName
-	                            )} text-white font-bold text-xs flex items-center justify-center shrink-0 shadow-xs border border-white/20 select-none mt-0.5`}
-	                            title={lead.fullName}
-	                          >
-	                            {getLeadInitials(lead.fullName)}
-	                          </div>
+                      {/* Lead & Organization Profile Layout */}
+                      <td className="px-5 py-4">
+                        <div className="flex items-start gap-3.5">
+                          {/* Sleek Gradient Avatar with Initials */}
+                          <div
+                            className={`w-10 h-10 rounded-xl bg-gradient-to-br ${getAvatarGradient(
+                              lead.fullName
+                            )} text-white font-bold text-xs flex items-center justify-center shrink-0 shadow-xs border border-white/20 select-none mt-0.5`}
+                            title={lead.fullName}
+                          >
+                            {getLeadInitials(lead.fullName)}
+                          </div>
 
-	                          {/* Profile Details */}
-	                          <div className="space-y-1.5 flex-1 min-w-0">
-	                            {/* Line 1: Full Name, Credentials, CRM Status, LinkedIn Pill */}
-	                            <div className="flex items-center gap-2 flex-wrap">
-	                              <span className="font-bold text-slate-900 dark:text-slate-100 text-[13px] tracking-tight break-words">
-	                                {lead.fullName}
-	                              </span>
-	                              {lead.status === 'CONVERTED' && (
-	                                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-950/60 text-emerald-800 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800">
-	                                  ✓ in CRM
-	                                </span>
-	                              )}
-	                              {lead.linkedinUrl && (
-	                                <a
-	                                  href={lead.linkedinUrl.startsWith('http') ? lead.linkedinUrl : `https://${lead.linkedinUrl}`}
-	                                  target="_blank"
-	                                  rel="noreferrer"
-	                                  className="inline-flex items-center gap-1 text-[11px] font-semibold text-[#0077b5] dark:text-[#3897d3] bg-[#0077b5]/10 dark:bg-[#0077b5]/20 hover:bg-[#0077b5]/20 px-2 py-0.5 rounded-md border border-[#0077b5]/20 transition-colors"
-	                                  title="Open Official LinkedIn Profile"
-	                                  onClick={(e) => e.stopPropagation()}
-	                                >
-	                                  <svg className="w-3 h-3 fill-current" viewBox="0 0 24 24">
-	                                    <path d="M19 3a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h14m-.5 15.5v-5.3a3.26 3.26 0 0 0-3.26-3.26c-.85 0-1.84.52-2.28 1.3v-1.11h-2.79v8.37h2.79v-4.93c0-.77.62-1.4 1.39-1.4a1.4 1.4 0 0 1 1.4 1.4v4.93h2.75M6.46 10.9v8.37H9.2V10.9H6.46M7.83 6.64a1.66 1.66 0 0 0-1.66 1.66 1.66 1.66 0 0 0 1.66 1.66 1.66 1.66 0 0 0 1.66-1.66c0-.92-.74-1.66-1.66-1.66Z" />
-	                                  </svg>
-	                                  <span>LinkedIn</span>
-	                                  <span className="text-[9px]">↗</span>
-	                                </a>
-	                              )}
-	                            </div>
+                          {/* Profile Details */}
+                          <div className="space-y-1.5 flex-1 min-w-0">
+                            {/* Line 1: Full Name, CRM Status, LinkedIn Pill */}
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <span className="font-bold text-slate-900 dark:text-slate-100 text-[13px] tracking-tight break-words">
+                                {lead.fullName}
+                              </span>
+                              {lead.status === 'CONVERTED' && (
+                                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-950/60 text-emerald-800 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800">
+                                  ✓ in CRM
+                                </span>
+                              )}
+                              {lead.linkedinUrl && (
+                                <a
+                                  href={lead.linkedinUrl.startsWith('http') ? lead.linkedinUrl : `https://${lead.linkedinUrl}`}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  className="inline-flex items-center gap-1 text-[11px] font-semibold text-[#0077b5] dark:text-[#3897d3] bg-[#0077b5]/10 dark:bg-[#0077b5]/20 hover:bg-[#0077b5]/20 px-2 py-0.5 rounded-md border border-[#0077b5]/20 transition-colors"
+                                  title="Open Official LinkedIn Profile"
+                                  onClick={(e) => e.stopPropagation()}
+                                >
+                                  <svg className="w-3 h-3 fill-current" viewBox="0 0 24 24">
+                                    <path d="M19 3a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h14m-.5 15.5v-5.3a3.26 3.26 0 0 0-3.26-3.26c-.85 0-1.84.52-2.28 1.3v-1.11h-2.79v8.37h2.79v-4.93c0-.77.62-1.4 1.39-1.4a1.4 1.4 0 0 1 1.4 1.4v4.93h2.75M6.46 10.9v8.37H9.2V10.9H6.46M7.83 6.64a1.66 1.66 0 0 0-1.66 1.66 1.66 1.66 0 0 0 1.66 1.66 1.66 1.66 0 0 0 1.66-1.66c0-.92-.74-1.66-1.66-1.66Z" />
+                                  </svg>
+                                  <span>LinkedIn</span>
+                                  <span className="text-[9px]">↗</span>
+                                </a>
+                              )}
+                            </div>
 
-	                            {/* Line 2: Full Job Title / Role */}
-	                            <div className="text-xs font-semibold text-indigo-700 dark:text-indigo-300 leading-snug break-words whitespace-normal flex items-start gap-1.5">
-	                              <span className="text-indigo-500/80 dark:text-indigo-400 text-[11px] shrink-0 mt-0.5">👔</span>
-	                              <span className="break-words">{lead.jobTitle || 'Executive Decision Maker'}</span>
-	                            </div>
+                            {/* Line 2: Full Job Title / Role */}
+                            <div className="text-xs font-semibold text-indigo-700 dark:text-indigo-300 leading-snug break-words whitespace-normal flex items-start gap-1.5">
+                              <span className="text-indigo-500/80 dark:text-indigo-400 text-[11px] shrink-0 mt-0.5">👔</span>
+                              <span className="break-words">{lead.jobTitle || 'Executive Decision Maker'}</span>
+                            </div>
 
-	                            {/* Line 3: Distinct Badges for Company and Location */}
-	                            <div className="text-xs flex items-center gap-2 flex-wrap pt-0.5">
-	                              {/* Company Badge Chip */}
-	                              <div className="inline-flex items-center gap-1.5 text-slate-800 dark:text-slate-200 font-bold bg-slate-100 dark:bg-slate-800/80 px-2.5 py-1 rounded-md border border-slate-200/80 dark:border-slate-700/80 max-w-full">
-	                                <span className="text-slate-400 dark:text-slate-500 text-[11px] shrink-0">🏢</span>
-	                                <span className="break-words">{sanitizeLeadCompany(lead.companyName)}</span>
-	                                {isValidWebsiteDomain(lead.companyDomain) && (
-	                                  <a
-	                                    href={lead.companyDomain!.startsWith('http') ? lead.companyDomain! : `https://${lead.companyDomain}`}
-	                                    target="_blank"
-	                                    rel="noreferrer"
-	                                    className="inline-flex items-center gap-0.5 text-primary-600 dark:text-primary-400 hover:underline font-semibold ml-0.5 text-[10px]"
-	                                    title={`Visit ${lead.companyDomain}`}
-	                                    onClick={(e) => e.stopPropagation()}
-	                                  >
-	                                    <span>{lead.companyDomain!.replace(/^https?:\/\//, '').replace(/\/.*$/, '')}</span>
-	                                    <span className="text-[9px]">↗</span>
-	                                  </a>
-	                                )}
-	                              </div>
+                            {/* Line 3: Distinct Badges for Company and Location */}
+                            <div className="text-xs flex items-center gap-2 flex-wrap pt-0.5">
+                              {/* Company Badge Chip */}
+                              <div className="inline-flex items-center gap-1.5 text-slate-800 dark:text-slate-200 font-bold bg-slate-100 dark:bg-slate-800/80 px-2.5 py-1 rounded-md border border-slate-200/80 dark:border-slate-700/80 max-w-full">
+                                <span className="text-slate-400 dark:text-slate-500 text-[11px] shrink-0">🏢</span>
+                                <span className="break-words">{sanitizeLeadCompany(lead.companyName)}</span>
+                                {isValidWebsiteDomain(lead.companyDomain) && (
+                                  <a
+                                    href={lead.companyDomain!.startsWith('http') ? lead.companyDomain! : `https://${lead.companyDomain}`}
+                                    target="_blank"
+                                    rel="noreferrer"
+                                    className="inline-flex items-center gap-0.5 text-primary-600 dark:text-primary-400 hover:underline font-semibold ml-0.5 text-[10px]"
+                                    title={`Visit ${lead.companyDomain}`}
+                                    onClick={(e) => e.stopPropagation()}
+                                  >
+                                    <span>{lead.companyDomain!.replace(/^https?:\/\//, '').replace(/\/.*$/, '')}</span>
+                                    <span className="text-[9px]">↗</span>
+                                  </a>
+                                )}
+                              </div>
 
-	                              {/* Location Badge Chip */}
-	                              {lead.location && (
-	                                <div className="inline-flex items-center gap-1 text-[11px] font-medium text-slate-600 dark:text-slate-300 bg-slate-50 dark:bg-slate-850 px-2 py-1 rounded-md border border-slate-200/60 dark:border-slate-800 max-w-full">
-	                                  <span className="text-[10px] shrink-0">📍</span>
-	                                  <span className="break-words">{lead.location}</span>
-	                                </div>
-	                              )}
-	                            </div>
-	                          </div>
-	                        </div>
-	                      </td>
+                              {/* Location Badge Chip */}
+                              {lead.location && (
+                                <div className="inline-flex items-center gap-1 text-[11px] font-medium text-slate-600 dark:text-slate-300 bg-slate-50 dark:bg-slate-850 px-2 py-1 rounded-md border border-slate-200/60 dark:border-slate-800 max-w-full">
+                                  <span className="text-[10px] shrink-0">📍</span>
+                                  <span className="break-words">{lead.location}</span>
+                                </div>
+                              )}
+                            </div>
 
-	                      {/* Corporate Email */}
-	                      <td className="px-4 py-4 text-xs text-slate-800 dark:text-slate-200" onClick={(e) => e.stopPropagation()}>
-	                        {lead.email ? (
-	                          <div className="space-y-1">
-	                            <div className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-400 border border-emerald-200/60 dark:border-emerald-800 text-[10px] font-bold">
-	                              <span>🟢</span>
-	                              <span>Corporate Email</span>
-	                            </div>
-	                            <div className="flex items-center gap-1.5 flex-wrap font-mono">
-	                              <span className="font-semibold text-slate-900 dark:text-slate-100 select-all break-all">{lead.email}</span>
-	                              <button
-	                                onClick={() => {
-	                                  navigator.clipboard.writeText(lead.email!);
-	                                  toast.success(`Copied ${lead.email} to clipboard!`);
-	                                }}
-	                                className="text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 text-xs p-1 rounded hover:bg-slate-100 dark:hover:bg-slate-800"
-	                                title="Copy email to clipboard"
-	                              >
-	                                📋
-	                              </button>
-	                            </div>
-	                          </div>
-	                        ) : (
-	                          <div className="space-y-1">
-	                            <button
-	                              onClick={() => handleFindEmails([lead.id])}
-	                              disabled={isFinding}
-	                              className="px-2.5 py-1 bg-indigo-50 dark:bg-indigo-950/40 hover:bg-indigo-100 dark:hover:bg-indigo-900/60 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800 text-xs font-bold rounded-lg transition-colors inline-flex items-center gap-1.5 shadow-2xs"
-	                            >
-	                              {isFinding ? (
-	                                <>
-	                                  <span className="w-3 h-3 border-2 border-indigo-600 border-t-transparent rounded-full animate-spin" />
-	                                  <span>Finding...</span>
-	                                </>
-	                              ) : (
-	                                <>
-	                                  <span>✨</span>
-	                                  <span>Find Corporate Email</span>
-	                                </>
-	                              )}
-	                            </button>
-		                            <p className="text-[10px] text-slate-400 dark:text-slate-500">Email not revealed</p>
-		                          </div>
-		                        )}
-		                      </td>
+                            {/* Line 4: Unique Profile Highlights & Bio (Pak Nell's requirement: complete without cut off, punchy key points) */}
+                            {(() => {
+                              const { shortSnippet, fullBio } = extractLeadBioSummary(lead);
+                              if (!fullBio) return null;
+                              const isExpanded = Boolean(expandedBioIds[lead.id]);
 
-	                      {/* ICP Match Score */}
+                              return (
+                                <div className="mt-1.5 p-2 rounded-lg bg-slate-50/90 dark:bg-slate-850/80 border border-slate-200/70 dark:border-slate-700/60 text-[11px] text-slate-600 dark:text-slate-300">
+                                  <div className="flex items-start gap-1.5">
+                                    <span className="text-[11px] shrink-0 mt-0.5 text-amber-500">✨</span>
+                                    <div className="flex-1 leading-relaxed">
+                                      <span className="font-semibold text-slate-800 dark:text-slate-200 mr-1">Unique Profile:</span>
+                                      <span>{isExpanded ? fullBio : shortSnippet}</span>
+                                      {fullBio.length > 135 && (
+                                        <button
+                                          type="button"
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            setExpandedBioIds((prev) => ({ ...prev, [lead.id]: !prev[lead.id] }));
+                                          }}
+                                          className="ml-1.5 text-primary-600 dark:text-primary-400 font-bold hover:underline inline-flex items-center text-[10px] cursor-pointer"
+                                        >
+                                          {isExpanded ? 'Show less' : 'View full bio'}
+                                        </button>
+                                      )}
+                                    </div>
+                                  </div>
+                                </div>
+                              );
+                            })()}
+                          </div>
+                        </div>
+                      </td>
+
+                      {/* Corporate Email */}
+                      <td className="px-5 py-4 text-xs text-slate-800 dark:text-slate-200" onClick={(e) => e.stopPropagation()}>
+                        {lead.email ? (
+                          <div className="space-y-1.5 min-w-[260px]">
+                            <div className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-400 border border-emerald-200/60 dark:border-emerald-800 text-[10px] font-bold">
+                              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                              <span>Corporate Email</span>
+                            </div>
+                            <div className="flex items-center justify-between gap-1.5 bg-slate-50 dark:bg-slate-800/80 px-2.5 py-1.5 rounded-lg border border-slate-200/80 dark:border-slate-700 font-mono text-[11px] group">
+                              <span className="font-semibold text-slate-900 dark:text-slate-100 select-all whitespace-nowrap overflow-hidden text-ellipsis max-w-[210px]" title={lead.email}>
+                                {lead.email}
+                              </span>
+                              <button
+                                onClick={() => {
+                                  navigator.clipboard.writeText(lead.email!);
+                                  toast.success(`Copied ${lead.email} to clipboard!`);
+                                }}
+                                className="text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 text-xs p-1 rounded hover:bg-white dark:hover:bg-slate-700 transition-colors shrink-0 cursor-pointer"
+                                title="Copy email to clipboard"
+                              >
+                                📋
+                              </button>
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="space-y-1.5 min-w-[260px]">
+                            <button
+                              onClick={() => handleFindEmails([lead.id])}
+                              disabled={isFinding}
+                              className="px-3 py-1.5 bg-indigo-50 hover:bg-indigo-100 dark:bg-indigo-950/40 dark:hover:bg-indigo-900/60 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800 text-xs font-bold rounded-xl transition-colors inline-flex items-center gap-1.5 shadow-2xs cursor-pointer"
+                            >
+                              {isFinding ? (
+                                <>
+                                  <span className="w-3 h-3 border-2 border-indigo-600 border-t-transparent rounded-full animate-spin" />
+                                  <span>Finding...</span>
+                                </>
+                              ) : (
+                                <>
+                                  <span>✨</span>
+                                  <span>Find Corporate Email</span>
+                                </>
+                              )}
+                            </button>
+                            <p className="text-[10px] text-slate-400 dark:text-slate-500">Corporate email not discovered</p>
+                          </div>
+                        )}
+                      </td>
+
+                      {/* ICP Match Score */}
                       <td className="px-4 py-4 text-center" onClick={(e) => e.stopPropagation()}>
                         {(() => {
-                          const { score, label, badgeClass } = computeLeadIcpScore(lead);
+                          const { score, label, badgeClass, matchFactors } = computeLeadIcpScore(lead);
                           return (
-                            <div className="inline-flex flex-col items-center gap-1">
-                              <span className={`px-2.5 py-0.5 rounded-full text-[11px] border ${badgeClass}`}>
-                                {label} ({score}%)
+                            <div className="inline-flex flex-col items-center gap-1.5 min-w-[140px]">
+                              <span className={`px-2.5 py-0.5 rounded-full text-[11px] border font-bold ${badgeClass}`}>
+                                {score}% Match
                               </span>
-                              <div className="w-16 h-1.5 bg-slate-100 rounded-full overflow-hidden border border-slate-200">
+                              <div className="w-20 h-1.5 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden border border-slate-200 dark:border-slate-700">
                                 <div
-                                  className={`h-full rounded-full ${score >= 85 ? 'bg-emerald-500' : score >= 70 ? 'bg-indigo-500' : 'bg-blue-400'}`}
+                                  className={`h-full rounded-full transition-all duration-300 ${score >= 85 ? 'bg-emerald-500' : score >= 70 ? 'bg-indigo-500' : 'bg-blue-400'}`}
                                   style={{ width: `${score}%` }}
                                 />
+                              </div>
+                              <div className="flex items-center justify-center gap-1 flex-wrap text-[9px] text-slate-500 dark:text-slate-400 font-medium max-w-[150px]">
+                                {matchFactors.map((factor, i) => (
+                                  <span key={i} className="bg-slate-100 dark:bg-slate-800/80 px-1.5 py-0.5 rounded border border-slate-200/60 dark:border-slate-700">
+                                    ✓ {factor}
+                                  </span>
+                                ))}
                               </div>
                             </div>
                           );
@@ -2127,21 +2028,31 @@ export default function CampaignWorkspacePage({
                         {lead.status === 'CONVERTED' && lead.convertedCardId ? (
                           <Link
                             href={`/dashboard?cardId=${lead.convertedCardId}`}
-                            className="px-3 py-1.5 bg-emerald-50 text-emerald-800 border border-emerald-300 text-xs font-bold rounded-xl hover:bg-emerald-100 transition-colors inline-flex items-center gap-1 shadow-2xs"
+                            className="px-3.5 py-1.5 bg-emerald-50 text-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800 text-xs font-bold rounded-xl hover:bg-emerald-100 dark:hover:bg-emerald-900/40 transition-colors inline-flex items-center gap-1.5 shadow-2xs"
                             title="View Card on Kanban CRM Board"
                           >
-                            <span>✓ In CRM</span>
+                            <span className="text-emerald-600 dark:text-emerald-400">✓</span>
+                            <span>In Pipeline</span>
                             <span className="text-[10px]">↗</span>
                           </Link>
                         ) : (
                           <button
                             onClick={() => openPushCrmModal([lead.id])}
                             disabled={isPushing}
-                            className="px-3 py-1.5 bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-300 text-xs font-bold rounded-xl transition-colors inline-flex items-center gap-1 shadow-2xs disabled:opacity-40"
+                            className="px-3.5 py-1.5 bg-primary-600 hover:bg-primary-700 text-white text-xs font-bold rounded-xl transition-colors inline-flex items-center gap-1.5 shadow-xs disabled:opacity-40 cursor-pointer"
                             title="Push directly into Kanban CRM Fresh leads column"
                           >
-                            <span>📋</span>
-                            <span>Push CRM</span>
+                            {isPushing ? (
+                              <>
+                                <span className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                                <span>Pushing...</span>
+                              </>
+                            ) : (
+                              <>
+                                <span>📥</span>
+                                <span>Push CRM</span>
+                              </>
+                            )}
                           </button>
                         )}
                       </td>
@@ -2953,18 +2864,18 @@ export default function CampaignWorkspacePage({
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2 border-t border-slate-200/60 animate-in fade-in">
                     <div>
                       <label className="block text-[11px] font-semibold text-slate-700 mb-1">
-                        Follow-up Delay (Days)
+                        Follow-up Delay (from Initial Email)
                       </label>
                       <select
                         value={settingsDripDelayDays}
                         onChange={(e) => setSettingsDripDelayDays(Number(e.target.value))}
                         className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl text-xs focus:ring-2 focus:ring-primary-500"
                       >
-                        <option value={1}>After 1 Day</option>
-                        <option value={2}>After 2 Days</option>
-                        <option value={3}>After 3 Days (Recommended)</option>
-                        <option value={5}>After 5 Days</option>
-                        <option value={7}>After 7 Days</option>
+                        <option value={7}>After 7 Days from initial email (Default)</option>
+                        <option value={3}>After 3 Days from initial email</option>
+                        <option value={5}>After 5 Days from initial email</option>
+                        <option value={10}>After 10 Days from initial email</option>
+                        <option value={14}>After 14 Days from initial email</option>
                       </select>
                     </div>
 

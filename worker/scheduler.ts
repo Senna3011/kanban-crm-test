@@ -136,13 +136,13 @@ export function startSchedulers() {
               {
                 currentDripStep: 0,
                 sentAt: {
-                  lte: new Date(now.getTime() - (camp.dripDelayDays || 3) * 24 * 60 * 60 * 1000),
+                  lte: new Date(now.getTime() - (camp.dripDelayDays || 7) * 24 * 60 * 60 * 1000),
                 },
               },
               ...(maxSteps >= 2 ? [{
                 currentDripStep: 1,
                 dripSentAt: {
-                  lte: new Date(now.getTime() - (camp.dripDelayDays2 || 5) * 24 * 60 * 60 * 1000),
+                  lte: new Date(now.getTime() - (camp.dripDelayDays2 || 7) * 24 * 60 * 60 * 1000),
                 },
               }] : []),
               ...(maxSteps >= 3 ? [{

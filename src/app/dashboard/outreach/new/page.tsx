@@ -992,7 +992,7 @@ export default function NewOutreachCampaignPage() {
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                       <div>
                         <label className="block text-[11px] font-semibold text-slate-700 mb-1">
-                          Delay (after previous email) <span className="text-slate-400 font-normal">• 7d default</span>
+                          Follow-Up Delay (from Initial Email) <span className="text-slate-400 font-normal">• 7d default</span>
                         </label>
                         {!customDelay1 ? (
                           <div className="flex gap-1.5">
@@ -1008,11 +1008,11 @@ export default function NewOutreachCampaignPage() {
                               }}
                               className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl text-xs font-medium"
                             >
-                              <option value={3}>After 3 Days</option>
-                              <option value={5}>After 5 Days</option>
-                              <option value={7}>After 7 Days (Default)</option>
-                              <option value={10}>After 10 Days</option>
-                              <option value={14}>After 14 Days</option>
+                              <option value={7}>After 7 Days from initial email (Default)</option>
+                              <option value={3}>After 3 Days from initial email</option>
+                              <option value={5}>After 5 Days from initial email</option>
+                              <option value={10}>After 10 Days from initial email</option>
+                              <option value={14}>After 14 Days from initial email</option>
                               <option value={-1}>Custom Days...</option>
                             </select>
                           </div>
@@ -1024,13 +1024,13 @@ export default function NewOutreachCampaignPage() {
                               max={60}
                               value={dripDelayDays}
                               onChange={(e) => setDripDelayDays(Math.max(1, Number(e.target.value)))}
-                              className="w-24 px-3 py-2 bg-white border border-indigo-300 rounded-xl text-xs font-bold"
+                              className="w-20 px-3 py-2 bg-white border border-indigo-300 rounded-xl text-xs font-bold"
                             />
-                            <span className="text-xs text-slate-500">days</span>
+                            <span className="text-xs text-slate-600 font-medium">days from initial email</span>
                             <button
                               type="button"
                               onClick={() => { setCustomDelay1(false); setDripDelayDays(7); }}
-                              className="text-[10px] text-slate-400 hover:text-slate-600 underline"
+                              className="text-[10px] text-slate-400 hover:text-slate-600 underline ml-1"
                             >
                               Presets
                             </button>
@@ -1057,7 +1057,7 @@ export default function NewOutreachCampaignPage() {
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                         <div>
                           <label className="block text-[11px] font-semibold text-slate-700 mb-1">
-                            Delay (after Step 1 email) <span className="text-slate-400 font-normal">• 7d default</span>
+                            Follow-Up Delay (from Last Email / Step 1) <span className="text-slate-400 font-normal">• 7d default</span>
                           </label>
                           {!customDelay2 ? (
                             <div className="flex gap-1.5">
@@ -1073,11 +1073,11 @@ export default function NewOutreachCampaignPage() {
                                 }}
                                 className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl text-xs font-medium"
                               >
-                                <option value={3}>After 3 Days</option>
-                                <option value={5}>After 5 Days</option>
-                                <option value={7}>After 7 Days (Default)</option>
-                                <option value={10}>After 10 Days</option>
-                                <option value={14}>After 14 Days</option>
+                                <option value={7}>After 7 Days from last email (Default)</option>
+                                <option value={3}>After 3 Days from last email</option>
+                                <option value={5}>After 5 Days from last email</option>
+                                <option value={10}>After 10 Days from last email</option>
+                                <option value={14}>After 14 Days from last email</option>
                                 <option value={-1}>Custom Days...</option>
                               </select>
                             </div>
@@ -1089,13 +1089,13 @@ export default function NewOutreachCampaignPage() {
                                 max={60}
                                 value={dripDelayDays2}
                                 onChange={(e) => setDripDelayDays2(Math.max(1, Number(e.target.value)))}
-                                className="w-24 px-3 py-2 bg-white border border-indigo-300 rounded-xl text-xs font-bold"
+                                className="w-20 px-3 py-2 bg-white border border-indigo-300 rounded-xl text-xs font-bold"
                               />
-                              <span className="text-xs text-slate-500">days</span>
+                              <span className="text-xs text-slate-600 font-medium">days from last email</span>
                               <button
                                 type="button"
                                 onClick={() => { setCustomDelay2(false); setDripDelayDays2(7); }}
-                                className="text-[10px] text-slate-400 hover:text-slate-600 underline"
+                                className="text-[10px] text-slate-400 hover:text-slate-600 underline ml-1"
                               >
                                 Presets
                               </button>
@@ -1123,7 +1123,7 @@ export default function NewOutreachCampaignPage() {
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                         <div>
                           <label className="block text-[11px] font-semibold text-slate-700 mb-1">
-                            Delay (after Step 2 email) <span className="text-slate-400 font-normal">• 7d default</span>
+                            Follow-Up Delay (from Last Email / Step 2) <span className="text-slate-400 font-normal">• 7d default</span>
                           </label>
                           {!customDelay3 ? (
                             <div className="flex gap-1.5">
@@ -1139,11 +1139,11 @@ export default function NewOutreachCampaignPage() {
                                 }}
                                 className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl text-xs font-medium"
                               >
-                                <option value={3}>After 3 Days</option>
-                                <option value={5}>After 5 Days</option>
-                                <option value={7}>After 7 Days (Default)</option>
-                                <option value={10}>After 10 Days</option>
-                                <option value={14}>After 14 Days</option>
+                                <option value={7}>After 7 Days from last email (Default)</option>
+                                <option value={3}>After 3 Days from last email</option>
+                                <option value={5}>After 5 Days from last email</option>
+                                <option value={10}>After 10 Days from last email</option>
+                                <option value={14}>After 14 Days from last email</option>
                                 <option value={-1}>Custom Days...</option>
                               </select>
                             </div>
@@ -1155,13 +1155,13 @@ export default function NewOutreachCampaignPage() {
                                 max={60}
                                 value={dripDelayDays3}
                                 onChange={(e) => setDripDelayDays3(Math.max(1, Number(e.target.value)))}
-                                className="w-24 px-3 py-2 bg-white border border-indigo-300 rounded-xl text-xs font-bold"
+                                className="w-20 px-3 py-2 bg-white border border-indigo-300 rounded-xl text-xs font-bold"
                               />
-                              <span className="text-xs text-slate-500">days</span>
+                              <span className="text-xs text-slate-600 font-medium">days from last email</span>
                               <button
                                 type="button"
                                 onClick={() => { setCustomDelay3(false); setDripDelayDays3(7); }}
-                                className="text-[10px] text-slate-400 hover:text-slate-600 underline"
+                                className="text-[10px] text-slate-400 hover:text-slate-600 underline ml-1"
                               >
                                 Presets
                               </button>
@@ -1183,30 +1183,55 @@ export default function NewOutreachCampaignPage() {
                   )}
 
                   {/* Sequence Preview Box (Recognition over Recall) */}
-                  <div className="p-3.5 bg-slate-100/80 rounded-xl border border-slate-200 text-xs space-y-1.5">
-                    <p className="text-[11px] font-bold text-slate-700 uppercase tracking-wider flex items-center gap-1.5">
-                      <span>👁️</span>
-                      <span>Drip Sequence Preview</span>
+                  <div className="p-3.5 bg-slate-100/80 rounded-xl border border-slate-200 text-xs space-y-2">
+                    <p className="text-[11px] font-bold text-slate-700 uppercase tracking-wider flex items-center justify-between">
+                      <span className="flex items-center gap-1.5">
+                        <span>👁️</span>
+                        <span>Drip Sequence Preview & Delay Timeline</span>
+                      </span>
+                      <span className="text-[10px] text-slate-500 font-normal lowercase">
+                        (sequential delay from last touch)
+                      </span>
                     </p>
-                    <p className="text-slate-600 text-[11px]">
-                      • <strong>Initial Touch:</strong> Personalized cold email sent upon approval.
-                    </p>
-                    <p className="text-slate-600 text-[11px]">
-                      • <strong>Step 1:</strong> Follow-up after {dripDelayDays} days ({dripSubject || 'Re: Original Subject'}).
-                    </p>
-                    {dripStepsCount >= 2 && (
-                      <p className="text-slate-600 text-[11px]">
-                        • <strong>Step 2:</strong> Follow-up after +{dripDelayDays2} days ({dripSubject2 || 'Re: Following up again...'}).
-                      </p>
-                    )}
-                    {dripStepsCount >= 3 && (
-                      <p className="text-slate-600 text-[11px]">
-                        • <strong>Step 3 (Final):</strong> Final check-in after +{dripDelayDays3} days ({dripSubject3 || 'Re: Final check-in / Closing loop'}).
-                      </p>
-                    )}
-                    <p className="text-[10px] text-emerald-700 font-semibold pt-1">
-                      ✓ Sequence automatically halts if the prospect replies, books a call, bounces, or unsubscribes.
-                    </p>
+
+                    <div className="space-y-1.5 pt-1">
+                      <div className="flex items-start gap-2 text-slate-700 text-[11px]">
+                        <span className="w-5 h-5 rounded-full bg-blue-100 text-blue-700 font-bold flex items-center justify-center shrink-0 text-[10px]">0</span>
+                        <div>
+                          <strong>Initial Touch:</strong> Personalized cold email sent immediately upon campaign launch/approval.
+                        </div>
+                      </div>
+
+                      <div className="flex items-start gap-2 text-slate-700 text-[11px]">
+                        <span className="w-5 h-5 rounded-full bg-indigo-100 text-indigo-700 font-bold flex items-center justify-center shrink-0 text-[10px]">1</span>
+                        <div>
+                          <strong>Follow-Up Step 1:</strong> Sent <strong>after {dripDelayDays} days from initial email</strong> ({dripSubject || 'Re: Original Subject'}).
+                        </div>
+                      </div>
+
+                      {dripStepsCount >= 2 && (
+                        <div className="flex items-start gap-2 text-slate-700 text-[11px]">
+                          <span className="w-5 h-5 rounded-full bg-indigo-100 text-indigo-700 font-bold flex items-center justify-center shrink-0 text-[10px]">2</span>
+                          <div>
+                            <strong>Follow-Up Step 2:</strong> Sent <strong>after +{dripDelayDays2} days from last email (Step 1)</strong> ({dripSubject2 || 'Re: Following up again...'}).
+                          </div>
+                        </div>
+                      )}
+
+                      {dripStepsCount >= 3 && (
+                        <div className="flex items-start gap-2 text-slate-700 text-[11px]">
+                          <span className="w-5 h-5 rounded-full bg-purple-100 text-purple-700 font-bold flex items-center justify-center shrink-0 text-[10px]">3</span>
+                          <div>
+                            <strong>Follow-Up Step 3 (Final):</strong> Sent <strong>after +{dripDelayDays3} days from last email (Step 2)</strong> ({dripSubject3 || 'Re: Final check-in / Closing loop'}).
+                          </div>
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="pt-2 border-t border-slate-200/80 flex items-center gap-1.5 text-[10px] text-emerald-700 font-semibold">
+                      <span>✓</span>
+                      <span>Smart Reply Detection: Sequence automatically stops if prospect replies, books a call, or unsubscribes.</span>
+                    </div>
                   </div>
                 </div>
               )}
