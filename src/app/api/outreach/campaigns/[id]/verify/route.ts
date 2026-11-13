@@ -63,7 +63,7 @@ export async function POST(
         queued: true,
         jobId: job.id,
         totalProcessed: leadsCount,
-        message: `Verifikasi ${leadsCount} leads dijadwalkan di background worker.`,
+        message: `Verification for ${leadsCount} leads queued in background worker.`,
       });
     }
 

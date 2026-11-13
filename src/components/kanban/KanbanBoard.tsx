@@ -8,6 +8,7 @@ import KanbanCard from './KanbanCard';
 import CardDetailPanel from './CardDetailPanel';
 import ColumnSettings from './ColumnSettings';
 import SubBoardSelector, { SubBoardSender } from './SubBoardSelector';
+import BoardLeadsReviewDrawer, { type BoardSenderOption } from './BoardLeadsReviewDrawer';
 import ConfirmDialog, { type ConfirmDialogVariant } from '@/components/ui/ConfirmDialog';
 import { composeAndSendEmail } from '@/server/actions/compose';
 import toast from 'react-hot-toast';
@@ -32,6 +33,7 @@ export default function KanbanBoard() {
   const [selectionMode, setSelectionMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [bulkDeleting, setBulkDeleting] = useState(false);
+  const [isReviewDrawerOpen, setIsReviewDrawerOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [filterMode, setFilterMode] = useState<FilterMode>('all');
   const [globalSortMode, setGlobalSortMode] = useState<'default' | 'unreads' | 'date'>('default');
@@ -57,6 +59,14 @@ export default function KanbanBoard() {
   const [showComposeModal, setShowComposeModal] = useState(false);
   const [composeFromList, setComposeFromList] = useState<string[]>([]);
   const [rawSenderConfigs, setRawSenderConfigs] = useState<any[]>([]);
+
+  const availableBoardSenders: BoardSenderOption[] = useMemo(() => {
+    return rawSenderConfigs.map((c) => ({
+      id: c.id,
+      name: c.name || c.smtpUser,
+      email: c.smtpUser || c.senderEmail || c.name,
+    }));
+  }, [rawSenderConfigs]);
   const [composeFrom, setComposeFrom] = useState('');
   const [composeTo, setComposeTo] = useState('');
   const [composeSubject, setComposeSubject] = useState('');
@@ -1007,6 +1017,19 @@ export default function KanbanBoard() {
             </button>
 
             <button
+              onClick={() => setIsReviewDrawerOpen(true)}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-indigo-700 bg-indigo-50 border border-indigo-200 rounded-lg hover:bg-indigo-100 shadow-xs transition-all cursor-pointer"
+              title="Open Bird-Eye View lead inspection & sender mailbox manager"
+            >
+              <span>🦅</span>
+              <span className="hidden sm:inline">Review Leads & Senders</span>
+              <span className="sm:hidden">Inspect</span>
+              <span className="px-1.5 py-0.2 rounded-full bg-indigo-200/80 text-indigo-900 text-[10px] font-bold">
+                {columns.reduce((acc, col) => acc + col.cards.length, 0)}
+              </span>
+            </button>
+
+            <button
               onClick={() => setShowColumnSettings(true)}
               className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-slate-700 bg-white border border-slate-200/90 rounded-lg hover:bg-slate-50 shadow-xs transition-all"
             >
@@ -1257,6 +1280,21 @@ export default function KanbanBoard() {
           onClose={() => setShowColumnSettings(false)}
         />
       )}
+
+      {/* Bird-Eye View Leads & Senders Review Drawer */}
+      <BoardLeadsReviewDrawer
+        isOpen={isReviewDrawerOpen}
+        onClose={() => setIsReviewDrawerOpen(false)}
+        boardTitle={boardName}
+        boardId={activeBoardId}
+        columns={columns}
+        availableSenders={availableBoardSenders}
+        onCardClick={(card) => {
+          setSelectedCard(card);
+          setIsReviewDrawerOpen(false);
+        }}
+        onRefresh={fetchColumns}
+      />
 
       {/* Outbound Compose Message Modal */}
       {showComposeModal && (

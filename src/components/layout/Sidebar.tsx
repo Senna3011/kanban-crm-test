@@ -82,14 +82,18 @@ export default function Sidebar() {
   function selectBoard(id: string) {
     setActiveBoard(id);
     localStorage.setItem('activeBoardId', id);
-    if (typeof window !== 'undefined') {
-      const url = new URL(window.location.href);
-      url.searchParams.set('boardId', id);
-      window.history.replaceState({}, '', url.toString());
-    }
-    window.dispatchEvent(new Event('board-switched'));
     setMobileOpen(false);
-    router.refresh();
+    window.dispatchEvent(new Event('board-switched'));
+    if (pathname === '/dashboard') {
+      if (typeof window !== 'undefined') {
+        const url = new URL(window.location.href);
+        url.searchParams.set('boardId', id);
+        window.history.replaceState({}, '', url.toString());
+      }
+      router.refresh();
+    } else {
+      router.push(`/dashboard?boardId=${id}`);
+    }
   }
 
   return (

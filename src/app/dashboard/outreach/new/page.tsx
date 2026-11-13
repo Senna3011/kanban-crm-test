@@ -137,6 +137,9 @@ export default function NewOutreachCampaignPage() {
           urlOrBrand: brandInput.trim(),
           tone: currentTone,
           length: currentLength,
+          targetRole: targetRole.trim() || undefined,
+          targetIndustry: selectedIndustries.join(', ') || targetIndustry.trim() || undefined,
+          targetLocation: targetLocation.trim() || undefined,
         }),
       });
 
@@ -213,6 +216,9 @@ export default function NewOutreachCampaignPage() {
       if (!targetLocation.trim()) {
         setError('Please specify a geographic location or target country/city.');
         return;
+      }
+      if (!brandInput.trim() && icpBrandUrl.trim()) {
+        setBrandInput(icpBrandUrl.trim());
       }
       setStep(3);
     }
@@ -693,11 +699,11 @@ export default function NewOutreachCampaignPage() {
                         <span>B2B Executive Gateway</span>
                       </span>
                       <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-indigo-100 dark:bg-indigo-900/60 text-indigo-700 dark:text-indigo-300">
-                        Rekomendasi
+                        Recommended
                       </span>
                     </div>
                     <p className="text-[11px] text-slate-500 dark:text-slate-400 leading-relaxed">
-                      Database eksekutif B2B terverifikasi. Respon cepat (&lt;2 detik) dengan email korporat pengambil keputusan.
+                      Verified B2B executive database. Fast response (&lt;2s) with corporate decision-maker verified emails.
                     </p>
                     <div className="mt-2 pt-2 border-t border-indigo-200/50 dark:border-indigo-800/40 flex items-center justify-between text-[10px] font-semibold text-indigo-700 dark:text-indigo-300">
                       <span>Est. Batch Cost</span>
@@ -720,14 +726,14 @@ export default function NewOutreachCampaignPage() {
                     <div className="flex items-center justify-between mb-1.5">
                       <span className="text-xs font-bold flex items-center gap-2">
                         <GlobeIcon className="w-4 h-4 text-slate-600 dark:text-slate-400" />
-                        <span>Live Business Search</span>
+                        <span>Google Search Dorker</span>
                       </span>
                       <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300">
-                        Direktori Web
+                        Web Directory
                       </span>
                     </div>
                     <p className="text-[11px] text-slate-500 dark:text-slate-400 leading-relaxed">
-                      Pencarian direktori bisnis lokal, peta usaha, dan domain perusahaan terindeks.
+                      Crawls local business directories, corporate maps, and indexed enterprise domains.
                     </p>
                     <div className="mt-2 pt-2 border-t border-slate-200/70 dark:border-slate-700 flex items-center justify-between text-[10px] font-semibold text-slate-600 dark:text-slate-400">
                       <span>Est. Batch Cost</span>
@@ -757,7 +763,7 @@ export default function NewOutreachCampaignPage() {
                       </span>
                     </div>
                     <p className="text-[11px] text-slate-500 dark:text-slate-400 leading-relaxed">
-                      Penelusuran multi-sumber untuk analisis jejak profesional dan profil eksekutif.
+                      Multi-source crawler for professional footprint intelligence and executive profile indexing.
                     </p>
                     <div className="mt-2 pt-2 border-t border-slate-200/70 dark:border-slate-700 flex items-center justify-between text-[10px] font-semibold text-slate-600 dark:text-slate-400">
                       <span>Est. Batch Cost</span>

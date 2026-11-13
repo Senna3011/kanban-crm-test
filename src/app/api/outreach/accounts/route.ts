@@ -72,7 +72,7 @@ export async function POST(req: NextRequest) {
       } catch (err: any) {
         console.error('[API OUTREACH ACCOUNTS] Encryption failed:', err.message);
         return NextResponse.json(
-          { error: 'Gagal mengamankan kredensial: modul enkripsi tidak dapat mengenkripsi password.' },
+          { error: 'Failed to secure credentials: encryption module could not encrypt password.' },
           { status: 500 }
         );
       }

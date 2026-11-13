@@ -6,6 +6,9 @@ export interface OfferSummarizeParams {
   tavilyApiKey?: string;
   tone?: 'formal' | 'conversational' | 'direct';
   length?: 'concise' | 'detailed';
+  targetRole?: string;
+  targetIndustry?: string;
+  targetLocation?: string;
 }
 
 export interface OfferSummarizeResult {
@@ -17,10 +20,18 @@ export interface OfferSummarizeResult {
 }
 
 /**
- * Clean HTML and extract text content
+ * Clean HTML and extract text content with priority on meta description & title
  */
 function extractTextFromHtml(html: string): string {
-  return html
+  const metaDescMatch = html.match(/<meta\s+[^>]*name=["']description["'][^>]*content=["']([^"']+)["']/i)
+    || html.match(/<meta\s+[^>]*content=["']([^"']+)["'][^>]*name=["']description["']/i)
+    || html.match(/<meta\s+[^>]*property=["']og:description["'][^>]*content=["']([^"']+)["']/i);
+  const titleMatch = html.match(/<title[^>]*>([^<]+)<\/title>/i);
+
+  const metaDesc = metaDescMatch?.[1]?.trim() || '';
+  const title = titleMatch?.[1]?.trim() || '';
+
+  const cleanBody = html
     .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '')
     .replace(/<style\b[^<]*(?:(?!<\/style>)<[^<]*)*<\/style>/gi, '')
     .replace(/<header\b[^<]*(?:(?!<\/header>)<[^<]*)*<\/header>/gi, '')
@@ -29,11 +40,19 @@ function extractTextFromHtml(html: string): string {
     .replace(/<[^>]+>/g, ' ')
     .replace(/\s+/g, ' ')
     .trim()
-    .slice(0, 4000);
+    .slice(0, 3000);
+
+  const parts = [
+    title ? `Title: ${title}` : '',
+    metaDesc ? `Description: ${metaDesc}` : '',
+    cleanBody ? `Content: ${cleanBody}` : '',
+  ].filter(Boolean);
+
+  return parts.join('\n\n').slice(0, 3500);
 }
 
 /**
- * Fetch webpage content directly
+ * Fetch webpage content directly with fast 3s timeout
  */
 export async function fetchDirectWebpageContent(targetUrl: string): Promise<string | null> {
   let url = targetUrl.trim();
@@ -43,7 +62,7 @@ export async function fetchDirectWebpageContent(targetUrl: string): Promise<stri
 
   try {
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 6000);
+    const timeout = setTimeout(() => controller.abort(), 4500);
 
     const res = await fetch(url, {
       headers: {
@@ -63,12 +82,12 @@ export async function fetchDirectWebpageContent(targetUrl: string): Promise<stri
 }
 
 /**
- * Search and extract knowledge using Tavily API
+ * Search and extract knowledge using Tavily API with fast 3.5s timeout
  */
 async function searchWithTavily(query: string, apiKey: string): Promise<string | null> {
   try {
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 8000);
+    const timeout = setTimeout(() => controller.abort(), 3500);
 
     const res = await fetch('https://api.tavily.com/search', {
       method: 'POST',
@@ -100,6 +119,50 @@ async function searchWithTavily(query: string, apiKey: string): Promise<string |
 }
 
 /**
+ * Fast deterministic fallback synthesizer when AI Gateway is slow or unreachable
+ */
+function extractOfferDirectlyFromKnowledge(
+  input: string,
+  knowledgeText: string,
+  params: OfferSummarizeParams,
+  source: OfferSummarizeResult['source']
+): OfferSummarizeResult {
+  const brandClean = input.replace(/^https?:\/\//i, '').replace(/^www\./i, '').split('/')[0];
+
+  const descMatch = knowledgeText.match(/Description:\s*([^\n]+)/i);
+  const titleMatch = knowledgeText.match(/Title:\s*([^\n]+)/i);
+
+  const rawSummary = descMatch?.[1]?.trim()
+    || titleMatch?.[1]?.trim()
+    || `${brandClean} specialized business offerings`;
+
+  // Strip excessive punctuation and truncate
+  const cleanedSummary = rawSummary.slice(0, 180).replace(/\.$/, '');
+
+  const targetRole = params.targetRole || 'leadership teams';
+  const targetIndustry = params.targetIndustry || 'their market';
+  const tone = params.tone || 'formal';
+
+  const valueProp = tone === 'direct'
+    ? `We help ${targetRole} scale with ${brandClean}: ${cleanedSummary}.`
+    : `Empowering ${targetRole} in ${targetIndustry} through ${brandClean}: ${cleanedSummary}.`;
+
+  const cta = tone === 'conversational'
+    ? 'Open to a brief 10-minute exchange this week?'
+    : 'Worth exploring on a brief 10-minute introductory call?';
+
+  const fullInstruction = `Focus on ${brandClean}'s core value: ${cleanedSummary}. Address key operational priorities for ${targetRole} in ${targetIndustry} and propose a low-friction 10-minute introductory discussion. Tone: ${tone}.`;
+
+  return {
+    valueProposition: valueProp,
+    painPoints: `Operational friction and scaling constraints in ${targetIndustry}.`,
+    callToAction: cta,
+    fullInstruction,
+    source,
+  };
+}
+
+/**
  * Summarize Brand/URL Knowledgebase into High-Converting Value Proposition for Cold Outreach
  */
 export async function summarizeBrandOffer(
@@ -123,65 +186,79 @@ export async function summarizeBrandOffer(
   let knowledgeText = '';
   let source: OfferSummarizeResult['source'] = 'DirectAI';
 
-  // 1. If Tavily key available, run Tavily search
-  if (tavilyKey) {
-    const tavilyData = await searchWithTavily(input, tavilyKey);
-    if (tavilyData && tavilyData.length > 50) {
-      knowledgeText = tavilyData;
-      source = 'Tavily';
-    }
+  const isUrlLike = input.includes('.') || input.startsWith('http');
+
+  // Parallel fast fetch: Direct WebScrape (if URL) and/or Tavily
+  const fetchPromises: Promise<void>[] = [];
+
+  if (isUrlLike) {
+    fetchPromises.push(
+      fetchDirectWebpageContent(input).then((web) => {
+        if (web && web.length > 40 && !knowledgeText) {
+          knowledgeText = web;
+          source = 'WebScrape';
+        }
+      }).catch(() => {})
+    );
   }
 
-  // 2. If it's a URL and Tavily didn't yield or not configured, fetch webpage directly
-  if (!knowledgeText && (input.includes('.') || input.startsWith('http'))) {
-    const webContent = await fetchDirectWebpageContent(input);
-    if (webContent && webContent.length > 50) {
-      knowledgeText = webContent;
-      source = 'WebScrape';
-    }
+  if (tavilyKey && (!isUrlLike || !knowledgeText)) {
+    fetchPromises.push(
+      searchWithTavily(input, tavilyKey).then((tav) => {
+        if (tav && tav.length > 50 && (!knowledgeText || source !== 'WebScrape')) {
+          knowledgeText = tav;
+          source = 'Tavily';
+        }
+      }).catch(() => {})
+    );
+  }
+
+  if (fetchPromises.length > 0) {
+    await Promise.allSettled(fetchPromises);
   }
 
   // 3. Synthesize via LLM
   const { apiKey, endpoint, model } = getAIConfig();
   if (!apiKey) {
-    const fallbackInstruction = tone === 'direct'
-      ? `Deliver direct value on ${input}. Focus on eliminating operational bottlenecks and propose a quick 10-minute audit.`
-      : tone === 'conversational'
-      ? `Share friendly insights on how ${input} helps engineering and business teams streamline workflows, offering a casual 10-minute exchange.`
-      : `Highlight our enterprise capabilities based on ${input}. Address operational efficiency and propose a complimentary 10-minute consultative session.`;
-
-    return {
-      valueProposition: `We partner with leadership teams to accelerate growth through custom software and workflow automation based on ${input}.`,
-      painPoints: `Manual operational bottlenecks and fragmented tooling.`,
-      callToAction: `Complimentary 10-minute discovery call.`,
-      fullInstruction: fallbackInstruction,
-      source,
-    };
+    return extractOfferDirectlyFromKnowledge(input, knowledgeText, params, source);
   }
 
   try {
+    const aiController = new AbortController();
+    const aiTimeout = setTimeout(() => aiController.abort(), 5500);
+
+    const audienceContext = [
+      params.targetRole ? `Target Decision Maker Role: ${params.targetRole}` : '',
+      params.targetIndustry ? `Target Industry: ${params.targetIndustry}` : '',
+      params.targetLocation ? `Target Market: ${params.targetLocation}` : '',
+    ].filter(Boolean).join('\n');
+
     const response = await fetch(endpoint, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         Authorization: `Bearer ${apiKey}`,
       },
+      signal: aiController.signal,
       body: JSON.stringify({
         model,
         messages: [
           {
             role: 'system',
-            content: `You are an executive sales strategist. Analyze the provided company/product research and generate a high-converting Cold Email Value Proposition & Directive.
+            content: `You are an elite B2B sales copywriter and offer strategist.
+Analyze the provided company/product research and generate a high-converting Cold Email Value Proposition & Directive.
 
 STYLING DIRECTIVES:
 - ${toneInstruction}
 - ${lengthInstruction}
 
-OUTPUT FORMAT: Strict JSON with keys:
-- "valueProposition": (1-2 crisp sentences describing the primary offer and business value matching the requested tone)
-- "painPoints": (1 sentence highlighting the exact customer problem/bottleneck solved)
-- "callToAction": (A single low-friction CTA, e.g. 10-min architecture review)
-- "fullInstruction": (A cohesive instruction combining the value, tone, and CTA to guide AI cold email drafting)`,
+OUTPUT FORMAT: Strict JSON only with no markdown or backticks:
+{
+  "valueProposition": "1-2 crisp sentences describing the primary offer and business value tailored to the target audience",
+  "painPoints": "1 sentence highlighting the exact customer problem or bottleneck solved",
+  "callToAction": "A single low-friction CTA (e.g. 10-min strategy review, brief chat)",
+  "fullInstruction": "A cohesive instruction combining the value, tone, and CTA to guide AI cold email drafting"
+}`,
           },
           {
             role: 'user',
@@ -189,16 +266,18 @@ OUTPUT FORMAT: Strict JSON with keys:
 Input: ${input}
 Tone: ${tone}
 Length: ${length}
+${audienceContext ? `TARGET AUDIENCE:\n${audienceContext}` : ''}
 ${params.additionalContext ? `Additional Context: ${params.additionalContext}` : ''}
 ${knowledgeText ? `Extracted Web Research:\n${knowledgeText.slice(0, 2500)}` : ''}
 
 Generate the structured value proposition adhering strictly to the requested tone (${tone}) and length (${length}).`,
           },
         ],
-        temperature: 0.5,
+        temperature: 0.4,
         max_tokens: 350,
       }),
     });
+    clearTimeout(aiTimeout);
 
     if (!response.ok) throw new Error('AI Gateway error');
     const data = await response.json();
@@ -215,12 +294,6 @@ Generate the structured value proposition adhering strictly to the requested ton
     };
   } catch (err: any) {
     console.warn('[OFFER SUMMARIZE ERROR]', err);
-    return {
-      valueProposition: `We help leadership teams eliminate operational friction through tailored technology and automation.`,
-      painPoints: `Manual overhead and scaling bottlenecks.`,
-      callToAction: `Brief 10-minute introductory conversation.`,
-      fullInstruction: `Highlight our core offerings based on ${input}. Emphasize operational efficiency and propose a complimentary 10-minute consultation.`,
-      source,
-    };
+    return extractOfferDirectlyFromKnowledge(input, knowledgeText, params, source);
   }
 }

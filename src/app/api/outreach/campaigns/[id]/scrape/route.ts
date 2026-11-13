@@ -111,7 +111,7 @@ export async function POST(
         jobId: job.id,
         runLog,
         estimatedCostUsd,
-        message: `Pencarian ${limit} leads dijadwalkan di background worker.`,
+        message: `Sourcing ${limit} leads queued in background worker.`,
       });
     }
 

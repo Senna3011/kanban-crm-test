@@ -61,12 +61,55 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
     return NextResponse.json({ error: 'Not found' }, { status: 404 });
   }
 
+  const updateData: any = {
+    status: body.status,
+    highlighted: body.highlighted,
+    assignedToId: body.assignedToId,
+  };
+
   if (body.columnId) {
     const targetCol = await prisma.column.findFirst({
       where: { id: body.columnId, board: { tenantId } },
     });
     if (!targetCol) {
       return NextResponse.json({ error: 'Target column not found or access denied' }, { status: 400 });
+    }
+
+    updateData.columnId = body.columnId;
+
+    // Check if moving to a follow-up column and needs draft auto-creation
+    const targetTitleLower = targetCol.title.toLowerCase().trim();
+    let stepForCol = -1;
+    if (targetTitleLower.includes('follow up 1') || targetTitleLower.includes('follow-up 1') || targetTitleLower === 'contacted') {
+      stepForCol = 1;
+    } else if (targetTitleLower.includes('follow up 2') || targetTitleLower.includes('follow-up 2')) {
+      stepForCol = 2;
+    } else if (targetTitleLower.includes('follow up 3') || targetTitleLower.includes('follow-up 3')) {
+      stepForCol = 3;
+    }
+
+    if (stepForCol > 0) {
+      const metadata = (typeof card.metadata === 'object' && card.metadata !== null) ? { ...(card.metadata as any) } : {};
+      const sequenceDrafts = Array.isArray(metadata.sequenceDrafts) ? metadata.sequenceDrafts : [];
+      const stepDraft = sequenceDrafts.find((s: any) => s.step === stepForCol);
+      if (stepDraft) {
+        const existingPending = await prisma.draftMessage.findFirst({
+          where: { cardId: id, status: 'pending' },
+        });
+        if (!existingPending) {
+          await prisma.draftMessage.create({
+            data: {
+              subject: stepDraft.subject || `Follow-up #${stepForCol}`,
+              body: stepDraft.body,
+              status: 'pending',
+              cardId: id,
+              tenantId,
+            },
+          });
+        }
+        metadata.currentSequenceStep = stepForCol;
+        updateData.metadata = metadata;
+      }
     }
   }
 
@@ -79,27 +122,21 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
     }
   }
 
-    const updateData: any = {
-      status: body.status,
-      highlighted: body.highlighted,
-      assignedToId: body.assignedToId,
-    };
+  if (body.emailConfigId !== undefined) updateData.emailConfigId = body.emailConfigId;
+  if (body.fromName !== undefined) updateData.fromName = body.fromName;
+  if (body.fromEmail !== undefined) updateData.fromEmail = body.fromEmail;
+  if (body.subject !== undefined) updateData.subject = body.subject;
+  if (body.bodyText !== undefined) updateData.bodyText = body.bodyText;
+  if (body.dealValue !== undefined) updateData.dealValue = body.dealValue === '' || body.dealValue === null ? null : Number(body.dealValue);
+  if (body.currency !== undefined) updateData.currency = body.currency;
+  if (body.contactRole !== undefined) updateData.contactRole = body.contactRole;
+  if (body.probability !== undefined) updateData.probability = body.probability === '' || body.probability === null ? null : Number(body.probability);
+  if (body.lostReason !== undefined) updateData.lostReason = body.lostReason;
 
-    if (body.columnId !== undefined) updateData.columnId = body.columnId;
-    if (body.fromName !== undefined) updateData.fromName = body.fromName;
-    if (body.fromEmail !== undefined) updateData.fromEmail = body.fromEmail;
-    if (body.subject !== undefined) updateData.subject = body.subject;
-    if (body.bodyText !== undefined) updateData.bodyText = body.bodyText;
-    if (body.dealValue !== undefined) updateData.dealValue = body.dealValue === '' || body.dealValue === null ? null : Number(body.dealValue);
-    if (body.currency !== undefined) updateData.currency = body.currency;
-    if (body.contactRole !== undefined) updateData.contactRole = body.contactRole;
-    if (body.probability !== undefined) updateData.probability = body.probability === '' || body.probability === null ? null : Number(body.probability);
-    if (body.lostReason !== undefined) updateData.lostReason = body.lostReason;
-
-    const updated = await prisma.card.update({
-      where: { id: id },
-      data: updateData,
-    });
+  const updated = await prisma.card.update({
+    where: { id: id },
+    data: updateData,
+  });
 
   try {
     const { broadcastAppEvent } = await import('@/lib/events');

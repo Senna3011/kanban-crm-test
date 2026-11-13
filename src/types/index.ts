@@ -41,6 +41,14 @@ export interface CardData {
     smtpUser: string;
     imapUser?: string;
   } | null;
+  drafts?: {
+    id: string;
+    subject: string | null;
+    body: string;
+    status: string;
+    sentAt?: string | null;
+    fromAddress?: string | null;
+  }[];
   targetAlias?: string | null;
   /** Number of distinct email cards in this conversation thread */
   threadCount?: number;

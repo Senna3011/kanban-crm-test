@@ -613,6 +613,45 @@ export async function convertOutreachLeadToKanbanCard(params: {
     params.replyBody ||
     `[INTERNAL PROSPECT DOSSIER]\nSourced from Outreach Campaign: "${lead.campaign.name}"\n\n• Full Name: ${lead.fullName}\n• Job Title: ${lead.jobTitle || 'N/A'}\n• Company: ${lead.companyName || 'N/A'}\n• LinkedIn: ${lead.linkedinUrl || 'N/A'}\n• Email: ${lead.email || 'N/A'}\n• Location: ${lead.location || 'N/A'}\n\nNote: Prospect pushed to CRM. No outgoing email has been sent yet. Review the pending draft pitch below before sending.`;
 
+  // Auto-build or reuse multi-step sequence drafts
+  const leadMetadata = (typeof lead.metadata === 'object' && lead.metadata !== null) ? (lead.metadata as any) : {};
+  let sequenceDrafts = leadMetadata.sequenceDrafts;
+
+  const firstName = lead.firstName || lead.fullName.split(' ')[0] || 'there';
+  const company = lead.companyName || 'your team';
+  const role = lead.jobTitle || 'executive';
+  const campaignName = lead.campaign?.name || 'Outreach Team';
+
+  const defaultInitialSubject = lead.aiDraftSubject || `Quick question regarding ${company}`;
+  const defaultInitialBody =
+    lead.aiDraftBody ||
+    `Hi ${firstName},\n\nI came across your profile as ${role} at ${company} and was really impressed by your team's focus.\n\nWe help companies like ${company} streamline operations and accelerate pipeline growth.\n\nWould you be open to a brief 5-minute chat next week to see if this aligns with your current priorities?\n\nBest regards,\n${campaignName}`;
+
+  const defaultFollowUp1Subject = lead.dripDraftSubject || `Re: Quick question regarding ${company}`;
+  const defaultFollowUp1Body =
+    lead.dripDraftBody ||
+    `Hi ${firstName},\n\nFollowing up on my previous note. I know you're busy, so I'll keep this brief.\n\nWe recently helped similar teams in your space increase pipeline efficiency by over 30%.\n\nDo you have 10 minutes this Thursday or Friday for a quick introduction?\n\nBest regards,\n${campaignName}`;
+
+  const defaultFollowUp2Subject = `Idea for ${company} / quick follow-up`;
+  const defaultFollowUp2Body =
+    `Hi ${firstName},\n\nWanted to share a quick idea on how ${company} could scale outreach and deal flow without adding overhead.\n\nWould love to hear your thoughts if you're open to exploring new approaches this quarter.\n\nBest,\n${campaignName}`;
+
+  const defaultFollowUp3Subject = `Closing the loop / ${company}`;
+  const defaultFollowUp3Body =
+    `Hi ${firstName},\n\nI haven't heard back, so I assume this isn't top of mind right now—completely understood!\n\nI'll pause reaching out for now so I don't crowd your inbox. Feel free to reach back out anytime if things change.\n\nBest of luck with everything at ${company}!\n\nBest,\n${campaignName}`;
+
+  if (!Array.isArray(sequenceDrafts) || sequenceDrafts.length === 0) {
+    sequenceDrafts = [
+      { step: 0, title: 'Initial Touch (Cold Pitch)', subject: defaultInitialSubject, body: defaultInitialBody },
+      { step: 1, title: 'Follow-Up #1', subject: defaultFollowUp1Subject, body: defaultFollowUp1Body },
+      { step: 2, title: 'Follow-Up #2', subject: defaultFollowUp2Subject, body: defaultFollowUp2Body },
+      { step: 3, title: 'Follow-Up #3 (Closing)', subject: defaultFollowUp3Subject, body: defaultFollowUp3Body },
+    ];
+  }
+
+  const initialDraftSubject = sequenceDrafts[0]?.subject || defaultInitialSubject;
+  const initialDraftBody = sequenceDrafts[0]?.body || defaultInitialBody;
+
   const card = await prisma.card.create({
     data: {
       subject,
@@ -632,24 +671,24 @@ export async function convertOutreachLeadToKanbanCard(params: {
         company: lead.companyName,
         linkedinUrl: lead.linkedinUrl,
         location: lead.location,
-        aiDraftSubject: lead.aiDraftSubject,
-        aiDraftBody: lead.aiDraftBody,
+        aiDraftSubject: initialDraftSubject,
+        aiDraftBody: initialDraftBody,
+        sequenceDrafts,
+        currentSequenceStep: 0,
       },
     },
   });
 
-  // If lead had an AI draft, create a pending draft message for this card
-  if (lead.aiDraftBody) {
-    await prisma.draftMessage.create({
-      data: {
-        subject: lead.aiDraftSubject || `Hello ${lead.fullName}`,
-        body: lead.aiDraftBody,
-        status: 'pending',
-        cardId: card.id,
-        tenantId: params.tenantId,
-      },
-    });
-  }
+  // Always ensure a ready pending DraftMessage is created for this card so it can be dispatched immediately
+  await prisma.draftMessage.create({
+    data: {
+      subject: initialDraftSubject,
+      body: initialDraftBody,
+      status: 'pending',
+      cardId: card.id,
+      tenantId: params.tenantId,
+    },
+  });
 
   // Create initial activity log
   await prisma.activityLog.create({

@@ -451,6 +451,7 @@ interface Props {
 export default function CardDetailPanel({ card, onClose }: Props) {
   const [draftBody, setDraftBody] = useState('');
   const [draftId, setDraftId] = useState<string | null>(null);
+  const [selectedSequenceStep, setSelectedSequenceStep] = useState<number>(0);
   const [activityLogs, setActivityLogs] = useState<ActivityLogData[]>([]);
   const [sending, setSending] = useState(false);
   const [deleting, setDeleting] = useState(false);
@@ -581,6 +582,9 @@ export default function CardDetailPanel({ card, onClose }: Props) {
             setDraftId(pending.id);
             setDraftBody(pending.body);
           }
+
+          const step = (data.metadata?.currentSequenceStep ?? (card.metadata as any)?.currentSequenceStep ?? 0) as number;
+          setSelectedSequenceStep(step);
         }
 
         if (!cardBoardId && typeof window !== 'undefined') {
@@ -1352,8 +1356,51 @@ export default function CardDetailPanel({ card, onClose }: Props) {
 	                  </div>
 	                </div>
 
-	                {/* AI Pitch Draft banner for Outreach leads */}
-	                {isOutreachCard && draftBody && (
+		                {/* Sequence Step Selector if available */}
+		                {(() => {
+		                  const sequenceDrafts = (cardData?.metadata?.sequenceDrafts || (card.metadata as any)?.sequenceDrafts || []) as {
+		                    step: number;
+		                    title: string;
+		                    subject: string;
+		                    body: string;
+		                  }[];
+		                  if (!Array.isArray(sequenceDrafts) || sequenceDrafts.length === 0) return null;
+
+		                  return (
+		                    <div className="space-y-1.5">
+		                      <div className="flex items-center justify-between text-[11px] font-bold text-slate-500 uppercase tracking-wider">
+		                        <span>Lead Sequence Stages</span>
+		                        <span className="text-primary-600 font-semibold normal-case">Step {selectedSequenceStep} of {sequenceDrafts.length - 1}</span>
+		                      </div>
+		                      <div className="flex items-center gap-1.5 p-1 bg-slate-100 rounded-xl overflow-x-auto">
+		                        {sequenceDrafts.map((seq) => {
+		                          const isActive = selectedSequenceStep === seq.step;
+		                          return (
+		                            <button
+		                              key={seq.step}
+		                              type="button"
+		                              onClick={() => {
+		                                setSelectedSequenceStep(seq.step);
+		                                setDraftBody(seq.body);
+		                              }}
+		                              className={`px-2.5 py-1 text-xs font-bold rounded-lg transition-all flex items-center gap-1 whitespace-nowrap cursor-pointer ${
+		                                isActive
+		                                  ? 'bg-white text-indigo-700 shadow-2xs'
+		                                  : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/50'
+		                              }`}
+		                            >
+		                              <span>{seq.step === 0 ? '📫' : '🔄'}</span>
+		                              <span>{seq.step === 0 ? 'Initial Touch' : `Follow-Up #${seq.step}`}</span>
+		                            </button>
+		                          );
+		                        })}
+		                      </div>
+		                    </div>
+		                  );
+		                })()}
+
+		                {/* AI Pitch Draft banner for Outreach leads */}
+		                {isOutreachCard && draftBody && (
 	                  <div className="p-2.5 bg-amber-50/90 dark:bg-amber-950/40 border border-amber-200/90 dark:border-amber-800/80 rounded-xl flex items-center justify-between text-xs text-amber-900 dark:text-amber-200">
 	                    <span className="flex items-center gap-1.5 min-w-0">
 	                      <span>💡</span>

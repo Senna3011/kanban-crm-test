@@ -30,6 +30,46 @@ export async function POST(req: NextRequest) {
 
     const limit = Math.min(Number(body.limit) || 15, 20);
 
+    // Auto-instantiate pending drafts for cards with sequenceDrafts in this column that don't have one yet
+    const cardsNeedingDraft = await prisma.card.findMany({
+      where: {
+        columnId,
+        tenantId,
+        drafts: {
+          none: {
+            status: { in: ['pending', 'edited'] },
+          },
+        },
+      },
+      select: { id: true, metadata: true },
+      take: limit,
+    });
+
+    for (const card of cardsNeedingDraft) {
+      const meta = (typeof card.metadata === 'object' && card.metadata !== null) ? (card.metadata as any) : {};
+      const sequenceDrafts = Array.isArray(meta.sequenceDrafts) ? meta.sequenceDrafts : [];
+      if (sequenceDrafts.length > 0) {
+        const colTitle = column.title.toLowerCase();
+        let step = meta.currentSequenceStep || 0;
+        if (colTitle.includes('follow up 1') || colTitle.includes('follow-up 1') || colTitle === 'contacted') step = 1;
+        else if (colTitle.includes('follow up 2') || colTitle.includes('follow-up 2')) step = 2;
+        else if (colTitle.includes('follow up 3') || colTitle.includes('follow-up 3')) step = 3;
+
+        const targetDraft = sequenceDrafts.find((s: any) => s.step === step) || sequenceDrafts[0];
+        if (targetDraft) {
+          await prisma.draftMessage.create({
+            data: {
+              subject: targetDraft.subject || `Outreach Message`,
+              body: targetDraft.body,
+              status: 'pending',
+              cardId: card.id,
+              tenantId,
+            },
+          });
+        }
+      }
+    }
+
     // Find cards in this column with pending or edited drafts (capped to prevent HTTP 504 timeout)
     const cards = await prisma.card.findMany({
       where: {

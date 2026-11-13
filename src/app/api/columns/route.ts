@@ -123,6 +123,9 @@ export async function GET(req: NextRequest) {
           emailConfig: {
             select: { id: true, name: true, smtpUser: true, imapUser: true },
           },
+          drafts: {
+            select: { id: true, subject: true, body: true, status: true, sentAt: true, fromAddress: true },
+          },
           assignedTo: {
             select: { id: true, name: true, email: true, avatar: true },
           },

@@ -45,7 +45,7 @@ export function sanitizeOutreachError(
     /quota|credit|insufficient|limit reached|rate limit/i.test(rawMessage)
   ) {
     return {
-      clientMessage: 'Kuota pencarian atau saldo kredit gateway B2B saat ini telah habis. Silakan isi ulang kuota atau gunakan provider alternatif.',
+      clientMessage: 'B2B gateway search quota or credit balance has been exhausted. Please recharge credits or switch to an alternative provider.',
       statusCode: 429,
       errorCode: 'GATEWAY_QUOTA_EXCEEDED',
     };
@@ -58,7 +58,7 @@ export function sanitizeOutreachError(
     /validation|where|expected|invalid parameter|identity_incomplete/i.test(rawMessage)
   ) {
     return {
-      clientMessage: 'Kriteria pencarian prospek tidak sesuai dengan format gateway ini. Silakan coba sesuaikan kata kunci jabatan (role) atau target lokasi.',
+      clientMessage: 'Prospect search criteria are incompatible with this gateway format. Please refine role keywords or target location.',
       statusCode: 400,
       errorCode: 'INVALID_SEARCH_CRITERIA',
     };
@@ -71,7 +71,7 @@ export function sanitizeOutreachError(
     /unauthorized|forbidden|api key|token|invalid token/i.test(rawMessage)
   ) {
     return {
-      clientMessage: 'Koneksi ke gateway penyedia data gagal diverifikasi. Silakan hubungi administrator sistem untuk memperbarui token gateway.',
+      clientMessage: 'Connection to data provider gateway could not be authenticated. Please contact system administrator to refresh gateway tokens.',
       statusCode: 502,
       errorCode: 'GATEWAY_AUTH_FAILURE',
     };
@@ -80,7 +80,7 @@ export function sanitizeOutreachError(
   // 4. Timeout / Batas Waktu Terlampaui (15s)
   if (/timeout|abort|etimedout|15 seconds/i.test(rawMessage)) {
     return {
-      clientMessage: 'Pencarian prospek melebihi batas waktu (timeout). Server provider sedang mengalami antrean sibuk, silakan coba beberapa saat lagi.',
+      clientMessage: 'Prospect search timed out. The upstream provider queue is currently congested; please retry in a few moments.',
       statusCode: 504,
       errorCode: 'GATEWAY_TIMEOUT',
     };
@@ -89,7 +89,7 @@ export function sanitizeOutreachError(
   // 5. Gangguan Server Gateway / Upstream Maintenance (HTTP 500, 502, 503)
   if (rawMessage.includes('500') || rawMessage.includes('502') || rawMessage.includes('503')) {
     return {
-      clientMessage: 'Penyedia gateway prospek sedang dalam pemeliharaan sistem. Silakan coba kembali sesaat lagi atau gunakan mode Live Search.',
+      clientMessage: 'Prospect gateway provider is currently undergoing maintenance. Please retry in a few moments or switch to Live Search mode.',
       statusCode: 502,
       errorCode: 'GATEWAY_UNAVAILABLE',
     };
@@ -97,7 +97,7 @@ export function sanitizeOutreachError(
 
   // 6. Default Safe Fallback
   return {
-    clientMessage: 'Pencarian prospek belum berhasil diproses. Silakan coba sesuaikan kriteria pencarian atau pilih provider alternatif.',
+    clientMessage: 'Prospect sourcing could not be completed. Please adjust your search criteria or select an alternative provider.',
     statusCode: 500,
     errorCode: 'DISCOVERY_FAILED',
   };

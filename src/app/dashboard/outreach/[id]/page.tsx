@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState, useRef } from 'react';
-import { useParams, useSearchParams } from 'next/navigation';
+import { useParams, useSearchParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import ConfirmDialog, { type ConfirmDialogVariant } from '@/components/ui/ConfirmDialog';
 import { estimateLeadSearchCost, formatUsdCost } from '@/lib/treg-billing';
@@ -185,6 +185,7 @@ export default function CampaignWorkspacePage({
 }: {
   params?: { id?: string } | Promise<{ id?: string }>;
 }) {
+  const router = useRouter();
   const routeParams = useParams();
   const campaignId = (routeParams?.id as string) || (params as any)?.id || '';
   const searchParams = useSearchParams();
@@ -208,12 +209,21 @@ export default function CampaignWorkspacePage({
   const pageSize = 15;
   const [filterStatus, setFilterStatus] = useState('ALL');
 
-  // Push to CRM Modal State (with Board & Column selection)
+  // Push to CRM Modal State (with Board & Column selection, Inline Board Creator & Success Feedback)
   const [isPushCrmModalOpen, setIsPushCrmModalOpen] = useState(false);
   const [crmTargetLeadIds, setCrmTargetLeadIds] = useState<string[]>([]);
   const [boardsList, setBoardsList] = useState<BoardOption[]>([]);
   const [selectedBoardId, setSelectedBoardId] = useState('');
   const [selectedColumnId, setSelectedColumnId] = useState('');
+  const [isCreatingBoardInline, setIsCreatingBoardInline] = useState(false);
+  const [newBoardTitle, setNewBoardTitle] = useState('');
+  const [creatingBoard, setCreatingBoard] = useState(false);
+  const [pushSuccessData, setPushSuccessData] = useState<{
+    boardId: string;
+    boardTitle: string;
+    columnTitle: string;
+    count: number;
+  } | null>(null);
 
   // Selected Lead for Sequential Draft Review Modal (Supports 4 drafts: Initial + 3 Follow-ups - Point 13)
   const [selectedLead, setSelectedLead] = useState<Lead | null>(null);
@@ -349,7 +359,7 @@ export default function CampaignWorkspacePage({
             setIsPollingWorker(false);
             const lastRun = loaded.runLogs?.[0];
             const costSuffix = lastRun ? ` • Run Cost: ${formatUsdCost(lastRun.actualCostUsd)}` : '';
-            toast.success(`🎉 Pencarian background selesai! Total ${loaded.leads?.length || 0} leads terkumpul${costSuffix}.`);
+            toast.success(`🎉 Background sourcing complete! Total ${loaded.leads?.length || 0} leads collected${costSuffix}.`);
             fetchEngineBalance(true);
           }
         }
@@ -437,10 +447,10 @@ export default function CampaignWorkspacePage({
       if (data.queued) {
         setIsPollingWorker(true);
         const estText = data.estimatedCostUsd !== undefined ? ` (Est. Cost: ${formatUsdCost(data.estimatedCostUsd)})` : '';
-        toast.success(`${data.message || `Pencarian ${customLimit || 10} leads dijadwalkan di background worker.`}${estText}`);
+        toast.success(`${data.message || `Sourcing ${customLimit || 10} leads queued in background worker.`}${estText}`);
       } else if (data.count === 0 && data.skippedDuplicates > 0) {
         const costText = data.costUsd !== undefined ? ` • Cost: ${formatUsdCost(data.costUsd)}` : '';
-        toast(`ℹ️ Tidak ada leads baru. (${data.skippedDuplicates} duplikat dilewati)${costText}`, { icon: '🔍' });
+        toast(`ℹ️ No new leads found. (${data.skippedDuplicates} duplicates skipped)${costText}`, { icon: '🔍' });
       } else {
         const costInfo = data.costUsd !== undefined ? ` • Cost: ${formatUsdCost(data.costUsd)}` : '';
         const balInfo = typeof data.balanceAfterUsd === 'number' ? ` • Balance: ${formatUsdCost(data.balanceAfterUsd)}` : '';
@@ -449,9 +459,9 @@ export default function CampaignWorkspacePage({
       await fetchCampaign();
       fetchEngineBalance(true);
     } catch (err: any) {
-      const rawMsg = err.message || 'Pencarian prospek gagal';
+      const rawMsg = err.message || 'Lead sourcing failed';
       const cleanMsg = rawMsg.startsWith('{') || rawMsg.includes('{"') || rawMsg.includes('SyntaxError')
-        ? 'Pencarian prospek belum berhasil diproses. Silakan coba sesuaikan kriteria atau pilih provider alternatif.'
+        ? 'Lead sourcing could not be completed. Please adjust search criteria or choose an alternative provider.'
         : rawMsg;
       toast.error(cleanMsg);
     } finally {
@@ -469,7 +479,7 @@ export default function CampaignWorkspacePage({
       if (!res.ok) throw new Error('Failed to reset status');
       setIsPollingWorker(false);
       setActionLoading('');
-      toast.success('Pencarian berhasil dibatalkan dan status di-reset ke DRAFT!');
+      toast.success('Search cancelled and status reset to DRAFT!');
       await fetchCampaign();
     } catch (err: any) {
       toast.error(`Reset Error: ${err.message}`);
@@ -522,7 +532,7 @@ export default function CampaignWorkspacePage({
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Failed to verify emails');
       if (data.queued) {
-        toast.success(data.message || `Verifikasi ${data.totalProcessed || 'leads'} dijadwalkan di background worker.`);
+        toast.success(data.message || `Verification for ${data.totalProcessed || 'leads'} queued in background worker.`);
       } else {
         const parts: string[] = [];
         if (data.safeCount) parts.push(`${data.safeCount} Safe 🟢`);
@@ -575,13 +585,15 @@ export default function CampaignWorkspacePage({
 
   // 5. Open Push to Kanban CRM Modal (with Board & Column Selector)
   async function openPushCrmModal(targetLeadIds?: string[]) {
+    setPushSuccessData(null);
+    setIsCreatingBoardInline(false);
     const ids = targetLeadIds || (selectedIds.length > 0 ? selectedIds : undefined);
     const eligibleLeads = (campaign?.leads || []).filter(
-      (l) => l.status !== 'CONVERTED' && (!ids || ids.includes(l.id)) && l.verifyStatus !== 'INVALID'
+      (l) => l.status !== 'CONVERTED' && (!ids || ids.includes(l.id)) && Boolean(l.email) && l.verifyStatus !== 'INVALID'
     );
 
     if (eligibleLeads.length === 0) {
-      toast.error('No uncommitted valid leads available to push to CRM.');
+      toast.error('No uncommitted leads with verified emails available to push to CRM.');
       return;
     }
 
@@ -617,6 +629,32 @@ export default function CampaignWorkspacePage({
     }
   }
 
+  async function handleCreateNewBoardInline() {
+    const title = newBoardTitle.trim() || `${campaign?.name || 'Outreach'} Board`;
+    setCreatingBoard(true);
+    try {
+      const res = await fetch('/api/boards', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ title }),
+      });
+      if (!res.ok) throw new Error('Failed to create board');
+      const newBoard = await res.json();
+      setBoardsList((prev) => [newBoard, ...prev]);
+      setSelectedBoardId(newBoard.id);
+      const cols = newBoard.columns || [];
+      const leadsCol = cols.find((c: any) => c.title.toLowerCase() === 'fresh leads') || cols.find((c: any) => c.title.toLowerCase() === 'leads') || cols[0];
+      if (leadsCol) setSelectedColumnId(leadsCol.id);
+      setIsCreatingBoardInline(false);
+      setNewBoardTitle('');
+      toast.success(`Board "${newBoard.title}" created successfully!`);
+    } catch (err: any) {
+      toast.error(`Error creating board: ${err.message}`);
+    } finally {
+      setCreatingBoard(false);
+    }
+  }
+
   // Execute the Push to CRM
   async function executePushCrm() {
     if (crmTargetLeadIds.length === 0) return;
@@ -633,14 +671,17 @@ export default function CampaignWorkspacePage({
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Failed to push leads to CRM');
-      
+
       const count = data.convertedCount || crmTargetLeadIds.length;
-      toast.success(
-        `✓ ${count} lead(s) successfully pushed to "Fresh leads" in CRM! Cards saved safely as drafts (No email sent).`,
-        { duration: 7000 }
-      );
+      const targetBoard = boardsList.find((b) => b.id === selectedBoardId);
+      const targetCol = targetBoard?.columns?.find((c: any) => c.id === selectedColumnId);
+      setPushSuccessData({
+        boardId: selectedBoardId,
+        boardTitle: targetBoard?.title || 'Target Board',
+        columnTitle: targetCol?.title || 'Fresh leads',
+        count,
+      });
       clearSelection();
-      setIsPushCrmModalOpen(false);
       await fetchCampaign();
     } catch (err: any) {
       toast.error(`Push to CRM failed: ${err.message}`);
@@ -1048,7 +1089,8 @@ export default function CampaignWorkspacePage({
   const dispatchedLeads = allLeads.filter((l) => l.status === 'DISPATCHED' || l.status === 'CONVERTED').length;
   const convertedLeads = allLeads.filter((l) => l.status === 'CONVERTED').length;
   const uncommittedSafeDrafts = allLeads.filter((l) => l.status !== 'CONVERTED' && l.verifyStatus === 'SAFE' && Boolean(l.aiDraftSubject)).length;
-  const uncommittedTotalLeads = allLeads.filter((l) => l.status !== 'CONVERTED').length;
+  const uncommittedTotalLeads = allLeads.filter((l) => l.status !== 'CONVERTED' && Boolean(l.email)).length;
+  const isActionLocked = Boolean(actionLoading) || isPollingWorker || campaign.status === 'RUNNING';
 
   function computeLeadIcpScore(lead: Lead): { score: number; label: string; badgeClass: string; matchFactors: string[] } {
     const matchFactors: string[] = [];
@@ -1221,7 +1263,7 @@ export default function CampaignWorkspacePage({
       nextActionLabel = 'Source Target Leads';
       nextActionHandler = async () => { await handleSourceLeads(); };
       nextActionColor = 'bg-blue-600 hover:bg-blue-700';
-    } else if (missingEmailCount > 0) {
+    } else if (leadsWithEmail === 0 && missingEmailCount > 0) {
       currentStepNumber = 2;
       nextActionPrompt = `Step 2: ${missingEmailCount} leads need email discovery. Click to extract business emails.`;
       nextActionLabel = `Get Lead Emails (${missingEmailCount})`;
@@ -1229,15 +1271,15 @@ export default function CampaignWorkspacePage({
       nextActionColor = 'bg-indigo-600 hover:bg-indigo-700';
     } else if (uncommittedTotalLeads > 0) {
       currentStepNumber = 3;
-      nextActionPrompt = `Step 3: ${uncommittedTotalLeads} leads ready. Push into Kanban CRM pipeline.`;
+      nextActionPrompt = `Step 3: ${uncommittedTotalLeads} verified leads ready. Push into Kanban CRM pipeline.`;
       nextActionLabel = `Push ${uncommittedTotalLeads} Leads to CRM`;
       nextActionHandler = () => { openPushCrmModal(); };
       nextActionColor = 'bg-emerald-600 hover:bg-emerald-700 text-white';
-    } else if (convertedLeads > 0 && convertedLeads === allLeads.length) {
+    } else if (convertedLeads > 0 && uncommittedTotalLeads === 0) {
       currentStepNumber = 3;
-      nextActionPrompt = 'Pipeline fully executed! All leads are active in Kanban CRM.';
+      nextActionPrompt = 'Pipeline fully executed! All verified leads are active in Kanban CRM.';
       nextActionLabel = 'View Kanban CRM Board';
-      nextActionHandler = () => { window.location.assign('/dashboard'); };
+      nextActionHandler = () => { router.push('/dashboard'); };
       nextActionColor = 'bg-emerald-600 hover:bg-emerald-700';
     }
   }
@@ -1512,10 +1554,17 @@ export default function CampaignWorkspacePage({
             {allLeads.length === 0 ? (
               <button
                 onClick={() => handleSourceLeads()}
-                disabled={Boolean(actionLoading) || loading}
-                className="mt-3 w-full py-1.5 bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold rounded-lg transition-colors flex items-center justify-center gap-1.5 shadow-xs"
+                disabled={isActionLocked}
+                className="mt-3 w-full py-1.5 bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold rounded-lg transition-colors flex items-center justify-center gap-1.5 shadow-xs disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                <span>🔍 Source Prospects</span>
+                {isActionLocked ? (
+                  <>
+                    <span className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                    <span>Sourcing in Progress...</span>
+                  </>
+                ) : (
+                  <span>🔍 Source Prospects</span>
+                )}
               </button>
             ) : (
               <div className="mt-3 pt-2.5 border-t border-white/10 flex items-center gap-1.5">
@@ -1531,9 +1580,9 @@ export default function CampaignWorkspacePage({
                   type="button"
                   onClick={() => copyLeadsToClipboard(allLeads, 'Step 1: All Sourced Leads')}
                   className="flex-1 py-1 px-2 bg-white/10 hover:bg-white/20 text-slate-200 hover:text-white text-[11px] font-semibold rounded-lg transition-colors flex items-center justify-center gap-1 border border-white/10 shadow-2xs"
-                  title="Copas all Step 1 leads to clipboard (Ready to paste into Excel/Sheets)"
+                  title="Copy all Step 1 leads to clipboard (Ready to paste into Excel/Sheets)"
                 >
-                  <span>📋</span> Copas
+                  <span>📋</span> Copy
                 </button>
               </div>
             )}
@@ -1558,8 +1607,8 @@ export default function CampaignWorkspacePage({
             <div className="mt-3 space-y-1.5">
               <button
                 onClick={() => handleFindEmails()}
-                disabled={Boolean(actionLoading) || missingEmailCount === 0 || allLeads.length === 0}
-                className="w-full py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold rounded-lg transition-colors flex items-center justify-center gap-1.5 shadow-xs disabled:opacity-40"
+                disabled={isActionLocked || missingEmailCount === 0 || allLeads.length === 0}
+                className="w-full py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold rounded-lg transition-colors flex items-center justify-center gap-1.5 shadow-xs disabled:opacity-40 disabled:cursor-not-allowed"
                 title="Find corporate verified emails for leads without email"
               >
                 {actionLoading === 'email' ? (
@@ -1584,9 +1633,9 @@ export default function CampaignWorkspacePage({
                     type="button"
                     onClick={() => copyLeadsToClipboard(allLeads.filter(l => Boolean(l.email)), 'Step 2: Corporate Emails')}
                     className="flex-1 py-1 px-2 bg-indigo-500/20 hover:bg-indigo-500/30 text-indigo-200 hover:text-white text-[11px] font-semibold rounded-lg transition-colors flex items-center justify-center gap-1 border border-indigo-400/20 shadow-2xs"
-                    title="Copas Step 2 leads with emails to clipboard (Ready to paste into Excel/Sheets)"
+                    title="Copy Step 2 leads with emails to clipboard (Ready to paste into Excel/Sheets)"
                   >
-                    <span>📋</span> Copas
+                    <span>📋</span> Copy
                   </button>
                 </div>
               )}
@@ -1610,20 +1659,29 @@ export default function CampaignWorkspacePage({
               </p>
             </div>
             <div className="mt-3 space-y-1.5">
-              <button
-                onClick={() => openPushCrmModal()}
-                disabled={Boolean(actionLoading) || uncommittedTotalLeads === 0 || allLeads.length === 0}
-                className="w-full py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold rounded-lg transition-colors flex items-center justify-center gap-1.5 shadow-xs disabled:opacity-40"
-                title="Bridge leads into Kanban CRM Fresh leads column"
-              >
-                {actionLoading === 'push-crm' ? (
-                  <span className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                ) : uncommittedTotalLeads === 0 && allLeads.length > 0 ? (
-                  <span>✓ All Synced to CRM</span>
-                ) : (
-                  <span>📥 Push to CRM ({uncommittedTotalLeads})</span>
-                )}
-              </button>
+              {uncommittedTotalLeads === 0 && allLeads.length > 0 ? (
+                <button
+                  type="button"
+                  onClick={() => router.push('/dashboard')}
+                  className="w-full py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold rounded-lg transition-colors flex items-center justify-center gap-1.5 shadow-xs cursor-pointer"
+                  title="Open Kanban CRM Board"
+                >
+                  <span>✓ Synced to CRM — View Board ↗</span>
+                </button>
+              ) : (
+                <button
+                  onClick={() => openPushCrmModal()}
+                  disabled={isActionLocked || uncommittedTotalLeads === 0 || allLeads.length === 0}
+                  className="w-full py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold rounded-lg transition-colors flex items-center justify-center gap-1.5 shadow-xs disabled:opacity-40 disabled:cursor-not-allowed"
+                  title="Bridge leads into Kanban CRM Fresh leads column"
+                >
+                  {actionLoading === 'push-crm' ? (
+                    <span className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                  ) : (
+                    <span>📥 Push to CRM ({uncommittedTotalLeads})</span>
+                  )}
+                </button>
+              )}
               {(convertedLeads > 0 || uncommittedTotalLeads > 0) && (
                 <div className="pt-2 border-t border-white/10 flex items-center gap-1.5">
                   <button
@@ -1648,9 +1706,9 @@ export default function CampaignWorkspacePage({
                       copyLeadsToClipboard(targetLeads, 'Step 3: CRM Pipeline Leads');
                     }}
                     className="flex-1 py-1 px-2 bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-200 hover:text-white text-[11px] font-semibold rounded-lg transition-colors flex items-center justify-center gap-1 border border-emerald-400/20 shadow-2xs"
-                    title="Copas Step 3 CRM leads to clipboard (Ready to paste into Excel/Sheets)"
+                    title="Copy Step 3 CRM leads to clipboard (Ready to paste into Excel/Sheets)"
                   >
-                    <span>📋</span> Copas
+                    <span>📋</span> Copy
                   </button>
                 </div>
               )}
@@ -1788,7 +1846,7 @@ export default function CampaignWorkspacePage({
                           {typeof run.balanceAfterUsd === 'number' ? formatUsdCost(run.balanceAfterUsd) : '—'}
                         </td>
                         <td className="px-4 py-2 text-right text-[10px] text-slate-400">
-                          {new Date(run.startedAt).toLocaleString('id-ID', {
+                          {new Date(run.startedAt).toLocaleString('en-US', {
                             day: '2-digit',
                             month: 'short',
                             hour: '2-digit',
@@ -2152,112 +2210,211 @@ export default function CampaignWorkspacePage({
       {isPushCrmModalOpen && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 z-50 animate-in fade-in">
           <div className="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl border border-slate-200 space-y-4">
-            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-              <div className="flex items-center gap-2">
-                <span className="text-xl">📋</span>
-                <div>
-                  <h3 className="text-sm font-bold text-slate-900">Push Leads to Kanban CRM</h3>
-                  <p className="text-xs text-slate-500">Select the target Kanban Board and Column for these prospects.</p>
+            {pushSuccessData ? (
+              /* Success Screen after Push to CRM */
+              <div className="py-4 space-y-5 text-center">
+                <div className="w-14 h-14 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center mx-auto text-2xl shadow-inner">
+                  ✓
+                </div>
+                <div className="space-y-1">
+                  <h3 className="text-base font-bold text-slate-900">Leads Successfully Synced to CRM!</h3>
+                  <p className="text-xs text-slate-500 max-w-sm mx-auto">
+                    {pushSuccessData.count} prospects converted into prospect cards on board{' '}
+                    <strong className="text-slate-800">&quot;{pushSuccessData.boardTitle}&quot;</strong> under column{' '}
+                    <strong className="text-slate-800">&quot;{pushSuccessData.columnTitle}&quot;</strong>.
+                  </p>
+                </div>
+                <div className="p-3.5 bg-slate-50 border border-slate-200 rounded-xl text-left text-xs space-y-1 text-slate-600">
+                  <div className="flex items-center gap-1.5 font-bold text-slate-800">
+                    <span>🛡️</span>
+                    <span>Safe Drafts Active</span>
+                  </div>
+                  <p className="text-[11px] text-slate-500 leading-relaxed">
+                    Personalized AI pitches are saved as pending drafts. You can review them in the Kanban board and initiate sending whenever ready.
+                  </p>
+                </div>
+                <div className="flex items-center justify-center gap-3 pt-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsPushCrmModalOpen(false);
+                      setPushSuccessData(null);
+                    }}
+                    className="px-4 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-100 rounded-xl"
+                  >
+                    Stay in Campaign
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsPushCrmModalOpen(false);
+                      setPushSuccessData(null);
+                      router.push(`/dashboard?boardId=${pushSuccessData.boardId}`);
+                    }}
+                    className="px-5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl transition-all shadow-md flex items-center gap-1.5 cursor-pointer"
+                  >
+                    <span>Open CRM Board 🚀</span>
+                  </button>
                 </div>
               </div>
-              <button
-                onClick={() => setIsPushCrmModalOpen(false)}
-                className="text-slate-400 hover:text-slate-600"
-              >
-                ✕
-              </button>
-            </div>
+            ) : (
+              <>
+                <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+                  <div className="flex items-center gap-2">
+                    <span className="text-xl">📋</span>
+                    <div>
+                      <h3 className="text-sm font-bold text-slate-900">Push Leads to Kanban CRM</h3>
+                      <p className="text-xs text-slate-500">Select target Kanban Board and Column for these prospects.</p>
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => setIsPushCrmModalOpen(false)}
+                    className="text-slate-400 hover:text-slate-600"
+                  >
+                    ✕
+                  </button>
+                </div>
 
-            {/* Target Count & Summary */}
-            <div className="p-3.5 bg-indigo-50/80 dark:bg-[#1c2b41] border border-indigo-100 dark:border-[#204677] rounded-xl text-xs space-y-1.5">
-              <div className="flex items-center justify-between font-bold text-indigo-950 dark:text-[#B6C2CF]">
-                <span>Eligible Leads to Push:</span>
-                <span className="bg-indigo-600 text-white px-2 py-0.5 rounded-full text-[11px]">
-                  {crmTargetLeadIds.length} Leads
-                </span>
-              </div>
-              <p className="text-[11px] text-indigo-700/80 dark:text-[#8C9BAB]">
-                Leads are saved into your Kanban board under <strong>&quot;Fresh leads&quot;</strong>.
-              </p>
-              <div className="pt-1.5 border-t border-indigo-100/80 dark:border-[#204677] text-[11px] font-semibold text-emerald-800 dark:text-[#4BCE97] flex items-center gap-1">
-                <span>🛡️</span>
-                <span>Safe Mode Active: Pushing will NOT send emails. Leads remain as pending drafts until you review and click &quot;Start Sending All&quot;.</span>
-              </div>
-            </div>
+                {/* Target Count & Summary */}
+                <div className="p-3.5 bg-indigo-50/80 dark:bg-[#1c2b41] border border-indigo-100 dark:border-[#204677] rounded-xl text-xs space-y-1.5">
+                  <div className="flex items-center justify-between font-bold text-indigo-950 dark:text-[#B6C2CF]">
+                    <span>Eligible Leads to Push:</span>
+                    <span className="bg-indigo-600 text-white px-2 py-0.5 rounded-full text-[11px]">
+                      {crmTargetLeadIds.length} Leads
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-indigo-700/80 dark:text-[#8C9BAB]">
+                    Leads are saved into your Kanban board under <strong>&quot;Fresh leads&quot;</strong>.
+                  </p>
+                  <div className="pt-1.5 border-t border-indigo-100/80 dark:border-[#204677] text-[11px] font-semibold text-emerald-800 dark:text-[#4BCE97] flex items-center gap-1">
+                    <span>🛡️</span>
+                    <span>Safe Mode Active: Pushing will NOT send emails. Leads remain as pending drafts until you review and click &quot;Start Sending All&quot;.</span>
+                  </div>
+                </div>
 
-            {/* Board & Column Selectors */}
-            <div className="space-y-3">
-              <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">
-                  Select Target Board *
-                </label>
-                <select
-                  value={selectedBoardId}
-                  onChange={(e) => handleSelectBoard(e.target.value)}
-                  className="w-full px-3 py-2 border border-slate-300 rounded-xl text-xs bg-white text-slate-800 font-semibold focus:ring-2 focus:ring-primary-500"
-                >
-                  {boardsList.length === 0 && <option value="">Default Main Sales Board</option>}
-                  {boardsList.map((b) => (
-                    <option key={b.id} value={b.id}>
-                      {b.title} ({b.columns?.length || 0} columns)
-                    </option>
-                  ))}
-                </select>
-              </div>
+                {/* Board & Column Selectors */}
+                <div className="space-y-3">
+                  <div>
+                    <div className="flex items-center justify-between mb-1">
+                      <label className="block text-xs font-semibold text-slate-700">
+                        Select Target Board *
+                      </label>
+                      {!isCreatingBoardInline ? (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setNewBoardTitle(`${campaign?.name || 'Outreach'} Leads`);
+                            setIsCreatingBoardInline(true);
+                          }}
+                          className="text-[11px] font-bold text-primary-600 hover:text-primary-800 transition-colors"
+                        >
+                          + Create New Board
+                        </button>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => setIsCreatingBoardInline(false)}
+                          className="text-[11px] font-semibold text-slate-500 hover:text-slate-700"
+                        >
+                          Cancel
+                        </button>
+                      )}
+                    </div>
 
-              <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">
-                  Select Target Column *
-                </label>
-                <select
-                  value={selectedColumnId}
-                  onChange={(e) => setSelectedColumnId(e.target.value)}
-                  className="w-full px-3 py-2 border border-slate-300 rounded-xl text-xs bg-white text-slate-800 focus:ring-2 focus:ring-primary-500"
-                >
-                  {(() => {
-                    const currentBoard = boardsList.find((b) => b.id === selectedBoardId) || boardsList[0];
-                    const columns = currentBoard?.columns || [];
-                    if (columns.length === 0) {
-                      return <option value="">Default "Leads" Column</option>;
-                    }
-                    return columns.map((col: any) => (
-                      <option key={col.id} value={col.id}>
-                        {col.title}
-                      </option>
-                    ));
-                  })()}
-                </select>
-              </div>
-            </div>
+                    {isCreatingBoardInline ? (
+                      <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl space-y-2 mb-2">
+                        <label className="block text-[11px] font-semibold text-slate-600">
+                          New Board Title:
+                        </label>
+                        <div className="flex items-center gap-2">
+                          <input
+                            type="text"
+                            value={newBoardTitle}
+                            onChange={(e) => setNewBoardTitle(e.target.value)}
+                            placeholder="e.g. Q2 Outreach Campaign"
+                            className="flex-1 px-3 py-1.5 border border-slate-300 rounded-lg text-xs bg-white text-slate-800 focus:outline-none focus:ring-2 focus:ring-primary-500"
+                          />
+                          <button
+                            type="button"
+                            onClick={handleCreateNewBoardInline}
+                            disabled={creatingBoard}
+                            className="px-3 py-1.5 bg-primary-600 hover:bg-primary-700 text-white text-xs font-bold rounded-lg disabled:opacity-50 flex items-center gap-1"
+                          >
+                            {creatingBoard ? 'Creating...' : 'Create'}
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      <select
+                        value={selectedBoardId}
+                        onChange={(e) => handleSelectBoard(e.target.value)}
+                        className="w-full px-3 py-2 border border-slate-300 rounded-xl text-xs bg-white text-slate-800 font-semibold focus:ring-2 focus:ring-primary-500"
+                      >
+                        {boardsList.length === 0 && <option value="">Default Main Sales Board</option>}
+                        {boardsList.map((b) => (
+                          <option key={b.id} value={b.id}>
+                            {b.title} ({b.columns?.length || 0} columns)
+                          </option>
+                        ))}
+                      </select>
+                    )}
+                  </div>
 
-            {/* Modal Actions */}
-            <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-100">
-              <button
-                type="button"
-                onClick={() => setIsPushCrmModalOpen(false)}
-                className="px-4 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-100 rounded-xl"
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                disabled={Boolean(actionLoading) || crmTargetLeadIds.length === 0}
-                onClick={executePushCrm}
-                className="px-5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl transition-all shadow-xs flex items-center gap-1.5 disabled:opacity-50"
-              >
-                {actionLoading === 'push-crm' ? (
-                  <>
-                    <span className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                    <span>Pushing to CRM...</span>
-                  </>
-                ) : (
-                  <>
-                    <span>✓</span>
-                    <span>Confirm & Push {crmTargetLeadIds.length} Leads</span>
-                  </>
-                )}
-              </button>
-            </div>
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-700 mb-1">
+                      Select Target Column *
+                    </label>
+                    <select
+                      value={selectedColumnId}
+                      onChange={(e) => setSelectedColumnId(e.target.value)}
+                      className="w-full px-3 py-2 border border-slate-300 rounded-xl text-xs bg-white text-slate-800 focus:ring-2 focus:ring-primary-500"
+                    >
+                      {(() => {
+                        const currentBoard = boardsList.find((b) => b.id === selectedBoardId) || boardsList[0];
+                        const columns = currentBoard?.columns || [];
+                        if (columns.length === 0) {
+                          return <option value="">Default "Leads" Column</option>;
+                        }
+                        return columns.map((col: any) => (
+                          <option key={col.id} value={col.id}>
+                            {col.title}
+                          </option>
+                        ));
+                      })()}
+                    </select>
+                  </div>
+                </div>
+
+                {/* Modal Actions */}
+                <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-100">
+                  <button
+                    type="button"
+                    onClick={() => setIsPushCrmModalOpen(false)}
+                    className="px-4 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-100 rounded-xl"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    disabled={Boolean(actionLoading) || crmTargetLeadIds.length === 0}
+                    onClick={executePushCrm}
+                    className="px-5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl transition-all shadow-xs flex items-center gap-1.5 disabled:opacity-50 cursor-pointer"
+                  >
+                    {actionLoading === 'push-crm' ? (
+                      <>
+                        <span className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                        <span>Pushing to CRM...</span>
+                      </>
+                    ) : (
+                      <>
+                        <span>✓</span>
+                        <span>Confirm & Push {crmTargetLeadIds.length} Leads</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+              </>
+            )}
           </div>
         </div>
       )}
