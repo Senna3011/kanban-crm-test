@@ -197,6 +197,14 @@ export async function testManyConnections(configIds: string[]) {
 
   const results = await Promise.all(
     configs.map(async (cfg) => {
+      const needsStoredPassword = cfg.authType !== 'oauth2' && !cfg.imapPass;
+      if (needsStoredPassword) {
+        return {
+          id: cfg.id,
+          imap: { success: false, error: 'Missing saved password. Re-enter password in Edit.' },
+          smtp: { success: false, error: 'Missing saved password. Re-enter password in Edit.' },
+        };
+      }
       const [imap, smtp] = await Promise.all([
         testImapConnection({ configId: cfg.id, host: cfg.imapHost, port: cfg.imapPort, user: cfg.imapUser }),
         testSmtpConnection({ configId: cfg.id, host: cfg.smtpHost, port: cfg.smtpPort, user: cfg.smtpUser }),

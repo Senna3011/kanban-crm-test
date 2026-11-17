@@ -46,12 +46,12 @@ function inferProvider(cfg: InventoryConfig): { name: string; icon: string } {
 }
 
 function HealthDot({ state, error, label }: { state?: 'ok' | 'fail' | 'checking'; error?: string; label: string }) {
-  if (!state) return <span className="text-slate-400 font-medium">{label}: —</span>;
+  if (!state) return <span className="text-slate-400 font-medium">Not tested</span>;
   if (state === 'checking') {
     return (
       <span className="inline-flex items-center gap-1 text-slate-500 font-medium">
         <span className="animate-spin inline-block w-2.5 h-2.5 border border-slate-400 border-t-transparent rounded-full" />
-        {label}: …
+        Testing…
       </span>
     );
   }
@@ -59,14 +59,15 @@ function HealthDot({ state, error, label }: { state?: 'ok' | 'fail' | 'checking'
     return (
       <span className="inline-flex items-center gap-1 text-emerald-700 font-semibold">
         <span>✓</span>
-        {label}
+        {label} connected
       </span>
     );
   }
   return (
-    <span className="inline-flex items-center gap-1 text-rose-600 font-semibold cursor-help" title={error || label + ' failed'}>
+    <span className="inline-flex items-center gap-1 text-rose-600 font-semibold" title={error || `${label} connection failed`}>
       <span>✗</span>
-      {label}
+      {label} failed
+      {error ? <span className="text-rose-400 font-normal"> — {error}</span> : null}
     </span>
   );
 }
@@ -123,10 +124,10 @@ export default function MailboxInventory({
 
   const idsToTest = selected.size > 0 ? [...selected] : configs.map((c) => c.id);
 
-  async function runTests(ids: string[]) {
+  async function runTests(ids: string[]): Promise<{ okCount: number; failCount: number } | null> {
     if (ids.length === 0) {
       toast.error('No mailboxes to test.');
-      return;
+      return null;
     }
     setHealth((prev) => {
       const next = { ...prev };
@@ -156,8 +157,10 @@ export default function MailboxInventory({
         }
         return next;
       });
-      if (failCount === 0) toast.success(`✅ All ${okCount} mailbox connection(s) healthy.`);
-      else toast(`${okCount} ✓ / ${failCount} ✗ connection test result.`, { icon: '⚠️' });
+      if (failCount === 0) toast.success(`✅ ${okCount} mailbox(es) healthy — IMAP & SMTP connected.`);
+      else if (okCount === 0) toast.error(`❌ All ${failCount} mailbox(es) failed connection test.`);
+      else toast(`${okCount} ✓ healthy / ${failCount} ✗ failed. See red rows below.`, { icon: '⚠️' });
+      return { okCount, failCount };
     } catch (err: any) {
       toast.error(err?.message || 'Connection test failed.');
       setHealth((prev) => {
@@ -168,6 +171,7 @@ export default function MailboxInventory({
         });
         return next;
       });
+      return null;
     }
   }
 
@@ -183,11 +187,10 @@ export default function MailboxInventory({
   async function handleTestOne(cfg: InventoryConfig) {
     setTestingId(cfg.id);
     try {
-      await runTests([cfg.id]);
-      const h = health[cfg.id];
-      if (h?.imap === 'fail' || h?.smtp === 'fail') {
-        // health state updates async; re-check via latest result inside runTests is not returned,
-        // so open edit form as repair hint when a failure was just recorded
+      const summary = await runTests([cfg.id]);
+      if (summary && summary.failCount > 0) {
+        setExpandedId(cfg.id);
+        toast('Fix credentials in the opened form, then Save.', { icon: '🔧' });
       }
     } finally {
       setTestingId(null);
@@ -387,9 +390,41 @@ export default function MailboxInventory({
             const h = health[cfg.id];
             const isExpanded = expandedId === cfg.id;
             const hasFailed = h && (h.imap === 'fail' || h.smtp === 'fail');
+            const isChecking = h?.imap === 'checking' || h?.smtp === 'checking';
+
+            let statusChip: React.ReactNode = (
+              <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 bg-slate-50 text-slate-500 border border-slate-200 rounded-full">
+                Not tested
+              </span>
+            );
+            if (isChecking) {
+              statusChip = (
+                <span className="inline-flex items-center gap-1.5 text-[10px] font-bold px-2 py-0.5 bg-blue-50 text-blue-700 border border-blue-200/70 rounded-full">
+                  <span className="animate-spin inline-block w-2.5 h-2.5 border border-blue-400 border-t-transparent rounded-full" />
+                  Testing…
+                </span>
+              );
+            } else if (h?.imap === 'ok' && h?.smtp === 'ok') {
+              statusChip = (
+                <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-full">
+                  ✓ Connected
+                </span>
+              );
+            } else if (hasFailed) {
+              statusChip = (
+                <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 bg-rose-50 text-rose-700 border border-rose-200 rounded-full">
+                  ✗ Connection failed
+                </span>
+              );
+            }
 
             return (
-              <div key={cfg.id} className={isExpanded ? 'bg-primary-50/30' : 'hover:bg-slate-50/60 transition-colors'}>
+              <div
+                key={cfg.id}
+                className={`${isExpanded ? 'bg-primary-50/30' : 'hover:bg-slate-50/60 transition-colors'} ${
+                  hasFailed ? 'border-l-4 border-l-rose-400' : ''
+                }`}
+              >
                 <div className="flex items-center gap-3 px-4 py-3">
                   {!readOnly && (
                     <input
@@ -430,9 +465,9 @@ export default function MailboxInventory({
                       )}
                     </div>
                     <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 mt-1 text-[11px]">
+                      {statusChip}
                       <HealthDot state={h?.imap} error={h?.imapError} label="IMAP" />
                       <HealthDot state={h?.smtp} error={h?.smtpError} label="SMTP" />
-                      {!h && <span className="text-slate-400">Not tested yet</span>}
                     </div>
                   </div>
 
