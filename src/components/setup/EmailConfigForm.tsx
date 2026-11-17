@@ -27,7 +27,7 @@ type EmailValues = {
   smtpPass: string;
 };
 
-const PRESETS: Record<string, { name: string; icon: string; imapHost: string; imapPort: number; smtpHost: string; smtpPort: number; hint: string }> = {
+export const PRESETS: Record<string, { name: string; icon: string; imapHost: string; imapPort: number; smtpHost: string; smtpPort: number; hint: string }> = {
   zoho: {
     name: 'Zoho Mail',
     icon: '📫',

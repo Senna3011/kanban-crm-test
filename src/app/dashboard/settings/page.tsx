@@ -2,10 +2,9 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/server/auth';
 import { getEmailConfigs } from '@/server/actions/email-config';
 import CompanyInfoForm from '@/components/setup/CompanyInfoForm';
-import EmailConfigForm from '@/components/setup/EmailConfigForm';
 import BoardSenderManager from '@/components/setup/BoardSenderManager';
 import ZohoConnectCard from '@/components/setup/ZohoConnectCard';
-import EmailConfigActiveToggle from '@/components/setup/EmailConfigActiveToggle';
+import MailboxInventory from '@/components/setup/MailboxInventory';
 import Link from 'next/link';
 import AiStatusBanner from '@/components/AiStatusBanner';
 
@@ -183,64 +182,8 @@ export default async function SettingsPage({
         {/* 1-Click Zoho OAuth Connect Card */}
         {isAdmin && <ZohoConnectCard boards={data.boards} />}
 
-        {data.configs.length === 0 ? (
-          <div className="text-center py-8 text-gray-500">
-            <p className="mb-4">No email accounts configured yet.</p>
-            {isAdmin && <EmailConfigForm boards={data.boards} />}
-          </div>
-        ) : isAdmin ? (
-          /* Admin View: Full editable forms */
-          <div className="space-y-6">
-            {data.configs.map((cfg) => (
-              <div key={cfg.id} className="border border-gray-200 rounded-lg p-4">
-                <div className="flex items-center justify-between mb-3">
-                  <div>
-                    <h3 className="font-medium text-gray-900">{cfg.name}</h3>
-                    <p className="text-sm text-gray-500">
-                      {cfg.imapUser} → {data.boards.find((b) => b.id === cfg.boardId)?.title || 'No board linked'}
-                    </p>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <EmailConfigActiveToggle
-                      configId={cfg.id}
-                      initialActive={cfg.isActive}
-                      readOnly={!isAdmin}
-                    />
-                  </div>
-                </div>
-                <EmailConfigForm initial={cfg} boards={data.boards} />
-              </div>
-            ))}
-            <EmailConfigForm boards={data.boards} isNew />
-          </div>
-        ) : (
-          /* Member View: Clean read-only status list */
-          <div className="space-y-3">
-            {data.configs.map((cfg) => (
-              <div
-                key={cfg.id}
-                className="flex items-center justify-between p-4 bg-slate-50 border border-slate-200 rounded-xl"
-              >
-                <div>
-                  <h4 className="font-semibold text-slate-800 text-sm">{cfg.name}</h4>
-                  <p className="text-xs text-slate-500 mt-0.5">
-                    Email: <span className="font-medium text-slate-700">{cfg.imapUser}</span> • Board:{' '}
-                    <span className="font-medium text-slate-700">
-                      {data.boards.find((b) => b.id === cfg.boardId)?.title || 'All Boards'}
-                    </span>
-                  </p>
-                </div>
-                <div className="flex items-center gap-2">
-                  <EmailConfigActiveToggle
-                    configId={cfg.id}
-                    initialActive={cfg.isActive}
-                    readOnly
-                  />
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
+        {/* Compact inventory: 1 row per mailbox, accordion edit, bulk actions */}
+        <MailboxInventory configs={data.configs} boards={data.boards} readOnly={!isAdmin} />
       </section>
     </div>
   );

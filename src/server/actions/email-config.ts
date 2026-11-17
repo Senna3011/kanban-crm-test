@@ -178,7 +178,34 @@ export async function deleteEmailConfig(id: string) {
   const config = await prisma.emailConfig.findFirst({ where: { id, tenantId } });
   if (!config) throw new Error('Configuration not found.');
   await prisma.emailConfig.delete({ where: { id } });
+  revalidatePath('/dashboard/settings');
   return { success: true };
+}
+
+export async function deleteManyEmailConfigs(ids: string[]) {
+  const user = await requireAdmin();
+  const tenantId = user.tenantId;
+  const result = await prisma.emailConfig.deleteMany({ where: { tenantId, id: { in: ids } } });
+  revalidatePath('/dashboard/settings');
+  return { success: true, deleted: result.count };
+}
+
+export async function testManyConnections(configIds: string[]) {
+  const user = await requireAdmin();
+  const tenantId = user.tenantId;
+  const configs = await prisma.emailConfig.findMany({ where: { tenantId, id: { in: configIds } } });
+
+  const results = await Promise.all(
+    configs.map(async (cfg) => {
+      const [imap, smtp] = await Promise.all([
+        testImapConnection({ configId: cfg.id, host: cfg.imapHost, port: cfg.imapPort, user: cfg.imapUser }),
+        testSmtpConnection({ configId: cfg.id, host: cfg.smtpHost, port: cfg.smtpPort, user: cfg.smtpUser }),
+      ]);
+      return { id: cfg.id, imap, smtp };
+    })
+  );
+
+  return { success: true, results };
 }
 
 export async function testImapConnection(data: {
