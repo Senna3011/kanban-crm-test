@@ -261,6 +261,10 @@ export async function testImapConnection(data: {
         }
         return { success: false, error: 'Token OAuth Zoho tidak valid. Klik Connect Zoho untuk reconnect.' };
       }
+      // Fall back to the password stored in DB when the caller only passes an id.
+      const storedPass = data.pass || (config?.imapPass ? decrypt(config.imapPass) : '');
+      validateConnectionInput({ host: data.host, port: data.port, user: data.user, pass: storedPass });
+      authConfig = { user: data.user, pass: storedPass };
     }
 
     if (!authConfig) {
@@ -324,6 +328,10 @@ export async function testSmtpConnection(data: {
         }
         return { success: false, error: 'Token OAuth Zoho tidak valid. Klik Connect Zoho untuk reconnect.' };
       }
+      // Fall back to the password stored in DB when the caller only passes an id.
+      const storedPass = data.pass || (config?.smtpPass ? decrypt(config.smtpPass) : '');
+      validateConnectionInput({ host: data.host, port: data.port, user: data.user, pass: storedPass });
+      authConfig = { user: data.user, pass: storedPass };
     }
 
   if (!authConfig) {
