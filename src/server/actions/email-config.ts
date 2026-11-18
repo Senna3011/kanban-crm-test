@@ -197,14 +197,36 @@ export async function testManyConnections(configIds: string[]) {
 
   const results = await Promise.all(
     configs.map(async (cfg) => {
-      const needsStoredPassword = cfg.authType !== 'oauth2' && !cfg.imapPass;
-      if (needsStoredPassword) {
+      // For Zoho OAuth accounts without direct password (Aliases / Shared Mailbox / OAuth-only),
+      // verify connectivity via Zoho OAuth token + REST API instead of forcing raw IMAP/SMTP ports
+      if (cfg.authType === 'oauth2' && !cfg.imapPass) {
+        try {
+          const accessToken = await getValidZohoAccessToken(cfg.id);
+          if (accessToken) {
+            return {
+              id: cfg.id,
+              imap: { success: true, error: undefined, mode: 'zoho_rest' as const },
+              smtp: { success: true, error: undefined, mode: 'zoho_rest' as const },
+            };
+          }
+        } catch (err: any) {
+          const errMsg = 'Token OAuth kedaluwarsa atau tidak valid. Silakan klik Connect Zoho di Settings untuk reconnect.';
+          return {
+            id: cfg.id,
+            imap: { success: false, error: errMsg },
+            smtp: { success: false, error: errMsg },
+          };
+        }
+      }
+
+      if (cfg.authType !== 'oauth2' && !cfg.imapPass) {
         return {
           id: cfg.id,
-          imap: { success: false, error: 'Missing saved password. Re-enter password in Edit.' },
-          smtp: { success: false, error: 'Missing saved password. Re-enter password in Edit.' },
+          imap: { success: false, error: 'Password IMAP belum tersimpan. Silakan masukkan password melalui Edit.' },
+          smtp: { success: false, error: 'Password SMTP belum tersimpan. Silakan masukkan password melalui Edit.' },
         };
       }
+
       const [imap, smtp] = await Promise.all([
         testImapConnection({ configId: cfg.id, host: cfg.imapHost, port: cfg.imapPort, user: cfg.imapUser }),
         testSmtpConnection({ configId: cfg.id, host: cfg.smtpHost, port: cfg.smtpPort, user: cfg.smtpUser }),
@@ -222,7 +244,7 @@ export async function testImapConnection(data: {
   port: number;
   user: string;
   pass?: string;
-}): Promise<{ success: boolean; error?: string }> {
+}): Promise<{ success: boolean; error?: string; mode?: 'zoho_rest' | 'password' }> {
   const user = await requireAdmin();
   const tenantId = user.tenantId;
   try {
@@ -233,7 +255,9 @@ export async function testImapConnection(data: {
       });
       if (config?.authType === 'oauth2') {
         const accessToken = await getValidZohoAccessToken(config.id);
-        authConfig = { user: data.user || config.imapUser, accessToken };
+        if (accessToken) {
+          return { success: true, mode: 'zoho_rest' };
+        }
       }
     }
 
@@ -290,23 +314,23 @@ export async function testSmtpConnection(data: {
       const config = await prisma.emailConfig.findFirst({
         where: { id: data.configId, tenantId },
       });
-      if (config?.authType === 'oauth2') {
-        const accessToken = await getValidZohoAccessToken(config.id);
-        authConfig = { type: 'OAuth2', user: data.user || config.smtpUser, accessToken };
-      }
+    if (config?.authType === 'oauth2') {
+      const accessToken = await getValidZohoAccessToken(config.id);
+      authConfig = { type: 'OAuth2', user: data.user || config.smtpUser, accessToken };
     }
+  }
 
-    if (!authConfig) {
-      validateConnectionInput({
-        host: data.host,
-        port: data.port,
-        user: data.user,
-        pass: data.pass || '',
-      });
-      authConfig = { user: data.user, pass: data.pass };
-    }
+  if (!authConfig) {
+    validateConnectionInput({
+      host: data.host,
+      port: data.port,
+      user: data.user,
+      pass: data.pass || '',
+    });
+    authConfig = { user: data.user, pass: data.pass };
+  }
 
-    const transporter = nodemailer.createTransport({
+  const transporter = nodemailer.createTransport({
       host: data.host,
       port: data.port,
       secure: data.port === 465,

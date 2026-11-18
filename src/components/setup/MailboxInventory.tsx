@@ -33,7 +33,14 @@ export type InventoryConfig = {
   isActive?: boolean;
 };
 
-type Health = { imap?: 'ok' | 'fail' | 'checking'; smtp?: 'ok' | 'fail' | 'checking'; imapError?: string; smtpError?: string };
+type Health = {
+  imap?: 'ok' | 'fail' | 'checking';
+  smtp?: 'ok' | 'fail' | 'checking';
+  imapError?: string;
+  smtpError?: string;
+  imapMode?: 'zoho_rest' | 'password';
+  smtpMode?: 'zoho_rest' | 'password';
+};
 type Filter = 'all' | 'active' | 'inactive' | 'unlinked';
 
 function inferProvider(cfg: InventoryConfig): { name: string; icon: string } {
@@ -45,7 +52,7 @@ function inferProvider(cfg: InventoryConfig): { name: string; icon: string } {
   return { name: 'Custom IMAP', icon: '🧩' };
 }
 
-function HealthDot({ state, error, label }: { state?: 'ok' | 'fail' | 'checking'; error?: string; label: string }) {
+function HealthDot({ state, error, label, mode }: { state?: 'ok' | 'fail' | 'checking'; error?: string; label: string; mode?: 'zoho_rest' | 'password' }) {
   if (!state) return <span className="text-slate-400 font-medium">Not tested</span>;
   if (state === 'checking') {
     return (
@@ -56,6 +63,17 @@ function HealthDot({ state, error, label }: { state?: 'ok' | 'fail' | 'checking'
     );
   }
   if (state === 'ok') {
+    if (mode === 'zoho_rest') {
+      return (
+        <span
+          className="inline-flex items-center gap-1 text-emerald-700 font-semibold"
+          title="Verified via Zoho Mail REST API (HTTPS Port 443 - aman & terjamin)"
+        >
+          <span>✓</span>
+          Zoho REST Connected
+        </span>
+      );
+    }
     return (
       <span className="inline-flex items-center gap-1 text-emerald-700 font-semibold">
         <span>✓</span>
@@ -153,6 +171,8 @@ export default function MailboxInventory({
             smtp: smtpOk ? 'ok' : 'fail',
             imapError: r.imap.error,
             smtpError: r.smtp.error,
+            imapMode: (r.imap as any).mode,
+            smtpMode: (r.smtp as any).mode,
           };
         }
         return next;
@@ -450,10 +470,35 @@ export default function MailboxInventory({
                         {provider.icon} {provider.name}
                       </span>
                       {cfg.authType === 'oauth2' && (
-                        <span className="text-[10px] font-bold px-2 py-0.5 bg-indigo-50 text-indigo-700 border border-indigo-200/70 rounded-full">
-                          OAuth
+                        <span
+                          className="text-[10px] font-bold px-2 py-0.5 bg-indigo-50 text-indigo-700 border border-indigo-200/70 rounded-full cursor-help"
+                          title="Akun resmi terhubung via Zoho OAuth2 (menggunakan token aman, tidak butuh password manual)"
+                        >
+                          🔑 Zoho OAuth2
                         </span>
                       )}
+                      {cfg.hasImapPassword ? (
+                        <span
+                          className="text-[10px] font-bold px-2 py-0.5 bg-emerald-50 text-emerald-700 border border-emerald-200/70 rounded-full cursor-help"
+                          title="Akun mandiri dengan IMAP/SMTP App Password"
+                        >
+                          🛡 App Password
+                        </span>
+                      ) : cfg.authType === 'oauth2' && cfg.name?.startsWith('Zoho (') ? (
+                        <span
+                          className="text-[10px] font-bold px-2 py-0.5 bg-blue-50 text-blue-700 border border-blue-200/70 rounded-full cursor-help"
+                          title="Primary Mailbox (Kotak surat utama yang memegang token OAuth)"
+                        >
+                          ⭐ Primary Mailbox
+                        </span>
+                      ) : cfg.authType === 'oauth2' ? (
+                        <span
+                          className="text-[10px] font-bold px-2 py-0.5 bg-purple-50 text-purple-700 border border-purple-200/70 rounded-full cursor-help"
+                          title="Team Alias / Shared Mailbox (Mengirim & menerima email via token Primary Mailbox)"
+                        >
+                          👥 Team Alias / Shared
+                        </span>
+                      ) : null}
                       {board ? (
                         <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 bg-primary-50 text-primary-700 border border-primary-200/70 rounded-full">
                           📋 {board.title}
@@ -466,8 +511,8 @@ export default function MailboxInventory({
                     </div>
                     <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 mt-1 text-[11px]">
                       {statusChip}
-                      <HealthDot state={h?.imap} error={h?.imapError} label="IMAP" />
-                      <HealthDot state={h?.smtp} error={h?.smtpError} label="SMTP" />
+                      <HealthDot state={h?.imap} error={h?.imapError} mode={h?.imapMode} label="IMAP" />
+                      <HealthDot state={h?.smtp} error={h?.smtpError} mode={h?.smtpMode} label="SMTP" />
                     </div>
                   </div>
 

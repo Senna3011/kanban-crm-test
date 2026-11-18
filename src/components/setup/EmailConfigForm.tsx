@@ -168,7 +168,7 @@ export default function EmailConfigForm({ initial, boards = [], isNew = false }:
       toast.error('Please enter the Email Address first.');
       return false;
     }
-    if (!hasSavedPasswords && !singlePassword && !form.imapPass) {
+    if (form.authType !== 'oauth2' && !hasSavedPasswords && !singlePassword && !form.imapPass) {
       toast.error('Please enter the Password or App Password first.');
       return false;
     }
@@ -376,18 +376,20 @@ export default function EmailConfigForm({ initial, boards = [], isNew = false }:
             />
             <p className="text-[11px] text-slate-500 mt-1">Used automatically for inbound (IMAP) & outbound (SMTP).</p>
           </div>
-          <div>
-            <Input
-              id={`pass-${form.id || 'new'}`}
-              label="Password / App Password"
-              type="password"
-              value={singlePassword}
-              onChange={(e) => handlePasswordChange(e.target.value)}
-              placeholder={hasSavedPasswords ? '••••••••' : 'Account Password or App Password'}
-              required={!hasSavedPasswords}
-            />
-            <p className="text-[11px] text-primary-700 font-medium mt-1">💡 {activePresetInfo.hint}</p>
-          </div>
+            {form.authType !== 'oauth2' && (
+              <div>
+                <Input
+                  id={`pass-${form.id || 'new'}`}
+                  label="Password / App Password"
+                  type="password"
+                  value={singlePassword}
+                  onChange={(e) => handlePasswordChange(e.target.value)}
+                  placeholder={hasSavedPasswords ? '••••••••' : 'Account Password or App Password'}
+                  required={!hasSavedPasswords}
+                />
+                <p className="text-[11px] text-primary-700 font-medium mt-1">💡 {activePresetInfo.hint}</p>
+              </div>
+            )}
         </div>
       </div>
 
