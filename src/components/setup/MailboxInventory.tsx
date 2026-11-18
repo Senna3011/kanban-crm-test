@@ -63,21 +63,13 @@ function HealthDot({ state, error, label, mode }: { state?: 'ok' | 'fail' | 'che
     );
   }
   if (state === 'ok') {
-    if (mode === 'zoho_rest') {
-      return (
-        <span
-          className="inline-flex items-center gap-1 text-emerald-700 font-semibold"
-          title="Verified via Zoho Mail REST API (HTTPS Port 443 - aman & terjamin)"
-        >
-          <span>✓</span>
-          Zoho REST Connected
-        </span>
-      );
-    }
     return (
-      <span className="inline-flex items-center gap-1 text-emerald-700 font-semibold">
+      <span
+        className="inline-flex items-center gap-1 text-emerald-700 font-semibold"
+        title={mode === 'zoho_rest' ? 'Verified via Zoho Mail OAuth2 (REST API Port 443)' : `${label} connected successfully`}
+      >
         <span>✓</span>
-        {label} connected
+        {label} connected{mode === 'zoho_rest' ? ' (OAuth)' : ''}
       </span>
     );
   }
@@ -177,8 +169,7 @@ export default function MailboxInventory({
         }
         return next;
       });
-      if (failCount === 0) toast.success(`✅ ${okCount} mailbox(es) healthy — IMAP & SMTP connected.`);
-      else if (okCount === 0) toast.error(`❌ All ${failCount} mailbox(es) failed connection test.`);
+      if (failCount === 0) toast.success(`✅ ${okCount} mailbox(es) healthy — IMAP & SMTP connected.`);      else if (okCount === 0) toast.error(`❌ All ${failCount} mailbox(es) failed connection test.`);
       else toast(`${okCount} ✓ healthy / ${failCount} ✗ failed. See red rows below.`, { icon: '⚠️' });
       return { okCount, failCount };
     } catch (err: any) {

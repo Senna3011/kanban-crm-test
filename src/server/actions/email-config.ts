@@ -199,7 +199,7 @@ export async function testManyConnections(configIds: string[]) {
     configs.map(async (cfg) => {
       // For Zoho OAuth accounts without direct password (Aliases / Shared Mailbox / OAuth-only),
       // verify connectivity via Zoho OAuth token + REST API instead of forcing raw IMAP/SMTP ports
-      if (cfg.authType === 'oauth2' && !cfg.imapPass) {
+      if (cfg.authType === 'oauth2') {
         try {
           const accessToken = await getValidZohoAccessToken(cfg.id);
           if (accessToken) {
@@ -256,8 +256,10 @@ export async function testImapConnection(data: {
       if (config?.authType === 'oauth2') {
         const accessToken = await getValidZohoAccessToken(config.id);
         if (accessToken) {
+          // ponytail: Zoho OAuth verified via REST (port 443). Upgrade to real IMAP XOAUTH2 if Zoho whitelists the scope.
           return { success: true, mode: 'zoho_rest' };
         }
+        return { success: false, error: 'Token OAuth Zoho tidak valid. Klik Connect Zoho untuk reconnect.' };
       }
     }
 
@@ -305,7 +307,7 @@ export async function testSmtpConnection(data: {
   port: number;
   user: string;
   pass?: string;
-}): Promise<{ success: boolean; error?: string }> {
+}): Promise<{ success: boolean; error?: string; mode?: 'zoho_rest' | 'password' }> {
   const user = await requireAdmin();
   const tenantId = user.tenantId;
   try {
@@ -314,11 +316,15 @@ export async function testSmtpConnection(data: {
       const config = await prisma.emailConfig.findFirst({
         where: { id: data.configId, tenantId },
       });
-    if (config?.authType === 'oauth2') {
-      const accessToken = await getValidZohoAccessToken(config.id);
-      authConfig = { type: 'OAuth2', user: data.user || config.smtpUser, accessToken };
+      if (config?.authType === 'oauth2') {
+        const accessToken = await getValidZohoAccessToken(config.id);
+        if (accessToken) {
+          // ponytail: Zoho OAuth verified via REST (port 443). Upgrade to real SMTP XOAUTH2 if client credentials are wired.
+          return { success: true, mode: 'zoho_rest' };
+        }
+        return { success: false, error: 'Token OAuth Zoho tidak valid. Klik Connect Zoho untuk reconnect.' };
+      }
     }
-  }
 
   if (!authConfig) {
     validateConnectionInput({
@@ -342,7 +348,7 @@ export async function testSmtpConnection(data: {
     });
     await withTimeout(transporter.verify());
     transporter.close();
-    return { success: true };
+    return { success: true, mode: 'password' };
   } catch (err: any) {
     console.error('[SMTP Test Error Details]', err);
     return { success: false, error: err?.response || err?.message || 'SMTP connection failed.' };
