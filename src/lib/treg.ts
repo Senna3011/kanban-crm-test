@@ -465,6 +465,7 @@ export async function searchTregLeadsWithCost(params: TregSearchParams): Promise
     }
 
     const resData = pageRes.resData || {};
+    console.log('[On-Demand B2B Gateway] Raw response keys:', Object.keys(resData), 'output keys:', resData.output ? Object.keys(resData.output) : 'none', 'sample:', JSON.stringify(resData).slice(0, 300));
     const rawList: TregPersonRecord[] =
       resData.data ||
       resData.output?.people ||
