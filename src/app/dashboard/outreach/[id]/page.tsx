@@ -359,7 +359,18 @@ export default function CampaignWorkspacePage({
             setIsPollingWorker(false);
             const lastRun = loaded.runLogs?.[0];
             const costSuffix = lastRun ? ` • Run Cost: ${formatUsdCost(lastRun.actualCostUsd)}` : '';
-            toast.success(`🎉 Background sourcing complete! Total ${loaded.leads?.length || 0} leads collected${costSuffix}.`);
+            const saved = lastRun?.itemsSaved ?? loaded.leads?.length ?? 0;
+            const requested = lastRun?.itemsRequested ?? 0;
+            const shortfallMeta = lastRun?.metadata?.shortfall ? lastRun.metadata : null;
+
+            if (shortfallMeta) {
+              toast(
+                `Found ${shortfallMeta.saved} of ${shortfallMeta.requested} requested leads. Provider inventory was exhausted or results were duplicates — refine location, role, or industry to increase matches.`,
+                { icon: 'ℹ️', duration: 8000 }
+              );
+            } else {
+              toast.success(`🎉 Background sourcing complete! Total ${saved} leads collected${costSuffix}.`);
+            }
             fetchEngineBalance(true);
           }
         }
@@ -1396,7 +1407,7 @@ export default function CampaignWorkspacePage({
               <button
                 onClick={() => handleSourceLeads(sourceBatchSize, sourceProvider)}
                 disabled={Boolean(actionLoading) || loading || isPollingWorker || campaign.status === 'RUNNING'}
-                className="px-3 py-2 hover:bg-slate-200 text-slate-800 text-xs font-semibold transition-colors disabled:opacity-50 flex items-center gap-1.5"
+                className={`px-3 py-2 hover:bg-slate-200 text-slate-800 text-xs font-semibold transition-colors disabled:opacity-50 flex items-center gap-1.5 ${isActionLocked ? 'ring-2 ring-indigo-400/70' : ''}`}
               >
                 {actionLoading === 'scrape' || isPollingWorker || campaign.status === 'RUNNING' ? (
                   <>
@@ -1439,9 +1450,6 @@ export default function CampaignWorkspacePage({
               <span>📊</span>
               <span>{exportingCsv ? 'Exporting...' : 'Export Excel/CSV'}</span>
             </button>
-            {isActionLocked && (
-              <div className="absolute inset-0 bg-slate-900/50 backdrop-blur-sm pointer-events-none z-50" />
-            )}
           </div>
         </div>
       </div>

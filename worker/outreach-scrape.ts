@@ -219,15 +219,46 @@ async function insertChunkedWithRetry(chunk: any[]): Promise<number> {
 
       totalInserted += insertedCount;
       console.log(`[Scrape Worker] Inserted ${insertedCount} leads (attempt ${refillAttempt}), total inserted: ${totalInserted}`);
+
+      // Early-stop: provider returned leads but none survived dedup — inventory exhausted
+      if (insertedCount === 0 && batchLeads.length > 0) {
+        console.warn(`[Scrape Worker] Refill attempt ${refillAttempt} produced 0 new leads after dedup — stopping refill loop early.`);
+        break;
+      }
+      // Early-stop: provider returned nothing at all
+      if (batchLeads.length === 0) {
+        console.warn(`[Scrape Worker] Provider returned 0 leads — stopping refill loop early.`);
+        break;
+      }
     }
 
-    console.log(`[Scrape Worker] Finished refill. Total inserted ${totalInserted} leads into campaign ${job.campaignId} (scraped ${totalScraped} raw).`);
+    const shortfallRequested = job.limit;
+    const shortfallSaved = totalInserted;
+    const hasShortfall = shortfallSaved < shortfallRequested;
+
+    console.log(`[Scrape Worker] Finished refill. Total inserted ${totalInserted} leads into campaign ${job.campaignId} (scraped ${totalScraped} raw)${hasShortfall ? ` — SHORTFALL: ${shortfallSaved}/${shortfallRequested}` : ''}.`);
 
     const actualCostUsd = tregTelemetry
       ? tregTelemetry.actualCostUsd
       : estimateLeadSearchCost(executedProvider, totalScraped);
 
     if (runLogId) {
+      const baseMeta: any = tregTelemetry
+        ? {
+            apiCallsMade: tregTelemetry.apiCallsMade,
+            billedCallsCount: tregTelemetry.billedCallsCount,
+            actualCostMicro: tregTelemetry.actualCostMicro,
+            callIds: tregTelemetry.callIds,
+          }
+        : {};
+
+      if (hasShortfall) {
+        baseMeta.shortfall = true;
+        baseMeta.requested = shortfallRequested;
+        baseMeta.saved = shortfallSaved;
+        baseMeta.reason = 'Provider inventory exhausted or results were duplicates of existing leads. Refine location, role, or industry to increase matches.';
+      }
+
       await prisma.outreachRunLog
         .update({
           where: { id: runLogId },
@@ -240,14 +271,7 @@ async function insertChunkedWithRetry(chunk: any[]): Promise<number> {
             balanceBeforeUsd: tregTelemetry ? tregTelemetry.balanceBeforeUsd : null,
             balanceAfterUsd: tregTelemetry ? tregTelemetry.balanceAfterUsd : null,
             costSource: tregTelemetry ? tregTelemetry.costSource : 'catalog_estimate',
-            metadata: tregTelemetry
-              ? {
-                  apiCallsMade: tregTelemetry.apiCallsMade,
-                  billedCallsCount: tregTelemetry.billedCallsCount,
-                  actualCostMicro: tregTelemetry.actualCostMicro,
-                  callIds: tregTelemetry.callIds,
-                }
-              : undefined,
+            metadata: baseMeta,
             completedAt: new Date(),
           },
         })
@@ -261,7 +285,7 @@ async function insertChunkedWithRetry(chunk: any[]): Promise<number> {
       data: { status: finalStatus },
     }).catch(() => {});
 
-    return { success: true, count: totalInserted, actualCostUsd };
+    return { success: true, count: totalInserted, actualCostUsd, shortfall: hasShortfall ? { requested: shortfallRequested, saved: shortfallSaved } : null };
   } catch (err: any) {
     console.error(`[Scrape Worker] Scrape error for campaign ${job.campaignId}:`, maskSensitiveInfo(err?.message || 'Unknown error'));
     if (runLogId) {
