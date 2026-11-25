@@ -117,7 +117,7 @@ export async function composeAndSendEmail(data: {
     if (!emailConfig && !outreachAccount) {
       return {
         success: false,
-        error: `Pengirim "${fromAddress || 'Default'}" belum diotorisasi untuk board "${board.title}". Silakan hubungkan email di Settings.`,
+        error: `Sender "${fromAddress || 'Default'}" is not authorized for board "${board.title}". Please connect email in Settings.`,
       };
     }
 

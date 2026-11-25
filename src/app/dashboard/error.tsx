@@ -21,9 +21,9 @@ export default function DashboardError({
           ⚠️
         </div>
         <div>
-          <h2 className="text-lg font-bold text-slate-900 dark:text-[#B6C2CF]">Terjadi Kesalahan di Dashboard</h2>
-          <p className="text-xs text-slate-500 dark:text-[#9FADBC] mt-2">
-            Gagal memuat komponen dashboard. Silakan muat ulang atau coba lagi.
+<h2 className="text-lg font-bold text-slate-900 dark:text-[#B6C2CF]">An Error Occurred in Dashboard</h2>
+            <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
+              Failed to load dashboard component. Please reload or try again.
           </p>
         </div>
         <div className="pt-3 flex items-center justify-center gap-3">

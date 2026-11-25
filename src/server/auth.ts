@@ -33,7 +33,7 @@ export const authOptions: NextAuthOptions = {
         const { checkRateLimit, LOGIN_RATE_LIMIT } = await import('@/lib/rate-limit');
         const rateLimitResult = checkRateLimit(normalizedEmail, LOGIN_RATE_LIMIT);
         if (!rateLimitResult.success) {
-          throw new Error('Terlalu banyak percobaan login. Silakan tunggu beberapa menit.');
+          throw new Error('Too many login attempts. Please wait a few minutes.');
         }
 
         const user = await prisma.user.findUnique({
