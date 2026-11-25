@@ -73,6 +73,8 @@ export function startSchedulers() {
           tenantId: config.tenantId,
           emailConfigId: config.id,
         });
+        // Stagger job dispatch ~1.5s to avoid simultaneous DB/IMAP connection spikes
+        await new Promise((r) => setTimeout(r, 1500));
       }
 
       console.log(`[Scheduler] Queued ${configs.length} poll jobs`);

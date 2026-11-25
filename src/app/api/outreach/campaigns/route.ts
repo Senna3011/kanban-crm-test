@@ -12,38 +12,37 @@ export async function GET(req: NextRequest) {
   const tenantId = (session.user as any).tenantId;
 
   try {
-    const [campaigns, leadStatusGroups, safeStatusGroups, costGroups] = await Promise.all([
-      prisma.outreachCampaign.findMany({
-        where: { tenantId },
-        orderBy: { createdAt: 'desc' },
-        include: {
-          account: {
-            select: { id: true, name: true, senderEmail: true, warmupEnabled: true, currentWarmupLimit: true, dailyLimit: true, healthStatus: true },
-          },
-          accounts: {
-            select: { id: true, name: true, senderEmail: true, warmupEnabled: true, currentWarmupLimit: true, dailyLimit: true, healthStatus: true },
-          },
-          _count: {
-            select: { leads: true },
-          },
+    // Sequential queries: 4 parallel holds blew Supabase session pool (15) during bulk scrape
+    const campaigns = await prisma.outreachCampaign.findMany({
+      where: { tenantId },
+      orderBy: { createdAt: 'desc' },
+      include: {
+        account: {
+          select: { id: true, name: true, senderEmail: true, warmupEnabled: true, currentWarmupLimit: true, dailyLimit: true, healthStatus: true },
         },
-      }),
-      prisma.outreachLead.groupBy({
-        by: ['campaignId', 'status'],
-        where: { campaign: { tenantId } },
-        _count: { id: true },
-      }),
-      prisma.outreachLead.groupBy({
-        by: ['campaignId'],
-        where: { campaign: { tenantId }, verifyStatus: 'SAFE' },
-        _count: { id: true },
-      }),
-      prisma.outreachRunLog.groupBy({
-        by: ['campaignId'],
-        where: { tenantId, step: 'SCRAPE' },
-        _sum: { actualCostUsd: true },
-      }),
-    ]);
+        accounts: {
+          select: { id: true, name: true, senderEmail: true, warmupEnabled: true, currentWarmupLimit: true, dailyLimit: true, healthStatus: true },
+        },
+        _count: {
+          select: { leads: true },
+        },
+      },
+    });
+    const leadStatusGroups = await prisma.outreachLead.groupBy({
+      by: ['campaignId', 'status'],
+      where: { campaign: { tenantId } },
+      _count: { id: true },
+    });
+    const safeStatusGroups = await prisma.outreachLead.groupBy({
+      by: ['campaignId'],
+      where: { campaign: { tenantId }, verifyStatus: 'SAFE' },
+      _count: { id: true },
+    });
+    const costGroups = await prisma.outreachRunLog.groupBy({
+      by: ['campaignId'],
+      where: { tenantId, step: 'SCRAPE' },
+      _sum: { actualCostUsd: true },
+    });
 
     // Map aggregated metrics per campaign
     const safeCountMap = new Map<string, number>();

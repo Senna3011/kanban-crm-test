@@ -14,14 +14,13 @@ export async function GET(req: NextRequest) {
   const forceRefresh = req.nextUrl.searchParams.get('refresh') === '1';
 
   try {
-    const [balance, totalAgg] = await Promise.all([
-      getTregBalance({ forceRefresh, includeUsage: true }),
-      prisma.outreachRunLog.aggregate({
-        where: { tenantId, step: 'SCRAPE' },
-        _sum: { actualCostUsd: true, itemsSaved: true },
-        _count: { id: true },
-      }),
-    ]);
+    // Sequential: avoid 2 simultaneous pool holds per request under Supabase 15-client cap
+    const balance = await getTregBalance({ forceRefresh, includeUsage: true });
+    const totalAgg = await prisma.outreachRunLog.aggregate({
+      where: { tenantId, step: 'SCRAPE' },
+      _sum: { actualCostUsd: true, itemsSaved: true },
+      _count: { id: true },
+    });
 
     return NextResponse.json({
       balance,

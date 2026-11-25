@@ -168,36 +168,54 @@ export async function processOutreachScrape(job: OutreachScrapeJob) {
         return { success: false, cancelled: true };
       }
 
-      // Chunked batch insertion (500 leads per chunk) to optimize Supabase memory & network
-      const chunkSize = 500;
-      let insertedCount = 0;
-
-      for (let i = 0; i < batchLeads.length; i += chunkSize) {
-        const chunk = batchLeads.slice(i, i + chunkSize);
-
-        const leadData = chunk.map((lead) => ({
-          campaignId: job.campaignId,
-          fullName: lead.fullName,
-          firstName: lead.firstName || null,
-          lastName: lead.lastName || null,
-          jobTitle: lead.jobTitle || 'Executive',
-          companyName: lead.companyName || null,
-          companyDomain: lead.companyDomain || null,
-          linkedinUrl: lead.linkedinUrl || null,
-          location: lead.location || null,
-          email: lead.email || null,
-          verifyStatus: 'UNVERIFIED',
-          status: 'SCRAPED' as const,
-          metadata: lead.metadata || { source: 'lead-discovery-bulk' },
-        }));
-
-        const result = await prisma.outreachLead.createMany({
-          data: leadData,
-          skipDuplicates: true,
-        });
-
-        insertedCount += result.count;
+async function insertChunkedWithRetry(chunk: any[]): Promise<number> {
+      const MAX_INSERT_RETRY = 3;
+      for (let attempt = 1; attempt <= MAX_INSERT_RETRY; attempt++) {
+        try {
+          const result = await prisma.outreachLead.createMany({
+            data: chunk,
+            skipDuplicates: true,
+          });
+          return result.count;
+        } catch (err: any) {
+          const msg = err?.message || '';
+          if ((msg.includes('EMAXCONNSESSION') || msg.includes('max clients reached')) && attempt < MAX_INSERT_RETRY) {
+            const delayMs = attempt * 2000;
+            console.warn(`[Scrape Worker] DB pool exhausted (EMAXCONNSESSION), retry ${attempt}/${MAX_INSERT_RETRY} in ${delayMs}ms...`);
+            await new Promise((r) => setTimeout(r, delayMs));
+            continue;
+          }
+          throw err;
+        }
       }
+      return 0;
+    }
+
+    // Chunked batch insertion (500 leads per chunk) to optimize Supabase memory & network
+    const chunkSize = 500;
+    let insertedCount = 0;
+
+    for (let i = 0; i < batchLeads.length; i += chunkSize) {
+      const chunk = batchLeads.slice(i, i + chunkSize);
+
+      const leadData = chunk.map((lead) => ({
+        campaignId: job.campaignId,
+        fullName: lead.fullName,
+        firstName: lead.firstName || null,
+        lastName: lead.lastName || null,
+        jobTitle: lead.jobTitle || 'Executive',
+        companyName: lead.companyName || null,
+        companyDomain: lead.companyDomain || null,
+        linkedinUrl: lead.linkedinUrl || null,
+        location: lead.location || null,
+        email: lead.email || null,
+        verifyStatus: 'UNVERIFIED',
+        status: 'SCRAPED' as const,
+        metadata: lead.metadata || { source: 'lead-discovery-bulk' },
+      }));
+
+      insertedCount += await insertChunkedWithRetry(leadData);
+    }
 
       totalInserted += insertedCount;
       console.log(`[Scrape Worker] Inserted ${insertedCount} leads (attempt ${refillAttempt}), total inserted: ${totalInserted}`);
