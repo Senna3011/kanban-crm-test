@@ -10,6 +10,17 @@ export interface BoardSenderOption {
   email: string;
 }
 
+/** Mirrors KanbanCard.isOutreach so the Bird-eye drawer only shows outreach leads */
+function isOutreachLead(card: any): boolean {
+  if (!card) return false;
+  return Boolean(
+    card.metadata?.isOutreachLead ||
+    card.subject?.startsWith('Outreach Lead:') ||
+    card.bodyText?.includes('Prospect sourced from campaign') ||
+    card.bodyText?.includes('[INTERNAL PROSPECT DOSSIER]')
+  );
+}
+
 interface Props {
   isOpen: boolean;
   onClose: () => void;
@@ -37,12 +48,14 @@ export default function BoardLeadsReviewDrawer({
   const [targetSenderId, setTargetSenderId] = useState('');
   const [applyingSender, setApplyingSender] = useState(false);
   const [previewDraft, setPreviewDraft] = useState<{ leadName: string; subject: string; body: string } | null>(null);
+  const [deleting, setDeleting] = useState<Set<string>>(new Set());
 
-  // Flatten all cards from all columns
+  // Flatten all cards from all columns (outreach prospects only)
   const allBoardCards = useMemo(() => {
     const list: { card: CardData; columnTitle: string; columnColor?: string }[] = [];
     for (const col of columns) {
       for (const card of col.cards) {
+        if (!isOutreachLead(card)) continue;
         list.push({ card, columnTitle: col.title, columnColor: col.color });
       }
     }
@@ -141,6 +154,62 @@ export default function BoardLeadsReviewDrawer({
     }
   };
 
+  const handleDeleteLead = async (cardId: string) => {
+    if (!window.confirm('Delete this prospect lead from the board?')) return;
+    setDeleting((prev) => new Set([...prev, cardId]));
+    try {
+      const res = await fetch('/api/cards', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ cardIds: [cardId] }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to delete lead');
+      toast.success('Lead deleted');
+      setSelectedCardIds((prev) => {
+        const next = new Set(prev);
+        next.delete(cardId);
+        return next;
+      });
+      onRefresh();
+    } catch (err: any) {
+      toast.error(err.message || 'Failed to delete lead');
+    } finally {
+      setDeleting((prev) => {
+        const next = new Set(prev);
+        next.delete(cardId);
+        return next;
+      });
+    }
+  };
+
+  const handleBulkDelete = async () => {
+    if (selectedCardIds.size === 0) return;
+    if (!window.confirm(`Delete ${selectedCardIds.size} selected prospect lead(s) from the board?`)) return;
+    const ids = Array.from(selectedCardIds);
+    ids.forEach((id) => setDeleting((prev) => new Set([...prev, id])));
+    try {
+      const res = await fetch('/api/cards', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ cardIds: ids }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to delete leads');
+      toast.success(`Deleted ${data.count || ids.length} lead(s)`);
+      setSelectedCardIds(new Set());
+      onRefresh();
+    } catch (err: any) {
+      toast.error(err.message || 'Failed to delete leads');
+    } finally {
+      ids.forEach((id) => setDeleting((prev) => {
+        const next = new Set(prev);
+        next.delete(id);
+        return next;
+      }));
+    }
+  };
+
   if (!isOpen) return null;
 
   return (
@@ -182,19 +251,19 @@ export default function BoardLeadsReviewDrawer({
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 p-4 border-b border-slate-100 dark:border-[#2C333A] bg-white dark:bg-[#161A1D] text-xs">
           <div className="p-2.5 rounded-xl bg-slate-50 dark:bg-[#1c2227] border border-slate-200 dark:border-[#2C333A]">
             <span className="text-slate-500 dark:text-slate-400 block font-medium">Total Prospects</span>
-            <span className="text-lg font-bold text-slate-900 dark:text-white">{allBoardCards.length}</span>
+            <span className="text-base font-bold text-slate-900 dark:text-white">{allBoardCards.length}</span>
           </div>
           <div className="p-2.5 rounded-xl bg-indigo-50/60 dark:bg-indigo-950/30 border border-indigo-100 dark:border-indigo-900/50">
             <span className="text-indigo-600 dark:text-indigo-400 block font-medium">Drafts Ready to Send</span>
-            <span className="text-lg font-bold text-indigo-700 dark:text-indigo-300">{readyToSendCount}</span>
+            <span className="text-base font-bold text-indigo-700 dark:text-indigo-300">{readyToSendCount}</span>
           </div>
           <div className="p-2.5 rounded-xl bg-emerald-50/60 dark:bg-emerald-950/30 border border-emerald-100 dark:border-emerald-900/50">
             <span className="text-emerald-600 dark:text-emerald-400 block font-medium">Available Senders</span>
-            <span className="text-lg font-bold text-emerald-700 dark:text-emerald-300">{availableSenders.length} mailboxes</span>
+            <span className="text-base font-bold text-emerald-700 dark:text-emerald-300">{availableSenders.length} mailboxes</span>
           </div>
           <div className="p-2.5 rounded-xl bg-amber-50/60 dark:bg-amber-950/30 border border-amber-100 dark:border-amber-900/50">
             <span className="text-amber-700 dark:text-amber-400 block font-medium">Pipeline Stages</span>
-            <span className="text-lg font-bold text-amber-800 dark:text-amber-300">{columns.length} columns</span>
+            <span className="text-base font-bold text-amber-800 dark:text-amber-300">{columns.length} columns</span>
           </div>
         </div>
 
@@ -220,11 +289,15 @@ export default function BoardLeadsReviewDrawer({
               className="px-3 py-1.5 text-xs rounded-xl border border-slate-300 dark:border-[#2C333A] bg-white dark:bg-[#1c2227] text-slate-800 dark:text-slate-200 font-semibold focus:outline-none"
             >
               <option value="ALL">All Stages ({allBoardCards.length})</option>
-              {columns.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.title} ({c.cards.length})
-                </option>
-              ))}
+              {columns.map((c) => {
+                const outreachCount = c.cards.filter((card) => isOutreachLead(card)).length;
+                if (outreachCount === 0) return null;
+                return (
+                  <option key={c.id} value={c.id}>
+                    {c.title} ({outreachCount})
+                  </option>
+                );
+              })}
             </select>
 
             {/* Status Filter */}
@@ -428,6 +501,18 @@ export default function BoardLeadsReviewDrawer({
                           <span>Review Card</span>
                           <span>↗</span>
                         </button>
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleDeleteLead(card.id);
+                          }}
+                          disabled={deleting.has(card.id)}
+                          className="px-2.5 py-1 text-[11px] font-bold text-rose-600 hover:text-rose-700 dark:text-rose-400 hover:underline inline-flex items-center gap-0.5 ml-2 disabled:opacity-50"
+                        >
+                          <span>Hapus</span>
+                          <span>🗑️</span>
+                        </button>
                       </td>
                     </tr>
                   );
@@ -445,9 +530,22 @@ export default function BoardLeadsReviewDrawer({
             className="px-4 py-1.5 bg-slate-200 hover:bg-slate-300 dark:bg-[#2C333A] dark:hover:bg-[#38414A] text-slate-800 dark:text-slate-200 font-bold rounded-xl transition-colors"
           >
             Done
-          </button>
-        </div>
-      </div>
+              </button>
+            </div>
+
+            {/* Bulk Delete */}
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={handleBulkDelete}
+                disabled={selectedCardIds.size === 0}
+                className="px-3 py-1.5 bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold rounded-lg transition-colors flex items-center gap-1 shadow-xs disabled:opacity-50 cursor-pointer"
+              >
+                <span>🗑️</span>
+                <span>Delete {selectedCardIds.size}</span>
+              </button>
+            </div>
+          </div>
 
       {/* Quick Draft Preview Modal */}
       {previewDraft && (

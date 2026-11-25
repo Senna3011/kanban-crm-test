@@ -880,7 +880,7 @@ export default function KanbanBoard() {
                 </div>
               </div>
             ) : (
-              <h1 className="text-lg sm:text-xl font-bold tracking-tight text-slate-900">{boardName}</h1>
+              <h1 className="text-base sm:text-lg font-bold tracking-tight text-slate-900">{boardName}</h1>
             )}
 
             {/* Sub-Board Selector Component Right Next to Board Title */}
@@ -1026,9 +1026,12 @@ export default function KanbanBoard() {
               <span>🦅</span>
               <span className="hidden sm:inline">Review Leads & Senders</span>
               <span className="sm:hidden">Inspect</span>
-              <span className="px-1.5 py-0.2 rounded-full bg-indigo-200/80 text-indigo-900 text-[10px] font-bold">
-                {columns.reduce((acc, col) => acc + col.cards.length, 0)}
-              </span>
+                <span className="px-1.5 py-0.2 rounded-full bg-indigo-200/80 text-indigo-900 text-[10px] font-bold">
+                  {columns.reduce((acc, col) => acc + col.cards.filter((c) => {
+                    const m = c.metadata || {};
+                    return Boolean(m.isOutreachLead || c.subject?.startsWith('Outreach Lead:') || c.bodyText?.includes('Prospect sourced from campaign') || c.bodyText?.includes('[INTERNAL PROSPECT DOSSIER]'));
+                  }).length, 0)}
+                </span>
             </button>
 
             <button
