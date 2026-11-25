@@ -704,10 +704,10 @@ export default function CardDetailPanel({ card, onClose }: Props) {
       }
       const sendRes = await sendDraft(idToSend, selectedFrom || undefined);
       if (!sendRes.success) {
-        toast.error(sendRes.error || 'Gagal mengirim email.');
+        toast.error(sendRes.error || 'Failed to send email.');
         return;
       }
-      toast.success('Email berhasil dikirim!');
+      toast.success('Email sent!');
       const updatedRes = await fetch(`/api/cards/${card.id}`);
       if (updatedRes.ok) {
         const updatedData = await updatedRes.json();

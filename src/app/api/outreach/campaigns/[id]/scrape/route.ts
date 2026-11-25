@@ -60,7 +60,7 @@ export async function POST(
           success: true,
           queued: true,
           alreadyRunning: true,
-          message: 'Pencarian leads sedang berjalan di background worker. Data akan ter-update otomatis.',
+          message: 'Lead search is running in the background worker. Data will update automatically.',
         });
       }
 

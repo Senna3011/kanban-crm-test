@@ -409,8 +409,8 @@ export async function scrapeApifyLeads(
     }
   }
 
-  // Return up to 2x requested limit to allow DB deduplication filter to reach requested limit
-  return candidates.slice(0, Math.max(limit * 2, 50));
+  // Return up to 3x requested limit to allow DB deduplication filter to reach requested limit
+  return candidates.slice(0, Math.max(limit * 3, 100));
 }
 
 async function scrapeDirectLinkedInUrls(

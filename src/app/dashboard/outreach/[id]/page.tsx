@@ -659,6 +659,7 @@ export default function CampaignWorkspacePage({
   async function executePushCrm() {
     if (crmTargetLeadIds.length === 0) return;
     setActionLoading('push-crm');
+    const pushToast = toast.loading('Pushing leads to CRM...');
     try {
       const res = await fetch('/api/outreach/leads/batch-push-crm', {
         method: 'POST',
@@ -683,7 +684,11 @@ export default function CampaignWorkspacePage({
       });
       clearSelection();
       await fetchCampaign();
+      toast.dismiss(pushToast);
+      toast.success(`${count} leads successfully pushed to CRM`);
+      router.push(`/dashboard?boardId=${selectedBoardId}`);
     } catch (err: any) {
+      toast.dismiss(pushToast);
       toast.error(`Push to CRM failed: ${err.message}`);
     } finally {
       setActionLoading('');
@@ -1349,10 +1354,11 @@ export default function CampaignWorkspacePage({
           </div>
 
           {/* Quick Utility Tools */}
-          <div className="flex flex-wrap items-center gap-2">
+          <div className="relative flex flex-wrap items-center gap-2">
             <button
               onClick={openSettingsModal}
-              className="px-3 py-2 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 border border-slate-200/90 dark:border-slate-700 text-xs font-bold rounded-xl transition-colors flex items-center gap-1.5 shadow-2xs"
+              disabled={isActionLocked}
+              className="px-3 py-2 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 border border-slate-200/90 dark:border-slate-700 text-xs font-bold rounded-xl transition-colors flex items-center gap-1.5 shadow-2xs disabled:opacity-50 disabled:cursor-not-allowed"
               title="Edit Campaign identity, targeting parameters, and AI copywriting prompt"
             >
               <span>⚙️</span>
@@ -1360,15 +1366,15 @@ export default function CampaignWorkspacePage({
             </button>
             <button
               onClick={() => setIsTestSendOpen(true)}
-              disabled={Boolean(actionLoading) || loading}
+              disabled={isActionLocked || loading}
               className="px-3 py-2 bg-amber-50 dark:bg-amber-950/40 hover:bg-amber-100 dark:hover:bg-amber-900/60 text-amber-900 dark:text-amber-300 border border-amber-300 dark:border-amber-800 text-xs font-bold rounded-xl transition-colors flex items-center gap-1.5 shadow-2xs disabled:opacity-50"
-              title="Kirim 1 email uji coba ke inbox pribadi sebelum kirim massal"
+              title="Send 1 test email to your personal inbox before bulk send"
             >
               <span>Send Test Email</span>
             </button>
             <button
               onClick={() => setIsAddLeadOpen(true)}
-              disabled={Boolean(actionLoading) || loading}
+              disabled={isActionLocked || loading}
               className="px-3 py-2 bg-emerald-50 dark:bg-emerald-950/40 hover:bg-emerald-100 dark:hover:bg-emerald-900/60 text-emerald-800 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800 text-xs font-bold rounded-xl transition-colors flex items-center gap-1.5 shadow-2xs disabled:opacity-50"
             >
               <span>➕</span>
@@ -1426,13 +1432,16 @@ export default function CampaignWorkspacePage({
 
             <button
               onClick={handleExportCsv}
-              disabled={exportingCsv || Boolean(actionLoading) || loading || allLeads.length === 0}
+              disabled={exportingCsv || isActionLocked || loading || allLeads.length === 0}
               className="px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold rounded-xl transition-colors flex items-center gap-1.5 disabled:opacity-50"
               title={allLeads.length === 0 ? 'No leads available to export' : 'Export leads to Excel-compatible CSV'}
             >
               <span>📊</span>
               <span>{exportingCsv ? 'Exporting...' : 'Export Excel/CSV'}</span>
             </button>
+            {isActionLocked && (
+              <div className="absolute inset-0 bg-slate-900/50 backdrop-blur-sm pointer-events-none z-50" />
+            )}
           </div>
         </div>
       </div>
@@ -1655,7 +1664,7 @@ export default function CampaignWorkspacePage({
               </div>
               <p className="text-xs font-semibold text-slate-200 mt-1.5">CRM Pipeline Bridge</p>
               <p className="text-xl font-bold text-emerald-400 mt-1">
-                {convertedLeads} <span className="text-xs font-normal text-slate-400">/ {allLeads.length} In Pipeline</span>
+                {convertedLeads} <span className="text-xs font-normal text-slate-400">/ {leadsWithEmail} In Pipeline</span>
               </p>
             </div>
             <div className="mt-3 space-y-1.5">

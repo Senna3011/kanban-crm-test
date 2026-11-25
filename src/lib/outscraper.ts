@@ -141,7 +141,7 @@ function buildDiversifiedDorkQueries(params: OutscraperSearchParams, limit: numb
   }
 
   // Medium to large batch (25 - 1000 leads): multi-angle queries
-  const queriesNeeded = Math.min(Math.max(Math.ceil(limit / 15), 2), roleSynonyms.length);
+  const queriesNeeded = Math.min(Math.max(Math.ceil(limit / 10), 2), 12);
   const selected = roleSynonyms.slice(0, queriesNeeded);
 
   return selected.map((syn) => `site:linkedin.com/in/ "${syn}" ${locFilter}${indFilter}`.trim());

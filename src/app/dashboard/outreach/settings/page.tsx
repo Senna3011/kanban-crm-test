@@ -635,7 +635,7 @@ export default function OutreachSettingsPage() {
                   JetDigitalPro Company Offer & AI Pitch Prompt
                 </h2>
                 <p className="text-xs text-slate-500 mt-0.5">
-                  Atur bagaimana AI memahami bisnis JetDigitalPro dan solusi apa yang ditawarkan dalam cold email untuk memikat prospek eksekutif.
+                  Configure how the AI understands JetDigitalPro's business and the solutions offered in cold email to attract executive prospects.
                 </p>
               </div>
 

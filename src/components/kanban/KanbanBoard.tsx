@@ -9,6 +9,7 @@ import CardDetailPanel from './CardDetailPanel';
 import ColumnSettings from './ColumnSettings';
 import SubBoardSelector, { SubBoardSender } from './SubBoardSelector';
 import BoardLeadsReviewDrawer, { type BoardSenderOption } from './BoardLeadsReviewDrawer';
+import BoardSenderManager from '@/components/setup/BoardSenderManager';
 import ConfirmDialog, { type ConfirmDialogVariant } from '@/components/ui/ConfirmDialog';
 import { composeAndSendEmail } from '@/server/actions/compose';
 import toast from 'react-hot-toast';
@@ -34,6 +35,7 @@ export default function KanbanBoard() {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [bulkDeleting, setBulkDeleting] = useState(false);
   const [isReviewDrawerOpen, setIsReviewDrawerOpen] = useState(false);
+  const [showSenderManager, setShowSenderManager] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [filterMode, setFilterMode] = useState<FilterMode>('all');
   const [globalSortMode, setGlobalSortMode] = useState<'default' | 'unreads' | 'date'>('default');
@@ -157,11 +159,11 @@ export default function KanbanBoard() {
       });
 
       if (!res.success) {
-        toast.error(res.error || 'Gagal mengirim email.');
+        toast.error(res.error || 'Failed to send email.');
         return;
       }
 
-      toast.success('Email berhasil dikirim dan kartu baru dibuat!');
+      toast.success('Email sent and new card created!');
       setComposeTo('');
       setComposeSubject('');
       setComposeBody('');
@@ -1038,8 +1040,22 @@ export default function KanbanBoard() {
               </svg>
               Columns
             </button>
+            <button
+              onClick={() => setShowSenderManager((prev) => !prev)}
+              className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-slate-700 bg-white border border-slate-200/90 rounded-lg hover:bg-slate-50 shadow-xs transition-all ${showSenderManager ? 'bg-primary-50 text-primary-700 border-primary-200' : ''}`}
+              title="Manage per-board mailbox senders & outreach mode"
+            >
+              <span>📧</span>
+              <span>Senders</span>
+            </button>
           </div>
         </div>
+
+        {showSenderManager && boards.length > 0 && (
+          <div className="mb-4 border border-slate-200 rounded-xl p-4 bg-slate-50">
+            <BoardSenderManager boards={boards} configs={rawSenderConfigs} readOnly={false} />
+          </div>
+        )}
 
         {/* Dynamic Sub-Board Quick Chips Bar (Top Most Active Senders + All) */}
         {subBoardSenders.length > 0 && (
