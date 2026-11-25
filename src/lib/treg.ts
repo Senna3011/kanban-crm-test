@@ -303,7 +303,7 @@ async function executeTregPageRequest(
   const timeoutId = setTimeout(() => controller.abort(), 15000);
 
   try {
-    const res = await fetch('https://treg.to/call/crawl4ai.people.search', {
+    const res = await fetch('https://treg.to/call/treg.people.search', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -406,7 +406,7 @@ export async function searchTregLeadsWithCost(params: TregSearchParams): Promise
     const requestBody: Record<string, any> = {
       where: wherePayload,
       limit: pageLimit,
-      ...(cursor ? { offset: cursor } : {}),
+      ...(cursor ? { cursor: cursor } : {}),
     };
 
     console.log('[On-Demand B2B Gateway] Sending search request to Treg.to:', JSON.stringify(requestBody));
@@ -507,7 +507,9 @@ export async function searchTregLeadsWithCost(params: TregSearchParams): Promise
       }
     }
 
-    const nextCursor = typeof resData.next === 'string' && resData.next ? resData.next : undefined;
+    const nextCursor = (typeof resData?.output?.next_cursor === 'string' && resData.output.next_cursor)
+      ? resData.output.next_cursor
+      : (typeof resData?.next === 'string' && resData.next ? resData.next : undefined);
     if (!nextCursor || nextCursor === cursor || rawList.length === 0 || qualifiedLeads.length >= targetLimit) {
       break;
     }
