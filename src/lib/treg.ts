@@ -352,8 +352,6 @@ export async function searchTregLeadsWithCost(params: TregSearchParams): Promise
     const requestBody: Record<string, any> = {
       where: wherePayload,
       limit: pageLimit,
-      // Request LinkedIn fields explicitly so Treg returns profile URLs when available
-      select: ['id', 'name', 'title', 'email', 'linkedin', 'linkedin_url', 'company', 'location'],
       ...(cursor ? { next: cursor } : {}),
     };
 
