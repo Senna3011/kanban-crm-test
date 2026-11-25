@@ -18,6 +18,24 @@ export async function processOutreachVerify(job: OutreachVerifyJob) {
 
   const apiKey = job.reoonApiKey || campaign.account?.reoonApiKey || process.env.REOON_API_KEY;
 
+  // If no Reoon API key, mark leads as FAILED with clear reason (no silent UNVERIFIED)
+  if (!apiKey) {
+    console.error(`[Verify Worker] No Reoon API key configured for campaign ${job.campaignId}. Marking leads as FAILED.`);
+    await prisma.outreachLead.updateMany({
+      where: {
+        campaignId: job.campaignId,
+        ...(job.leadIds && job.leadIds.length > 0 ? { id: { in: job.leadIds } } : {}),
+        OR: [{ verifyStatus: null }, { verifyStatus: 'UNVERIFIED' }],
+      },
+      data: {
+        verifyStatus: 'UNVERIFIED',
+        status: 'FAILED',
+        errorMessage: 'No Reoon API key configured — email cannot be verified.',
+      },
+    });
+    return { success: false, count: 0, reason: 'no_api_key' };
+  }
+
   // Fetch leads in batches of 500 to keep memory low
   const batchSize = 500;
   let cursor: string | undefined = undefined;
@@ -69,6 +87,17 @@ export async function processOutreachVerify(job: OutreachVerifyJob) {
         continue;
       } catch (err: any) {
         console.warn(`[Verify Worker] Reoon Bulk API failed (${err.message}). Falling back to multi-provider stream.`);
+        // Mark leads with error info so UI can surface the reason
+        await prisma.outreachLead.updateMany({
+          where: {
+            campaignId: job.campaignId,
+            ...(job.leadIds && job.leadIds.length > 0 ? { id: { in: job.leadIds } } : {}),
+            OR: [{ verifyStatus: null }, { verifyStatus: 'UNVERIFIED' }],
+          },
+          data: {
+            errorMessage: `Reoon bulk verification failed: ${err.message}`,
+          },
+        }).catch(() => {});
       }
     }
 
@@ -117,6 +146,13 @@ export async function processOutreachVerify(job: OutreachVerifyJob) {
         totalProcessed++;
       } catch (e: any) {
         console.error(`[Verify Worker] Error verifying lead ${lead.id}:`, e.message);
+        await prisma.outreachLead.update({
+          where: { id: lead.id },
+          data: {
+            status: 'FAILED',
+            errorMessage: `Reoon verification failed: ${e.message}`,
+          },
+        }).catch(() => {});
       }
     }
 

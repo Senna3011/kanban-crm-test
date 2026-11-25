@@ -2006,6 +2006,24 @@ export default function CampaignWorkspacePage({
                                   ⏳ Pending Proof
                                 </span>
                               )}
+                              {lead.errorMessage && (
+                                <span
+                                  className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-md bg-red-100 dark:bg-red-950/60 text-red-800 dark:text-red-300 border border-red-200 dark:border-red-800"
+                                  title={lead.errorMessage}
+                                >
+                                  ⚠ Verify Failed
+                                </span>
+                              )}
+                              {lead.verifyStatus === 'SAFE' && !lead.errorMessage && (
+                                <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-md bg-emerald-100 dark:bg-emerald-950/60 text-emerald-800 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800" title="Email verified as safe deliverable mailbox">
+                                  ✓ Email Verified
+                                </span>
+                              )}
+                              {!lead.linkedinUrl && !lead.errorMessage && lead.verifyStatus !== 'SAFE' && (
+                                <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-md bg-amber-50 dark:bg-amber-950/40 text-amber-800 dark:text-amber-300 border border-amber-200 dark:border-amber-800" title="No LinkedIn profile or verified email yet">
+                                  ⏳ Pending Proof
+                                </span>
+                              )}
                               {lead.linkedinUrl && (
                                 <a
                                   href={lead.linkedinUrl.startsWith('http') ? lead.linkedinUrl : `https://${lead.linkedinUrl}`}

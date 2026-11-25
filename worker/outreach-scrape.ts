@@ -143,6 +143,7 @@ export async function processOutreachScrape(job: OutreachScrapeJob) {
     const MAX_REFILL = job.limit >= 500 ? 5 : 3;
     let totalInserted = 0;
     let totalScraped = 0;
+    let verifyQueued = false;
     let refillAttempt = 0;
     const providersTried: string[] = [];
 
@@ -338,6 +339,8 @@ async function insertChunkedWithRetry(chunk: any[]): Promise<number> {
 
       baseMeta.providersTried = providersTried;
       baseMeta.broadened = broadened;
+      baseMeta.verifyQueued = verifyQueued;
+      baseMeta.verifyApiKeyPresent = Boolean(campaign.account?.reoonApiKey || process.env.REOON_API_KEY);
       if (hasShortfall) {
         baseMeta.shortfall = true;
         baseMeta.requested = shortfallRequested;
@@ -388,11 +391,13 @@ async function insertChunkedWithRetry(chunk: any[]): Promise<number> {
             removeOnComplete: true,
           }
         );
+        verifyQueued = true;
         console.log(`[Scrape Worker] Queued auto-verify for campaign ${job.campaignId} (${totalInserted} new leads).`);
       } catch (queueErr: any) {
         console.warn(`[Scrape Worker] Failed to queue auto-verify: ${queueErr.message}`);
       }
     }
+
 
     return { success: true, count: totalInserted, actualCostUsd, shortfall: hasShortfall ? { requested: shortfallRequested, saved: shortfallSaved } : null };
   } catch (err: any) {
