@@ -404,6 +404,7 @@ export async function searchTregLeadsWithCost(params: TregSearchParams): Promise
     };
 
     const requestBody: Record<string, any> = {
+      title: personWhere.title,
       where: wherePayload,
       limit: pageLimit,
       ...(cursor ? { cursor: cursor } : {}),
