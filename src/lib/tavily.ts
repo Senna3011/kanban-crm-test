@@ -17,6 +17,7 @@ export interface OfferSummarizeResult {
   callToAction: string;
   fullInstruction: string;
   source: 'Tavily' | 'WebScrape' | 'DirectAI';
+  isFallback?: boolean;
 }
 
 /**
@@ -142,6 +143,17 @@ function extractOfferDirectlyFromKnowledge(
   const targetRole = params.targetRole || 'leadership teams';
   const targetIndustry = params.targetIndustry || 'their market';
   const tone = params.tone || 'formal';
+  const length = params.length || 'concise';
+
+  const toneClause = tone === 'direct'
+    ? 'Use a direct, punchy tone with zero fluff and immediate value focus.'
+    : tone === 'conversational'
+    ? 'Use a warm, peer-to-peer conversational tone.'
+    : 'Use an executive, polished, consultative tone.';
+
+  const lengthClause = length === 'detailed'
+    ? 'Write 100-130 words with 2 clear value bullet points and quantifiable proof.'
+    : 'Write under 85 words, concise and high-impact.';
 
   const valueProp = tone === 'direct'
     ? `We help ${targetRole} scale with ${brandClean}: ${cleanedSummary}.`
@@ -151,7 +163,7 @@ function extractOfferDirectlyFromKnowledge(
     ? 'Open to a brief 10-minute exchange this week?'
     : 'Worth exploring on a brief 10-minute introductory call?';
 
-  const fullInstruction = `Focus on ${brandClean}'s core value: ${cleanedSummary}. Address key operational priorities for ${targetRole} in ${targetIndustry} and propose a low-friction 10-minute introductory discussion. Tone: ${tone}.`;
+  const fullInstruction = `Focus on ${brandClean}'s core value: ${cleanedSummary}. Address key operational priorities for ${targetRole} in ${targetIndustry} and propose a low-friction 10-minute introductory discussion. ${toneClause} ${lengthClause}`;
 
   return {
     valueProposition: valueProp,
@@ -274,7 +286,7 @@ Generate the structured value proposition adhering strictly to the requested ton
           },
         ],
         temperature: 0.4,
-        max_tokens: 350,
+        max_tokens: 500,
       }),
     });
     clearTimeout(aiTimeout);
@@ -291,9 +303,12 @@ Generate the structured value proposition adhering strictly to the requested ton
       callToAction: parsed.callToAction || `Complimentary 10-minute software & architecture review.`,
       fullInstruction: parsed.fullInstruction || `Highlight our solutions based on ${input}. Focus on resolving operational friction and offer a 10-minute discovery session.`,
       source,
+      isFallback: false,
     };
   } catch (err: any) {
     console.warn('[OFFER SUMMARIZE ERROR]', err);
-    return extractOfferDirectlyFromKnowledge(input, knowledgeText, params, source);
+    console.warn('[OFFER SUMMARIZE FALLBACK] AI gateway failed, using deterministic synthesizer');
+    const fb = extractOfferDirectlyFromKnowledge(input, knowledgeText, params, source);
+    return { ...fb, isFallback: true };
   }
 }

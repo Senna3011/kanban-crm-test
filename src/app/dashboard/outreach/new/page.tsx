@@ -148,7 +148,11 @@ export default function NewOutreachCampaignPage() {
 
       if (data.data?.fullInstruction) {
         setPromptInstructions(data.data.fullInstruction);
-        toast.success(`Value proposition updated (${currentTone} tone, ${currentLength})!`);
+        if (data.data?.isFallback) {
+          toast(`Value proposition updated (${currentTone} tone, ${currentLength}) — AI gateway slow, using fast fallback template.`);
+        } else {
+          toast.success(`Value proposition updated (${currentTone} tone, ${currentLength})!`);
+        }
       }
     } catch (err: any) {
       toast.error(`Research failed: ${err.message}`);
