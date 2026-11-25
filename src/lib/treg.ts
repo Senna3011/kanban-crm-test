@@ -406,7 +406,7 @@ export async function searchTregLeadsWithCost(params: TregSearchParams): Promise
     const requestBody: Record<string, any> = {
       where: wherePayload,
       limit: pageLimit,
-      ...(cursor ? { next: cursor } : {}),
+      ...(cursor ? { cursor: cursor } : {}),
     };
 
     console.log('[On-Demand B2B Gateway] Sending search request to Treg.to:', JSON.stringify(requestBody));
