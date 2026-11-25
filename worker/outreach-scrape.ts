@@ -51,7 +51,19 @@ export async function processOutreachScrape(job: OutreachScrapeJob) {
       let batchTelemetry: TregSearchResult | null = null;
       const activeProvider = forcedProvider || job.provider;
       if (activeProvider === 'treg' || (!activeProvider && process.env.TREG_API_KEY)) {
+        // Redis cache for Treg raw results (24h) to avoid re-billing identical queries
+        const cacheKey = `treg:cache:${Buffer.from(JSON.stringify({q:job.query,r:job.role,l:job.location,i:job.industry})).toString('base64')}`;
         try {
+          const { default: Redis } = await import('ioredis');
+          const redis = new Redis(process.env.REDIS_URL || 'redis://localhost:6379');
+          const cached = await redis.get(cacheKey);
+          if (cached) {
+            const parsed = JSON.parse(cached);
+            redis.disconnect();
+            console.log(`[Scrape Worker] Treg cache HIT for ${cacheKey.slice(0,40)}...`);
+            executedProvider = 'treg';
+            return { leads: parsed.leads, telemetry: null };
+          }
           batchTelemetry = await searchTregLeadsWithCost({
             query: job.query,
             role: job.role,
@@ -59,6 +71,8 @@ export async function processOutreachScrape(job: OutreachScrapeJob) {
             industry: job.industry,
             limit,
           });
+          await redis.set(cacheKey, JSON.stringify({ leads: batchTelemetry.leads }), 'EX', 86400);
+          redis.disconnect();
           executedProvider = 'treg';
           return { leads: batchTelemetry.leads, telemetry: batchTelemetry };
         } catch (err: any) {
@@ -255,6 +269,52 @@ async function insertChunkedWithRetry(chunk: any[]): Promise<number> {
       }
     }
 
+    // Query broadening: if shortfall > 30% after all providers, try one broadened pass (location cleared)
+    let broadened = false;
+    if (totalInserted < job.limit * 0.7 && totalInserted > 0) {
+      broadened = true;
+      console.log(`[Scrape Worker] Shortfall >30% — running broadened pass (location cleared, role widened).`);
+      const broadLeads = await searchTregLeadsWithCost({
+        query: job.query,
+        role: job.role,
+        location: undefined,
+        industry: job.industry,
+        limit: job.limit - totalInserted,
+      }).catch(() => null);
+      if (broadLeads && broadLeads.leads.length > 0) {
+        const existingEmails = await prisma.outreachLead.findMany({
+          where: { campaignId: job.campaignId, email: { in: broadLeads.leads.map((l) => l.email).filter(Boolean) as string[] } },
+          select: { email: true },
+        });
+        const existingSet = new Set(existingEmails.map((e) => e.email));
+        const deduped = broadLeads.leads.filter((l) => !l.email || !existingSet.has(l.email));
+        const chunkSize = 500;
+        for (let i = 0; i < deduped.length; i += chunkSize) {
+          const chunk = deduped.slice(i, i + chunkSize);
+          const leadData = chunk.map((lead) => ({
+            campaignId: job.campaignId,
+            fullName: lead.fullName,
+            firstName: lead.firstName || null,
+            lastName: lead.lastName || null,
+            jobTitle: lead.jobTitle || 'Executive',
+            companyName: lead.companyName || null,
+            companyDomain: lead.companyDomain || null,
+            linkedinUrl: lead.linkedinUrl || null,
+            location: lead.location || null,
+            email: lead.email || null,
+            verifyStatus: 'UNVERIFIED',
+            status: 'SCRAPED' as const,
+            metadata: lead.metadata || { source: 'lead-discovery-broadened' },
+          }));
+          const result = await prisma.outreachLead.createMany({ data: leadData, skipDuplicates: true });
+          totalInserted += result.count;
+          totalScraped += chunk.length;
+        }
+        if (broadLeads) tregTelemetry = broadLeads;
+        console.log(`[Scrape Worker] Broadened pass inserted ${totalInserted} total.`);
+      }
+    }
+
     const shortfallRequested = job.limit;
     const shortfallSaved = totalInserted;
     const hasShortfall = shortfallSaved < shortfallRequested;
@@ -276,6 +336,7 @@ async function insertChunkedWithRetry(chunk: any[]): Promise<number> {
         : {};
 
       baseMeta.providersTried = providersTried;
+      baseMeta.broadened = broadened;
       if (hasShortfall) {
         baseMeta.shortfall = true;
         baseMeta.requested = shortfallRequested;
