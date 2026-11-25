@@ -501,7 +501,7 @@ export default function OutreachSettingsPage() {
                   </div>
                   <div>
                     <label className="block text-xs font-semibold text-slate-700 mb-1">
-                      SMTP Password / App Password {editingId && '(Kosongkan jika tidak diubah)'}
+                      SMTP Password / App Password {editingId && '(Leave blank if not changing)'}
                     </label>
                     <input
                       type="password"
@@ -663,7 +663,7 @@ export default function OutreachSettingsPage() {
                     className="w-full px-3 py-2 border border-slate-300 rounded-xl text-xs focus:ring-2 focus:ring-primary-500 focus:outline-none text-slate-800"
                   />
                   <p className="text-[11px] text-slate-400 mt-1">
-                    AI akan menyebutkan produk/layanan di atas secara natural sesuai kebutuhan profil target lead.
+                    AI will naturally mention the products/services above based on the target lead profile needs.
                   </p>
                 </div>
 

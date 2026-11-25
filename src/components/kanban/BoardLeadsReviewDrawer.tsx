@@ -510,7 +510,7 @@ export default function BoardLeadsReviewDrawer({
                           disabled={deleting.has(card.id)}
                           className="px-2.5 py-1 text-[11px] font-bold text-rose-600 hover:text-rose-700 dark:text-rose-400 hover:underline inline-flex items-center gap-0.5 ml-2 disabled:opacity-50"
                         >
-                          <span>Hapus</span>
+                          <span>Delete</span>
                           <span>🗑️</span>
                         </button>
                       </td>

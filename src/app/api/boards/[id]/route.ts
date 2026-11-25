@@ -27,7 +27,7 @@ export async function DELETE(
 
   if (count <= 1) {
     return NextResponse.json(
-      { error: 'Tidak dapat menghapus satu-satunya papan (board) yang tersisa.' },
+      { error: 'Cannot delete the only remaining board.' },
       { status: 400 }
     );
   }
@@ -42,7 +42,7 @@ export async function DELETE(
   });
 
   if (!target) {
-    return NextResponse.json({ error: 'Board tidak ditemukan.' }, { status: 404 });
+    return NextResponse.json({ error: 'Board not found.' }, { status: 404 });
   }
 
   const columnIds = target.columns.map((c) => c.id);
@@ -105,7 +105,7 @@ export async function DELETE(
   } catch (err: any) {
     console.error(`[DELETE /api/boards/${id}] Error:`, err);
     return NextResponse.json(
-      { error: err?.message || 'Gagal menghapus board karena kendala database.' },
+      { error: err?.message || 'Failed to delete board due to a database issue.' },
       { status: 500 }
     );
   }

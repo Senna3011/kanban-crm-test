@@ -110,7 +110,7 @@ async function verifyWithReoon(email: string, apiKey: string): Promise<EmailVeri
 }
 
 /**
- * Tier 2 (Cadangan 1): Bouncer Email Verifier (usebouncer.com)
+ * Tier 2 (Fallback 1): Bouncer Email Verifier (usebouncer.com)
  */
 async function verifyWithBouncer(email: string, apiKey: string): Promise<EmailVerifyResult | null> {
   try {
@@ -190,7 +190,7 @@ async function verifyWithBouncer(email: string, apiKey: string): Promise<EmailVe
 }
 
 /**
- * Tier 3 (Cadangan 2): Hunter.io Email Verifier (hunter.io)
+ * Tier 3 (Fallback 2): Hunter.io Email Verifier (hunter.io)
  */
 async function verifyWithHunter(email: string, apiKey: string): Promise<EmailVerifyResult | null> {
   try {
@@ -326,7 +326,7 @@ export async function verifyEmailMultiProvider(
       status: 'INVALID',
       score: 0,
       provider: 'SyntaxCheck',
-      reason: 'Format email tidak valid (RFC 5322 syntax error)',
+      reason: 'Invalid email format (RFC 5322 syntax error)',
       isDisposable: false,
       isFree: false,
     };
@@ -342,25 +342,25 @@ export async function verifyEmailMultiProvider(
     if (result) return result;
   }
 
-  // Tier 2: Bouncer (Cadangan 1 saat Reoon limit/habis)
+  // Tier 2: Bouncer (Fallback 1 when Reoon limit/exhausted)
   if (bouncerKey) {
     const result = await verifyWithBouncer(cleanEmail, bouncerKey);
     if (result) return result;
   }
 
-  // Tier 3: Hunter.io (Cadangan 2 saat Reoon & Bouncer limit/habis)
+  // Tier 3: Hunter.io (Fallback 2 when Reoon & Bouncer limit/exhausted)
   if (hunterKey) {
     const result = await verifyWithHunter(cleanEmail, hunterKey);
     if (result) return result;
   }
 
-  // Jika semua API verifier gagal atau belum diisi
+  // If all verifier APIs failed or are not configured
   return {
     email: cleanEmail,
     status: 'UNVERIFIED',
     score: 0,
     provider: 'None',
-    reason: 'Semua API key verifier (Reoon, Bouncer, Hunter.io) habis kuota atau belum diatur',
+    reason: 'All verifier API keys (Reoon, Bouncer, Hunter.io) are out of quota or not configured',
     isDisposable: false,
     isFree: false,
   };
@@ -455,7 +455,7 @@ export async function findAndVerifyProspectEmail(
       status: 'INVALID',
       score: 0,
       provider: 'None',
-      reason: 'Nama prospek tidak lengkap',
+      reason: 'Prospect name is incomplete',
     };
   }
 

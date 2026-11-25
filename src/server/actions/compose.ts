@@ -9,13 +9,13 @@ import { createTransport } from 'nodemailer';
 import { broadcastAppEvent } from '@/lib/events';
 
 function sanitizeErrorMessage(err: any): string {
-  const raw = err?.response || err?.message || 'Gagal mengirim email';
+  const raw = err?.response || err?.message || 'Failed to send email';
   return String(raw)
     // Strip Windows and POSIX absolute file paths
     .replace(/[a-zA-Z]:\\[^\s:;,]+/g, '')
     .replace(/\/[a-zA-Z0-9_.-]+(?:\/[a-zA-Z0-9_.-]+)+/g, '')
     .replace(/\s+/g, ' ')
-    .trim() || 'Gagal mengirim email. Silakan periksa koneksi atau kredensial akun email.';
+    .trim() || 'Failed to send email. Please check your connection or email account credentials.';
 }
 
 export async function composeAndSendEmail(data: {
@@ -28,7 +28,7 @@ export async function composeAndSendEmail(data: {
   try {
     const session = await getServerSession(authOptions);
     if (!session?.user) {
-      return { success: false, error: 'Sesi Anda telah berakhir. Silakan login kembali.' };
+      return { success: false, error: 'Your session has expired. Please log in again.' };
     }
 
     const tenantId = (session.user as any).tenantId;
@@ -38,11 +38,11 @@ export async function composeAndSendEmail(data: {
     const fromAddress = data.fromAddress?.trim();
 
     if (!toEmail || !toEmail.includes('@')) {
-      return { success: false, error: 'Mohon masukkan alamat email penerima yang valid.' };
+      return { success: false, error: 'Please enter a valid recipient email address.' };
     }
 
     if (!body) {
-      return { success: false, error: 'Isi pesan email tidak boleh kosong.' };
+      return { success: false, error: 'Email body cannot be empty.' };
     }
 
     // Find board
@@ -52,7 +52,7 @@ export async function composeAndSendEmail(data: {
     });
 
     if (!board) {
-      return { success: false, error: 'Papan Kanban tidak ditemukan.' };
+      return { success: false, error: 'Kanban board not found.' };
     }
 
     // Find target column (prefer "Leads" or first column)
@@ -200,7 +200,7 @@ export async function composeAndSendEmail(data: {
       const host = emailConfig?.smtpHost || outreachAccount?.smtpHost || 'SMTP';
       return {
         success: false,
-        error: `Gagal mengirim email (${host}): ${sanitizeErrorMessage(smtpErr)}`,
+        error: `Failed to send email (${host}): ${sanitizeErrorMessage(smtpErr)}`,
       };
     }
 

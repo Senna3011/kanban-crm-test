@@ -144,7 +144,7 @@ export default function Sidebar() {
                   setShowNewBoardModal(true);
                 }}
                 className="text-[11px] font-bold text-primary-600 dark:text-primary-400 hover:underline flex items-center gap-0.5"
-                title="Buat Board Baru"
+                title="Create New Board"
               >
                 <span>+ Board</span>
               </button>
@@ -336,13 +336,13 @@ export default function Sidebar() {
                 selectBoard(updated[0].id);
               }
               window.dispatchEvent(new Event('board-refresh'));
-              toast.success(`Board '${boardToDelete.title}' berhasil dihapus.`);
+              toast.success(`Board '${boardToDelete.title}' deleted successfully.`);
             } else {
               const data = await res.json().catch(() => ({}));
-              toast.error(data.error || 'Gagal menghapus board.');
+              toast.error(data.error || 'Failed to delete board.');
             }
           } catch (err: any) {
-            toast.error(err.message || 'Terjadi kesalahan saat menghapus board.');
+            toast.error(err.message || 'An error occurred while deleting the board.');
           } finally {
             setDeleteDialog({ isOpen: false, board: null, isLoading: false });
           }

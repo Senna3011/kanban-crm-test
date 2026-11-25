@@ -463,7 +463,7 @@ export default function MailboxInventory({
                       {cfg.authType === 'oauth2' && (
                         <span
                           className="text-[10px] font-bold px-2 py-0.5 bg-indigo-50 text-indigo-700 border border-indigo-200/70 rounded-full cursor-help"
-                          title="Akun resmi terhubung via Zoho OAuth2 (menggunakan token aman, tidak butuh password manual)"
+                          title="Official account connected via Zoho OAuth2 (uses secure token, no manual password needed)"
                         >
                           🔑 Zoho OAuth2
                         </span>
@@ -471,14 +471,14 @@ export default function MailboxInventory({
                       {cfg.hasImapPassword ? (
                         <span
                           className="text-[10px] font-bold px-2 py-0.5 bg-emerald-50 text-emerald-700 border border-emerald-200/70 rounded-full cursor-help"
-                          title="Akun mandiri dengan IMAP/SMTP App Password"
+                          title="Standalone account with IMAP/SMTP App Password"
                         >
                           🛡 App Password
                         </span>
                       ) : cfg.authType === 'oauth2' && cfg.name?.startsWith('Zoho (') ? (
                         <span
                           className="text-[10px] font-bold px-2 py-0.5 bg-blue-50 text-blue-700 border border-blue-200/70 rounded-full cursor-help"
-                          title="Primary Mailbox (Kotak surat utama yang memegang token OAuth)"
+                          title="Primary Mailbox (main mailbox holding the OAuth token)"
                         >
                           ⭐ Primary Mailbox
                         </span>

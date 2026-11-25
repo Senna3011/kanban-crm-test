@@ -12,17 +12,17 @@ export default function GuidePage() {
       <div className="flex items-start justify-between gap-4 border-b border-slate-200 pb-4">
         <div>
           <h1 className="text-xl sm:text-2xl font-bold text-slate-900 tracking-tight">
-            📖 Pusat Panduan Sistem (Web Documentation)
+            📖 System Documentation Hub
           </h1>
           <p className="text-xs sm:text-sm text-slate-500 mt-1">
-            Panduan operasional lengkap untuk Mesin Cold Outreach B2B, Manajemen Pipeline Kanban CRM, dan Konfigurasi Mailbox.
+            Complete operational guide for the B2B Cold Outreach Engine, Kanban CRM Pipeline Management, and Mailbox Configuration.
           </p>
         </div>
         <Link
           href="/dashboard"
           className="text-xs sm:text-sm text-primary-700 hover:text-primary-900 bg-primary-50 px-3 py-1.5 rounded-xl font-semibold shrink-0 border border-primary-200 transition-colors"
         >
-          ← Kembali ke Board
+          ← Back to Board
         </Link>
       </div>
 
@@ -79,7 +79,7 @@ export default function GuidePage() {
                   Multi-Sender Mailbox Pool & Automated Warmup
                 </h2>
                 <p className="text-xs text-slate-500">
-                  Rotasi pengiriman otomatis tanpa ganti akun manual untuk menjaga reputasi domain.
+                  Automatic sending rotation without manual account switching to protect domain reputation.
                 </p>
               </div>
             </div>
@@ -91,25 +91,25 @@ export default function GuidePage() {
                     <span>📬</span> Multi-Sender Pool (Round-Robin)
                   </h3>
                   <p className="text-xs text-slate-600">
-                    Kaitkan beberapa akun email ke dalam satu kampanye. Sistem di balik layar secara otomatis memilih akun yang paling longgar (<em>least-loaded</em>) dan belum mencapai kuota harian.
+                    Link multiple email accounts into one campaign. The system automatically picks the least-loaded account (<em>least-loaded</em>) that has not yet reached its daily quota.
                   </p>
                 </div>
                 <div className="p-4 rounded-xl border border-amber-100 bg-amber-50/40 space-y-2">
                   <h3 className="font-bold text-slate-900 text-xs uppercase tracking-wide text-amber-900 flex items-center gap-1.5">
-                    <span>📈</span> Automated Warmup (+5/hari)
+                    <span>📈</span> Automated Warmup (+5/day)
                   </h3>
                   <p className="text-xs text-slate-600">
-                    Mailbox baru otomatis dinaikkan limit kirimnya setiap tengah malam (contoh: Hari 1 kirim 10, Hari 2 kirim 15) hingga mencapai batas maksimal harian tanpa memicu alarm spam.
+                    New mailboxes automatically have their send limit increased every midnight (e.g. Day 1 send 10, Day 2 send 15) until reaching the maximum daily cap without triggering spam alarms.
                   </p>
                 </div>
               </div>
 
               <div className="p-3.5 bg-slate-50 border border-slate-200 rounded-xl text-xs space-y-1.5">
-                <p className="font-semibold text-slate-800">🛡️ Perlindungan Reputasi & Bounce Otomatis:</p>
+                <p className="font-semibold text-slate-800">🛡️ Automatic Reputation & Bounce Protection:</p>
                 <ul className="list-disc list-inside space-y-1 text-slate-600">
-                  <li><strong className="text-emerald-700">HEALTHY:</strong> Mailbox beroperasi optimal tanpa bounce.</li>
-                  <li><strong className="text-amber-700">WARNING:</strong> Terdeteksi 3-4 bounce email.</li>
-                  <li><strong className="text-rose-700">PAUSED_BOUNCE:</strong> Terdeteksi 5 bounce beruntun $\rightarrow$ Mailbox otomatis dijeda dari rotasi agar domain tidak diblokir.</li>
+                  <li><strong className="text-emerald-700">HEALTHY:</strong> Mailbox operating optimally with no bounces.</li>
+                  <li><strong className="text-amber-700">WARNING:</strong> Detected 3-4 email bounces.</li>
+                  <li><strong className="text-rose-700">PAUSED_BOUNCE:</strong> Detected 5 consecutive bounces $\rightarrow$ Mailbox is automatically paused from rotation to prevent the domain from being blocked.</li>
                 </ul>
               </div>
             </div>
@@ -126,7 +126,7 @@ export default function GuidePage() {
                   Lead Discovery & Multi-Tier Email Verification
                 </h2>
                 <p className="text-xs text-slate-500">
-                  Pencarian pengambil keputusan B2B dan verifikasi multi-lapis deliverability engine.
+                  B2B decision-maker search and multi-layer deliverability engine verification.
                 </p>
               </div>
             </div>
@@ -134,17 +134,17 @@ export default function GuidePage() {
             <div className="pl-11 space-y-3 text-xs sm:text-sm text-slate-600 leading-relaxed">
               <ol className="list-decimal list-inside space-y-2">
                 <li>
-                  <strong>Buat Campaign Baru:</strong> Buka <Link href="/dashboard/outreach/new" className="text-indigo-600 underline font-semibold">Outreach &gt; Create Campaign</Link>. Tentukan Role (e.g. <em>CTO, Founder</em>), Lokasi (e.g. <em>United States, Singapore</em>), dan Industri target.
+                  <strong>Create New Campaign:</strong> Open <Link href="/dashboard/outreach/new" className="text-indigo-600 underline font-semibold">Outreach &gt; Create Campaign</Link>. Specify Role (e.g. <em>CTO, Founder</em>), Location (e.g. <em>United States, Singapore</em>), and target Industry.
                 </li>
                 <li>
-                  <strong>Sourcing Prospek:</strong> Sistem mencari kontak profil eksekutif & data perusahaan dari jaringan direktori bisnis terverifikasi.
+                  <strong>Prospect Sourcing:</strong> The system searches executive profile contacts & company data from a verified business directory network.
                 </li>
                 <li>
-                  <strong>Verifikasi Deliverability:</strong> Klik tombol <em>Verify Mailboxes</em>. Sistem memvalidasi kotak surat via Multi-Layer Deliverability Engine:
+                  <strong>Deliverability Verification:</strong> Click the <em>Verify Mailboxes</em> button. The system validates mailboxes via the Multi-Layer Deliverability Engine:
                   <ul className="pl-6 pt-1 space-y-1 list-disc">
-                    <li><span className="text-emerald-700 font-bold">SAFE:</span> Valid 100%, siap untuk pengiriman cold email.</li>
-                    <li><span className="text-amber-700 font-bold">RISKY / CATCH-ALL:</span> Server menerima semua email, disarankan dicek manual.</li>
-                    <li><span className="text-rose-700 font-bold">INVALID:</span> Kotak surat mati, otomatis dikeluarkan dari pengiriman.</li>
+                    <li><span className="text-emerald-700 font-bold">SAFE:</span> 100% valid, ready for cold email sending.</li>
+                    <li><span className="text-amber-700 font-bold">RISKY / CATCH-ALL:</span> Server accepts all emails, manual check recommended.</li>
+                    <li><span className="text-rose-700 font-bold">INVALID:</span> Dead mailbox, automatically excluded from sending.</li>
                   </ul>
                 </li>
               </ol>
@@ -162,7 +162,7 @@ export default function GuidePage() {
                   AI Copywriting, Sequential Reviewer & Dispatch
                 </h2>
                 <p className="text-xs text-slate-500">
-                  Penyusunan pitch 1-on-1 dengan AI dan kurasi sebelum pengiriman.
+                  AI-assisted 1-on-1 pitch writing and curation before dispatch.
                 </p>
               </div>
             </div>
@@ -170,16 +170,16 @@ export default function GuidePage() {
             <div className="pl-11 space-y-3 text-xs sm:text-sm text-slate-600 leading-relaxed">
               <ul className="space-y-2 list-disc list-inside">
                 <li>
-                  <strong>AI Brand Offer Summarizer:</strong> Masukkan website produk Anda $\rightarrow$ AI membaca keunggulan penawaran dan menyusun email yang disesuaikan untuk tiap profil prospek.
+                  <strong>AI Brand Offer Summarizer:</strong> Enter your product website $\rightarrow$ AI reads the offering highlights and crafts tailored emails for each prospect profile.
                 </li>
                 <li>
-                  <strong>Sequential Draft Reviewer:</strong> Klik nama lead untuk membuka modal kurasi. Anda dapat mengedit subjek, isi email, menekan <em>Regenerate</em>, dan berpindah antar-prospek menggunakan tombol <strong>Previous (←)</strong> dan <strong>Next (→)</strong>.
+                  <strong>Sequential Draft Reviewer:</strong> Click a lead name to open the curation modal. You can edit the subject, email body, press <em>Regenerate</em>, and navigate between prospects using the <strong>Previous (←)</strong> and <strong>Next (→)</strong> buttons.
                 </li>
                 <li>
-                  <strong>Pengiriman Terkendali (Anti-Spam Jitter):</strong> Setiap pengiriman batch disisipi jeda acak 3–9 detik dan header RFC 8058 <em>One-Click Unsubscribe</em>.
+                  <strong>Controlled Dispatch (Anti-Spam Jitter):</strong> Each batch dispatch inserts a random 3–9 second delay and RFC 8058 <em>One-Click Unsubscribe</em> headers.
                 </li>
                 <li>
-                  <strong>Auto-Convert on Reply:</strong> Saat prospek membalas email, sistem IMAP otomatis mendeteksi balasan dan mengubah lead menjadi kartu baru di Kanban CRM!
+                  <strong>Auto-Convert on Reply:</strong> When a prospect replies, the IMAP system automatically detects the reply and converts the lead into a new Kanban CRM card!
                 </li>
               </ul>
             </div>
@@ -203,27 +203,27 @@ export default function GuidePage() {
                   Struktur Pipeline & Deal Value Forecasting
                 </h2>
                 <p className="text-xs text-slate-500">
-                  Pengelolaan tahapan prospek penjualan dan pemantauan proyeksi omset.
+                  Sales prospect stage management and revenue projection monitoring.
                 </p>
               </div>
             </div>
 
             <div className="pl-11 space-y-3 text-xs sm:text-sm text-slate-600 leading-relaxed">
               <p>
-                Setiap kartu di <Link href="/dashboard" className="text-primary-600 underline font-semibold">Kanban Board (📋)</Link> merepresentasikan satu peluang bisnis atau percakapan klien.
+                Every card on the <Link href="/dashboard" className="text-primary-600 underline font-semibold">Kanban Board (📋)</Link> represents a business opportunity or client conversation.
               </p>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
                 <div className="p-3.5 bg-slate-50 rounded-xl border border-slate-200">
                   <h4 className="font-bold text-slate-800 text-xs">💰 Deal Value & Currency</h4>
                   <p className="text-xs text-slate-600 mt-1">
-                    Catat estimasi nilai transaksi (misal: <code>$5,000</code> atau <code>Rp 75.000.000</code>). Nilai seluruh kartu diakumulasikan otomatis pada header setiap kolom stage.
+                    Record the estimated deal value (e.g. <code>$5,000</code> or <code>Rp 75,000,000</code>). All card values are automatically accumulated in the header of each stage column.
                   </p>
                 </div>
                 <div className="p-3.5 bg-slate-50 rounded-xl border border-slate-200">
                   <h4 className="font-bold text-slate-800 text-xs">🎯 Contact Roles</h4>
                   <p className="text-xs text-slate-600 mt-1">
-                    Klasifikasikan kontak prospek sebagai <em>Decision Maker, Champion, Influencer, Gatekeeper,</em> atau <em>Buyer</em> untuk strategi negosiasi tim sales.
+                    Classify prospect contacts as <em>Decision Maker, Champion, Influencer, Gatekeeper,</em> or <em>Buyer</em> for your sales team's negotiation strategy.
                   </p>
                 </div>
               </div>
@@ -241,7 +241,7 @@ export default function GuidePage() {
                   Two-Way Communication & AI Follow-Up Drafts
                 </h2>
                 <p className="text-xs text-slate-500">
-                  Sinkronisasi email dua arah dan penulisan draf balasan instan.
+                  Two-way email synchronization and instant reply draft writing.
                 </p>
               </div>
             </div>
@@ -249,16 +249,16 @@ export default function GuidePage() {
             <div className="pl-11 space-y-3 text-xs sm:text-sm text-slate-600 leading-relaxed">
               <ul className="space-y-2 list-disc list-inside">
                 <li>
-                  <strong>Buka Card Detail:</strong> Klik kartu apa saja untuk melihat riwayat percakapan lengkap (*Activity Timeline*) dan detail pengirim.
+                  <strong>Open Card Detail:</strong> Click any card to view the full conversation history (*Activity Timeline*) and sender details.
                 </li>
                 <li>
-                  <strong>AI Inbound Classification:</strong> Email masuk otomatis dikategorikan ke dalam level ketertarikan (<em>High, Medium, Low Interest</em>) dan disarankan pemindahan stage yang tepat.
+                  <strong>AI Inbound Classification:</strong> Incoming emails are automatically categorized by interest level (<em>High, Medium, Low Interest</em>) with suggested stage moves.
                 </li>
                 <li>
-                  <strong>Kirim Balasan Langsung:</strong> Tulis balasan atau gunakan draf AI langsung dari panel detail kartu tanpa perlu membuka webmail terpisah.
+                  <strong>Direct Reply:</strong> Write a reply or use the AI draft directly from the card detail panel without opening a separate webmail.
                 </li>
                 <li>
-                  <strong>Follow-Up SLA Reminder:</strong> Kartu di stage Follow Up yang belum membalas akan menampilkan badge peringatan <em>Overdue</em> otomatis.
+                  <strong>Follow-Up SLA Reminder:</strong> Cards in the Follow Up stage that have not received a reply will display an automatic <em>Overdue</em> warning badge.
                 </li>
               </ul>
             </div>
@@ -278,17 +278,17 @@ export default function GuidePage() {
               </span>
               <div>
                 <h2 className="text-base sm:text-lg font-bold text-slate-900">
-                  Koneksi Mailbox Inbound & Outbound (Zoho, Gmail, Outlook)
+                  Inbound & Outbound Mailbox Connection (Zoho, Gmail, Outlook)
                 </h2>
                 <p className="text-xs text-slate-500">
-                  Konfigurasi kredensial IMAP untuk penerimaan email dan SMTP untuk pengiriman.
+                  IMAP credential configuration for receiving email and SMTP for sending.
                 </p>
               </div>
             </div>
 
             <div className="pl-11 space-y-4 text-xs sm:text-sm text-slate-600 leading-relaxed">
               <p>
-                Buka menu <Link href="/dashboard/settings" className="text-primary-600 underline font-semibold">Settings (⚙️)</Link> untuk menghubungkan akun email utama CRM Anda.
+                Open the <Link href="/dashboard/settings" className="text-primary-600 underline font-semibold">Settings (⚙️)</Link> menu to connect your main CRM email account.
               </p>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
@@ -300,7 +300,7 @@ export default function GuidePage() {
                     <li><strong>IMAP Host:</strong> imap.zoho.com (Port: 993, SSL)</li>
                     <li><strong>SMTP Host:</strong> smtp.zoho.com (Port: 465, SSL)</li>
                     <li><strong>Username:</strong> email@domain.com</li>
-                    <li><strong>Password:</strong> App Password dari Zoho Security Settings</li>
+                    <li><strong>Password:</strong> App Password from Zoho Security Settings</li>
                   </ul>
                 </div>
 
@@ -311,13 +311,13 @@ export default function GuidePage() {
                   <ul className="text-xs text-slate-700 space-y-1 list-disc list-inside">
                     <li><strong>IMAP Host:</strong> imap.gmail.com (Port: 993, SSL)</li>
                     <li><strong>SMTP Host:</strong> smtp.gmail.com (Port: 465, SSL)</li>
-                    <li><strong>Password:</strong> Gunakan 16-digit Google App Password</li>
+                    <li><strong>Password:</strong> Use a 16-digit Google App Password</li>
                   </ul>
                 </div>
               </div>
 
               <div className="p-3.5 bg-emerald-50 border border-emerald-200 rounded-xl text-xs text-emerald-800">
-                💡 <strong>Tips Verifikasi:</strong> Selalu klik tombol <em>Test Connection / Test SMTP Handshake</em> sebelum menyimpan konfigurasi untuk memastikan kredensial valid dan bebas error koneksi.
+                💡 <strong>Verification Tip:</strong> Always click the <em>Test Connection / Test SMTP Handshake</em> button before saving configuration to ensure credentials are valid and free of connection errors.
               </div>
             </div>
           </div>

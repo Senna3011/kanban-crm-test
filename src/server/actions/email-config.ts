@@ -210,7 +210,7 @@ export async function testManyConnections(configIds: string[]) {
             };
           }
         } catch (err: any) {
-          const errMsg = 'Token OAuth kedaluwarsa atau tidak valid. Silakan klik Connect Zoho di Settings untuk reconnect.';
+          const errMsg = 'OAuth token expired or invalid. Please click Connect Zoho in Settings to reconnect.';
           return {
             id: cfg.id,
             imap: { success: false, error: errMsg },
@@ -222,8 +222,8 @@ export async function testManyConnections(configIds: string[]) {
       if (cfg.authType !== 'oauth2' && !cfg.imapPass) {
         return {
           id: cfg.id,
-          imap: { success: false, error: 'Password IMAP belum tersimpan. Silakan masukkan password melalui Edit.' },
-          smtp: { success: false, error: 'Password SMTP belum tersimpan. Silakan masukkan password melalui Edit.' },
+          imap: { success: false, error: 'IMAP password not saved. Please enter the password via Edit.' },
+          smtp: { success: false, error: 'SMTP password not saved. Please enter the password via Edit.' },
         };
       }
 
@@ -259,7 +259,7 @@ export async function testImapConnection(data: {
           // ponytail: Zoho OAuth verified via REST (port 443). Upgrade to real IMAP XOAUTH2 if Zoho whitelists the scope.
           return { success: true, mode: 'zoho_rest' };
         }
-        return { success: false, error: 'Token OAuth Zoho tidak valid. Klik Connect Zoho untuk reconnect.' };
+        return { success: false, error: 'Invalid Zoho OAuth token. Click Connect Zoho to reconnect.' };
       }
       // Fall back to the password stored in DB when the caller only passes an id.
       const storedPass = data.pass || (config?.imapPass ? decrypt(config.imapPass) : '');
@@ -299,7 +299,7 @@ export async function testImapConnection(data: {
     console.error('[IMAP Test Error Details]', err);
     let errMsg = err?.response || err?.responseText || err?.message || 'IMAP connection failed.';
     if (errMsg === 'Command failed') {
-      errMsg = 'Command failed. Pastikan "IMAP Access" sudah diaktifkan (Centang Enable) di Settings Zoho Mail (mail.zoho.com).';
+        errMsg = 'Command failed. Make sure "IMAP Access" is enabled (Check Enable) in Zoho Mail Settings (mail.zoho.com).';
     }
     return { success: false, error: errMsg };
   }
@@ -326,7 +326,7 @@ export async function testSmtpConnection(data: {
           // ponytail: Zoho OAuth verified via REST (port 443). Upgrade to real SMTP XOAUTH2 if client credentials are wired.
           return { success: true, mode: 'zoho_rest' };
         }
-        return { success: false, error: 'Token OAuth Zoho tidak valid. Klik Connect Zoho untuk reconnect.' };
+        return { success: false, error: 'Invalid Zoho OAuth token. Click Connect Zoho to reconnect.' };
       }
       // Fall back to the password stored in DB when the caller only passes an id.
       const storedPass = data.pass || (config?.smtpPass ? decrypt(config.smtpPass) : '');

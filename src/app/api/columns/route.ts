@@ -31,7 +31,7 @@ export async function GET(req: NextRequest) {
     const allowedBoardIds = userBoardMap[userId];
     if (Array.isArray(allowedBoardIds) && allowedBoardIds.length > 0) {
       if (boardId && !allowedBoardIds.includes(boardId)) {
-        return NextResponse.json({ error: 'Forbidden: Akses board ini tidak diizinkan untuk akun Anda.' }, { status: 403 });
+        return NextResponse.json({ error: 'Forbidden: You are not authorized to access this board.' }, { status: 403 });
       }
     }
   }
@@ -244,7 +244,7 @@ export async function POST(req: NextRequest) {
 
   const role = (session.user as any).role;
   if (role !== 'admin') {
-    return NextResponse.json({ error: 'Forbidden: Hanya Admin yang dapat menambah kolom.' }, { status: 403 });
+    return NextResponse.json({ error: 'Forbidden: Only Admins can add columns.' }, { status: 403 });
   }
 
   const tenantId = (session.user as any).tenantId;
@@ -273,7 +273,7 @@ export async function PUT(req: NextRequest) {
 
   const role = (session.user as any).role;
   if (role !== 'admin') {
-    return NextResponse.json({ error: 'Forbidden: Hanya Admin yang dapat mengubah pengaturan kolom.' }, { status: 403 });
+    return NextResponse.json({ error: 'Forbidden: Only Admins can modify column settings.' }, { status: 403 });
   }
 
   const tenantId = (session.user as any).tenantId;

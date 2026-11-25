@@ -81,7 +81,7 @@ export async function POST(req: NextRequest) {
 
   const role = (session.user as any).role;
   if (role !== 'admin') {
-    return NextResponse.json({ error: 'Forbidden: Hanya Admin yang dapat membuat Board baru.' }, { status: 403 });
+    return NextResponse.json({ error: 'Forbidden: Only Admins can create new Boards.' }, { status: 403 });
   }
 
   const tenantId = (session.user as any).tenantId;

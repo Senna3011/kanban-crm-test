@@ -170,7 +170,7 @@ export default function KanbanBoard() {
       setShowComposeModal(false);
       fetchColumns();
     } catch (err: any) {
-      toast.error(err?.message || 'Gagal mengirim email.');
+      toast.error(err?.message || 'Failed to send email.');
     } finally {
       setSendingCompose(false);
     }

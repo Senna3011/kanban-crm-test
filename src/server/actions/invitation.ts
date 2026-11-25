@@ -37,13 +37,13 @@ export async function createInvitation(data: { email: string; role?: 'admin' | '
 
   const email = data.email?.trim().toLowerCase();
   if (!email || !email.includes('@')) {
-    throw new Error('Alamat email tidak valid.');
+    throw new Error('Invalid email address.');
   }
 
   // Check if already a user
   const existingUser = await prisma.user.findUnique({ where: { email } });
   if (existingUser) {
-    throw new Error('User dengan email ini sudah terdaftar di sistem.');
+    throw new Error('A user with this email is already registered in the system.');
   }
 
   const role = data.role === 'admin' ? 'admin' : 'member';
@@ -111,18 +111,18 @@ export async function createInvitation(data: { email: string; role?: 'admin' | '
         await transporter.sendMail({
           from: config.smtpUser,
           to: email,
-          subject: `Undangan Bergabung ke CRM - ${admin.tenantName}`,
+          subject: `Invitation to Join CRM - ${admin.tenantName}`,
           html: `
             <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e5e7eb; rounded: 8px;">
-              <h2 style="color: #2563eb;">Undangan Bergabung ke CRM</h2>
-              <p>Halo,</p>
-              <p>Anda telah diundang oleh administrator <strong>${admin.tenantName}</strong> untuk bergabung sebagai <strong>${role}</strong> di Kanban CRM.</p>
+              <h2 style="color: #2563eb;">Invitation to Join CRM</h2>
+              <p>Hello,</p>
+              <p>You have been invited by <strong>${admin.tenantName}</strong> to join Kanban CRM as <strong>${role}</strong>.</p>
               <div style="margin: 30px 0;">
                 <a href="${inviteLink}" style="background-color: #2563eb; color: #ffffff; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: bold; display: inline-block;">
-                  Terima Undangan & Buat Akun
+                  Accept Invitation & Create Account
                 </a>
               </div>
-              <p style="color: #6b7280; font-size: 14px;">Link ini berlaku selama 48 jam. Jika tombol tidak berfungsi, salin link berikut:</p>
+              <p style="color: #6b7280; font-size: 14px;">This link is valid for 48 hours. If the button does not work, copy the following link:</p>
               <p style="color: #2563eb; word-break: break-all; font-size: 13px;">${inviteLink}</p>
             </div>
           `,
@@ -154,14 +154,14 @@ export async function revokeInvitation(invitationId: string) {
     where: { id: invitationId, tenantId: admin.tenantId },
   });
 
-  if (!inv) throw new Error('Undangan tidak ditemukan.');
+  if (!inv) throw new Error('Invitation not found.');
 
   await prisma.invitation.delete({ where: { id: invitationId } });
   return { success: true };
 }
 
 export async function getInvitationDetails(token: string) {
-  if (!token) throw new Error('Token undangan tidak valid.');
+  if (!token) throw new Error('Invalid invitation token.');
 
   const inv = await prisma.invitation.findUnique({
     where: { token },
@@ -169,11 +169,11 @@ export async function getInvitationDetails(token: string) {
   });
 
   if (!inv) {
-    return { valid: false, reason: 'Undangan tidak ditemukan atau sudah digunakan.' };
+    return { valid: false, reason: 'Invitation not found or already used.' };
   }
 
   if (new Date() > new Date(inv.expiresAt)) {
-    return { valid: false, reason: 'Undangan ini sudah kadaluarsa (melewati 48 jam).' };
+    return { valid: false, reason: 'This invitation has expired (past 48 hours).' };
   }
 
   return {
@@ -191,20 +191,20 @@ export async function acceptInvitation(data: {
 }) {
   const { token, name, password } = data;
 
-  if (!token) throw new Error('Token wajib diisi.');
-  if (!name || name.trim().length < 2) throw new Error('Nama minimal 2 karakter.');
-  if (!password || password.length < 6) throw new Error('Password minimal 6 karakter.');
+  if (!token) throw new Error('Token is required.');
+  if (!name || name.trim().length < 2) throw new Error('Name must be at least 2 characters.');
+  if (!password || password.length < 6) throw new Error('Password must be at least 6 characters.');
 
   const inv = await prisma.invitation.findUnique({
     where: { token },
   });
 
   if (!inv) {
-    throw new Error('Undangan tidak valid atau sudah digunakan.');
+    throw new Error('Invitation is invalid or already used.');
   }
 
   if (new Date() > new Date(inv.expiresAt)) {
-    throw new Error('Undangan ini sudah kadaluarsa.');
+    throw new Error('This invitation has expired.');
   }
 
   const existingUser = await prisma.user.findUnique({
@@ -214,7 +214,7 @@ export async function acceptInvitation(data: {
   if (existingUser) {
     // Delete stale invitation
     await prisma.invitation.delete({ where: { id: inv.id } }).catch(() => {});
-    throw new Error('Email ini sudah memiliki akun aktif. Silakan langsung login.');
+    throw new Error('This email already has an active account. Please log in directly.');
   }
 
   const passwordHash = await bcrypt.hash(password, 12);

@@ -338,7 +338,7 @@ export async function getValidZohoAccessToken(configId: string): Promise<string>
     if (primaryOAuth && primaryOAuth.id !== configId) {
       return getValidZohoAccessToken(primaryOAuth.id);
     }
-    throw new Error('Akun Zoho tidak memiliki refresh token. Silakan sambungkan ulang akun Zoho Anda di Settings.');
+    throw new Error('Zoho account has no refresh token. Please reconnect your Zoho account in Settings.');
   }
 
   const now = new Date();

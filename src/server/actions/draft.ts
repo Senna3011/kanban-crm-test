@@ -180,7 +180,7 @@ export async function sendDraft(
       const host = emailConfig.smtpHost || 'SMTP';
       return {
         success: false,
-        error: `Gagal mengirim email (${host}): ${sanitizeErrorMessage(smtpErr)}`,
+        error: `Failed to send email (${host}): ${sanitizeErrorMessage(smtpErr)}`,
       };
     }
 

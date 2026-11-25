@@ -16,7 +16,7 @@ export function validateImageInput(dataUrlOrUrl?: string | null, fieldName = 'Ga
       new URL(trimmed);
       return trimmed;
     } catch {
-      throw new Error(`Format URL ${fieldName} tidak valid.`);
+      throw new Error(`Invalid ${fieldName} URL format.`);
     }
   }
 
@@ -24,20 +24,20 @@ export function validateImageInput(dataUrlOrUrl?: string | null, fieldName = 'Ga
   if (trimmed.startsWith('data:')) {
     const match = trimmed.match(/^data:([a-zA-Z0-9\/+.-]+);base64,(.+)$/);
     if (!match) {
-      throw new Error(`Format data URL ${fieldName} tidak valid.`);
+      throw new Error(`Invalid ${fieldName} data URL format.`);
     }
 
     const mimeType = match[1].toLowerCase();
     if (!ALLOWED_MIME_TYPES.includes(mimeType)) {
-      throw new Error(`Tipe file ${fieldName} tidak didukung. Gunakan PNG, JPEG, WEBP, GIF, atau SVG.`);
+      throw new Error(`Unsupported ${fieldName} file type. Use PNG, JPEG, WEBP, GIF, or SVG.`);
     }
 
     if (trimmed.length > MAX_IMAGE_BASE64_LENGTH) {
-      throw new Error(`Ukuran file ${fieldName} melebihi batas maksimal (maksimal 2MB).`);
+      throw new Error(`${fieldName} file size exceeds the maximum limit (max 2MB).`);
     }
 
     return trimmed;
   }
 
-  throw new Error(`Format ${fieldName} harus berupa file gambar valid atau link URL web.`);
+  throw new Error(`${fieldName} format must be a valid image file or a web URL link.`);
 }

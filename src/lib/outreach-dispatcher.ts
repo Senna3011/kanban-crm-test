@@ -219,7 +219,7 @@ export async function dispatchColdEmail(params: DispatchLeadEmailParams): Promis
   }
 
   if (!smtpUser || !smtpPass) {
-    const errorMsg = 'Tidak ada mailbox SMTP aktif untuk pengiriman. Atur di Outreach Account Settings.';
+    const errorMsg = 'No active SMTP mailbox for sending. Configure in Outreach Account Settings.';
     await prisma.outreachLead.update({
       where: { id: lead.id },
       data: {

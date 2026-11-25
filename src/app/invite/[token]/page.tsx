@@ -31,7 +31,7 @@ export default function AcceptInvitePage({ params }: { params: Promise<{ token: 
         const details = await getInvitationDetails(token);
         setInviteData(details);
       } catch (err: any) {
-        setInviteData({ valid: false, reason: err?.message || 'Gagal memuat informasi undangan.' });
+        setInviteData({ valid: false, reason: err?.message || 'Failed to load invitation details.' });
       } finally {
         setLoading(false);
       }
@@ -42,27 +42,27 @@ export default function AcceptInvitePage({ params }: { params: Promise<{ token: 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!name.trim()) {
-      toast.error('Silakan masukkan nama lengkap.');
+      toast.error('Please enter your full name.');
       return;
     }
     if (password.length < 6) {
-      toast.error('Password minimal 6 karakter.');
+      toast.error('Password must be at least 6 characters.');
       return;
     }
     if (password !== confirmPassword) {
-      toast.error('Konfirmasi password tidak cocok.');
+      toast.error('Passwords do not match.');
       return;
     }
 
     setSubmitting(true);
     try {
       await acceptInvitation({ token, name, password });
-      toast.success('Akun berhasil dibuat! Mengalihkan ke login...');
+      toast.success('Account created! Redirecting to login...');
       setTimeout(() => {
         router.push('/login?registered=true');
       }, 1500);
     } catch (err: any) {
-      toast.error(err?.message || 'Gagal menerima undangan.');
+      toast.error(err?.message || 'Failed to accept invitation.');
       setSubmitting(false);
     }
   };
@@ -82,15 +82,15 @@ export default function AcceptInvitePage({ params }: { params: Promise<{ token: 
           <div className="w-12 h-12 rounded-full bg-red-100 text-red-600 flex items-center justify-center mx-auto mb-4 text-xl">
             ✕
           </div>
-          <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-2">Undangan Tidak Valid</h2>
+          <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-2">Invalid Invitation</h2>
           <p className="text-gray-600 dark:text-gray-300 text-sm mb-6">
-            {inviteData?.reason || 'Link undangan sudah kadaluarsa atau tidak ditemukan.'}
+            {inviteData?.reason || 'The invitation link has expired or was not found.'}
           </p>
           <Link
             href="/login"
             className="inline-block w-full py-2.5 px-4 bg-primary-600 hover:bg-primary-700 text-white font-medium rounded-lg text-sm transition"
           >
-            Kembali ke Halaman Login
+            Back to Login
           </Link>
         </div>
       </div>
@@ -104,9 +104,9 @@ export default function AcceptInvitePage({ params }: { params: Promise<{ token: 
           <div className="inline-flex items-center justify-center w-12 h-12 rounded-full bg-primary-100 text-primary-600 mb-3 text-xl font-bold">
             CRM
           </div>
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Terima Undangan</h1>
+          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Accept Invitation</h1>
           <p className="text-sm text-gray-600 dark:text-gray-300 mt-1">
-            Bergabung dengan tim <strong className="text-gray-900 dark:text-white">{inviteData.tenantName}</strong>
+            Join the team <strong className="text-gray-900 dark:text-white">{inviteData.tenantName}</strong>
           </p>
         </div>
 
@@ -125,7 +125,7 @@ export default function AcceptInvitePage({ params }: { params: Promise<{ token: 
 
           <div>
             <label className="block text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase mb-1">
-              Peran Akun
+              Account Role
             </label>
             <span className="inline-block px-2.5 py-1 text-xs font-medium rounded-full bg-blue-100 text-blue-800 dark:bg-blue-950/50 dark:text-blue-300 capitalize">
               {inviteData.role || 'member'}
@@ -134,35 +134,35 @@ export default function AcceptInvitePage({ params }: { params: Promise<{ token: 
 
           <div>
             <label className="block text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase mb-1">
-              Nama Lengkap
+              Full Name
             </label>
             <input
               type="text"
               required
               value={name}
               onChange={(e) => setName(e.target.value)}
-              placeholder="Contoh: Budi Pratama"
+              placeholder="e.g. John Doe"
               className="w-full px-3.5 py-2.5 bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-900 dark:text-white text-sm focus:ring-2 focus:ring-primary-500 focus:outline-none"
             />
           </div>
 
           <div>
             <label className="block text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase mb-1">
-              Buat Password
+              Create Password
             </label>
             <input
               type="password"
               required
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              placeholder="Minimal 6 karakter"
+              placeholder="Minimum 6 characters"
               className="w-full px-3.5 py-2.5 bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-900 dark:text-white text-sm focus:ring-2 focus:ring-primary-500 focus:outline-none"
             />
           </div>
 
           <div>
             <label className="block text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase mb-1">
-              Konfirmasi Password
+              Confirm Password
             </label>
             <input
               type="password"
@@ -179,7 +179,7 @@ export default function AcceptInvitePage({ params }: { params: Promise<{ token: 
             disabled={submitting}
             className="w-full mt-2 py-2.5 px-4 bg-primary-600 hover:bg-primary-700 disabled:opacity-50 text-white font-medium rounded-lg text-sm transition shadow-sm"
           >
-            {submitting ? 'Memproses Akun...' : 'Konfirmasi & Selesaikan Registrasi'}
+            {submitting ? 'Creating Account...' : 'Confirm & Complete Registration'}
           </button>
         </form>
       </div>
