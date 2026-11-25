@@ -64,7 +64,7 @@ export async function POST(
         companyName: companyName?.trim() || 'Custom Prospect',
         jobTitle: jobTitle?.trim() || 'Business Leader',
         location: location?.trim() || 'Indonesia',
-        linkedinUrl: linkedinUrl?.trim() || `https://linkedin.com/in/${email.split('@')[0]}`,
+        linkedinUrl: linkedinUrl?.trim() || null,
         verifyStatus: 'UNVERIFIED',
         verifyScore: 0,
         aiDraftSubject: generated.subject,

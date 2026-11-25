@@ -83,3 +83,20 @@ export function isValidDecisionMakerLead(lead: ApifyScrapedLead): boolean {
 
   return true;
 }
+
+/**
+ * Lead has hard proof of a real human: valid LinkedIn profile URL OR SAFE-verified email.
+ * Used as quality gate before drafting/sending outreach.
+ */
+export function hasHumanProof(lead: { linkedinUrl?: string | null; verifyStatus?: string | null }): boolean {
+  if (lead.linkedinUrl) {
+    const url = lead.linkedinUrl.toLowerCase();
+    if (url.includes('/in/') && !url.includes('/company/') && !url.includes('/school/')) {
+      return true;
+    }
+  }
+  if (lead.verifyStatus === 'SAFE') {
+    return true;
+  }
+  return false;
+}

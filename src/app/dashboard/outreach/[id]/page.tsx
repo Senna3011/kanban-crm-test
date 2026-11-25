@@ -1996,22 +1996,32 @@ export default function CampaignWorkspacePage({
                                 ✓ in CRM
                               </span>
                             )}
-                            {lead.linkedinUrl && (
-                              <a
-                                href={lead.linkedinUrl.startsWith('http') ? lead.linkedinUrl : `https://${lead.linkedinUrl}`}
-                                target="_blank"
-                                rel="noreferrer"
-                                className="inline-flex items-center gap-1 text-[11px] font-semibold text-[#0077b5] dark:text-[#3897d3] bg-[#0077b5]/10 dark:bg-[#0077b5]/20 hover:bg-[#0077b5]/20 px-2 py-0.5 rounded-md border border-[#0077b5]/20 transition-colors"
-                                title="Open Official LinkedIn Profile"
-                                onClick={(e) => e.stopPropagation()}
-                              >
-                                <svg className="w-3 h-3 fill-current" viewBox="0 0 24 24">
-                                  <path d="M19 3a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h14m-.5 15.5v-5.3a3.26 3.26 0 0 0-3.26-3.26c-.85 0-1.84.52-2.28 1.3v-1.11h-2.79v8.37h2.79v-4.93c0-.77.62-1.4 1.39-1.4a1.4 1.4 0 0 1 1.4 1.4v4.93h2.75M6.46 10.9v8.37H9.2V10.9H6.46M7.83 6.64a1.66 1.66 0 0 0-1.66 1.66 1.66 1.66 0 0 0 1.66 1.66 1.66 1.66 0 0 0 1.66-1.66c0-.92-.74-1.66-1.66-1.66Z" />
-                                </svg>
-                                <span>LinkedIn</span>
-                                <span className="text-[9px]">↗</span>
-                              </a>
-                            )}
+{lead.verifyStatus === 'SAFE' && (
+                                <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-md bg-emerald-100 dark:bg-emerald-950/60 text-emerald-800 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800" title="Email verified as safe deliverable mailbox">
+                                  ✓ Email Verified
+                                </span>
+                              )}
+                              {!lead.linkedinUrl && lead.verifyStatus !== 'SAFE' && (
+                                <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-md bg-amber-50 dark:bg-amber-950/40 text-amber-800 dark:text-amber-300 border border-amber-200 dark:border-amber-800" title="No LinkedIn profile or verified email yet — will be auto-verified after scrape">
+                                  ⏳ Pending Proof
+                                </span>
+                              )}
+                              {lead.linkedinUrl && (
+                                <a
+                                  href={lead.linkedinUrl.startsWith('http') ? lead.linkedinUrl : `https://${lead.linkedinUrl}`}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  className="inline-flex items-center gap-1 text-[11px] font-semibold text-[#0077b5] dark:text-[#3897d3] bg-[#0077b5]/10 dark:bg-[#0077b5]/20 hover:bg-[#0077b5]/20 px-2 py-0.5 rounded-md border border-[#0077b5]/20 transition-colors"
+                                  title="Open Official LinkedIn Profile"
+                                  onClick={(e) => e.stopPropagation()}
+                                >
+                                  <svg className="w-3 h-3 fill-current" viewBox="0 0 24 24">
+                                    <path d="M19 3a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h14m-.5 15.5v-5.3a3.26 3.26 0 0 0-3.26-3.26c-.85 0-1.84.52-2.28 1.3v-1.11h-2.79v8.37h2.79v-4.93c0-.77.62-1.4 1.39-1.4a1.4 1.4 0 0 1 1.4 1.4v4.93h2.75M6.46 10.9v8.37H9.2V10.9H6.46M7.83 6.64a1.66 1.66 0 0 0-1.66 1.66 1.66 1.66 0 0 0 1.66 1.66 1.66 1.66 0 0 0 1.66-1.66c0-.92-.74-1.66-1.66-1.66Z" />
+                                  </svg>
+                                  <span>LinkedIn</span>
+                                  <span className="text-[9px]">↗</span>
+                                </a>
+                              )}
                           </div>
 
                           {/* Line 2: Full Job Title / Role */}

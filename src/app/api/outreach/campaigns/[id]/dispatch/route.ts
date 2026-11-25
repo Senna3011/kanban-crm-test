@@ -36,6 +36,11 @@ export async function POST(
       ...(leadIds && leadIds.length > 0 ? { id: { in: leadIds } } : {}),
       email: { not: null },
       status: { notIn: ['DISPATCHED', 'CONVERTED', 'REPLIED'] },
+      // Quality gate: only leads with human proof (LinkedIn profile OR SAFE email)
+      OR: [
+        { linkedinUrl: { contains: '/in/' } },
+        { verifyStatus: 'SAFE' },
+      ],
     },
   });
 

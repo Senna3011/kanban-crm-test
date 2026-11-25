@@ -5,6 +5,7 @@ import { searchTregLeadsWithCost, TregSearchResult } from '../src/lib/treg';
 import { estimateLeadSearchCost } from '../src/lib/treg-billing';
 import { maskSensitiveInfo } from '../src/lib/outreach-error';
 import { OutreachScrapeJob } from '../queue/jobs';
+import { outreachVerifyQueue } from '../queue';
 
 export async function processOutreachScrape(job: OutreachScrapeJob) {
   console.log(`[Scrape Worker] Starting discovery scrape for campaign ${job.campaignId} (Target: ${job.limit} leads, Provider: ${job.provider || 'treg'})`);
@@ -369,6 +370,29 @@ async function insertChunkedWithRetry(chunk: any[]): Promise<number> {
       where: { id: job.campaignId },
       data: { status: finalStatus },
     }).catch(() => {});
+
+    // Auto-verify: prove human identity via LinkedIn URL or SAFE email for all new leads
+    if (totalInserted > 0) {
+      try {
+        await outreachVerifyQueue.add(
+          'outreach_verify_batch',
+          {
+            type: 'outreach_verify_batch',
+            tenantId: job.tenantId || campaign.tenantId,
+            campaignId: job.campaignId,
+            reoonApiKey: campaign.account?.reoonApiKey || process.env.REOON_API_KEY,
+          },
+          {
+            attempts: 2,
+            backoff: { type: 'exponential', delay: 10000 },
+            removeOnComplete: true,
+          }
+        );
+        console.log(`[Scrape Worker] Queued auto-verify for campaign ${job.campaignId} (${totalInserted} new leads).`);
+      } catch (queueErr: any) {
+        console.warn(`[Scrape Worker] Failed to queue auto-verify: ${queueErr.message}`);
+      }
+    }
 
     return { success: true, count: totalInserted, actualCostUsd, shortfall: hasShortfall ? { requested: shortfallRequested, saved: shortfallSaved } : null };
   } catch (err: any) {
