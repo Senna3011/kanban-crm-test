@@ -1416,12 +1416,34 @@ export default function CampaignWorkspacePage({
                     <span className="w-3.5 h-3.5 border-2 border-slate-800 border-t-transparent rounded-full animate-spin" />
                     <span>Searching ({sourceBatchSize})...</span>
                   </>
-                ) : (
-                  <>
-                    <span>Source Leads</span>
-                  </>
-                )}
-              </button>
+                  ) : (
+                    <>
+                      <span>Source Leads</span>
+                    </>
+                  )}
+                </button>
+                <button
+                  onClick={async () => {
+                    try {
+                      const res = await fetch(`/api/outreach/campaigns/${campaignId}/widen-search`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ limit: sourceBatchSize }),
+                      });
+                      const data = await res.json();
+                      if (!res.ok) throw new Error(data.error || 'Widen search failed');
+                      setIsPollingWorker(true);
+                      toast.success(data.message || 'Widening search queued.');
+                    } catch (e: any) {
+                      toast.error(e.message || 'Widen search failed');
+                    }
+                  }}
+                  disabled={Boolean(actionLoading) || loading || isPollingWorker || campaign.status === 'RUNNING'}
+                  className="px-3 py-2 hover:bg-amber-100 text-amber-800 text-xs font-semibold transition-colors disabled:opacity-50 flex items-center gap-1.5"
+                  title="Widen search globally (lower quality, more volume)"
+                >
+                  Widen Search
+                </button>
               <select
                 value={sourceBatchSize}
                 onChange={(e) => setSourceBatchSize(Number(e.target.value))}

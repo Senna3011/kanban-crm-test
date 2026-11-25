@@ -72,6 +72,54 @@ export interface TregPersonRecord {
   };
 }
 
+export const CONTINENT_MAP: Record<string, string> = {
+  // Americas
+  'united states': 'americas', 'usa': 'americas', 'canada': 'americas', 'mexico': 'americas',
+  'brazil': 'americas', 'argentina': 'americas', 'colombia': 'americas', 'chile': 'americas',
+  'peru': 'americas', 'venezuela': 'americas', 'ecuador': 'americas', 'bolivia': 'americas',
+  'paraguay': 'americas', 'uruguay': 'americas', 'costa rica': 'americas', 'panama': 'americas',
+  'guatemala': 'americas', 'honduras': 'americas', 'el salvador': 'americas', 'nicaragua': 'americas',
+  'dominican republic': 'americas', 'puerto rico': 'americas', 'jamaica': 'americas',
+  // Europe
+  'united kingdom': 'europe', 'uk': 'europe', 'germany': 'europe', 'france': 'europe',
+  'italy': 'europe', 'spain': 'europe', 'netherlands': 'europe', 'belgium': 'europe',
+  'switzerland': 'europe', 'austria': 'europe', 'sweden': 'europe', 'norway': 'europe',
+  'denmark': 'europe', 'finland': 'europe', 'poland': 'europe', 'portugal': 'europe',
+  'ireland': 'europe', 'greece': 'europe', 'czech republic': 'europe', 'czechia': 'europe',
+  'hungary': 'europe', 'romania': 'europe', 'bulgaria': 'europe', 'croatia': 'europe',
+  'slovakia': 'europe', 'slovenia': 'europe', 'serbia': 'europe', 'ukraine': 'europe',
+  'russia': 'europe', 'turkey': 'europe',
+  // Asia
+  'china': 'asia', 'japan': 'asia', 'india': 'asia', 'south korea': 'asia', 'korea': 'asia',
+  'indonesia': 'asia', 'thailand': 'asia', 'vietnam': 'asia', 'philippines': 'asia',
+  'malaysia': 'asia', 'singapore': 'asia', 'taiwan': 'asia', 'hong kong': 'asia',
+  'pakistan': 'asia', 'bangladesh': 'asia', 'sri lanka': 'asia', 'myanmar': 'asia',
+  'cambodia': 'asia', 'laos': 'asia', 'nepal': 'asia', 'uae': 'asia',
+  'united arab emirates': 'asia', 'saudi arabia': 'asia', 'israel': 'asia',
+  'qatar': 'asia', 'kuwait': 'asia', 'bahrain': 'asia', 'oman': 'asia',
+  // Africa
+  'south africa': 'africa', 'nigeria': 'africa', 'kenya': 'africa', 'egypt': 'africa',
+  'morocco': 'africa', 'ghana': 'africa', 'ethiopia': 'africa', 'tanzania': 'africa',
+  'uganda': 'africa', 'rwanda': 'africa', 'senegal': 'africa', 'tunisia': 'africa',
+  // Oceania
+  'australia': 'oceania', 'new zealand': 'oceania',
+};
+
+export const CONTINENT_COUNTRIES: Record<string, string[]> = {
+  americas: ['United States', 'Canada', 'Mexico', 'Brazil', 'Argentina', 'Colombia', 'Chile', 'Peru', 'Costa Rica', 'Panama'],
+  europe: ['United Kingdom', 'Germany', 'France', 'Italy', 'Spain', 'Netherlands', 'Belgium', 'Switzerland', 'Austria', 'Sweden', 'Norway', 'Denmark', 'Finland', 'Poland', 'Portugal', 'Ireland'],
+  asia: ['China', 'Japan', 'India', 'South Korea', 'Indonesia', 'Thailand', 'Vietnam', 'Philippines', 'Malaysia', 'Singapore', 'Taiwan', 'Hong Kong', 'Pakistan', 'Bangladesh', 'UAE', 'Saudi Arabia', 'Israel'],
+  africa: ['South Africa', 'Nigeria', 'Kenya', 'Egypt', 'Morocco', 'Ghana', 'Ethiopia', 'Tanzania'],
+  oceania: ['Australia', 'New Zealand'],
+};
+
+export function getCountriesInContinent(countryOrLocation?: string): string[] {
+  if (!countryOrLocation) return [];
+  const key = countryOrLocation.toLowerCase().trim();
+  const continent = CONTINENT_MAP[key];
+  if (!continent) return [];
+  return CONTINENT_COUNTRIES[continent] || [];
+}
 const INDUSTRY_TAXONOMY_MAP: Record<string, string> = {
   'information technology & services': 'IT Services and IT Consulting',
   'computer software / saas': 'Software Development',
@@ -231,7 +279,13 @@ function mapRecordToLead(item: TregPersonRecord, params: TregSearchParams): Apif
     },
   };
 
-  return isValidDecisionMakerLead(candidate) ? candidate : null;
+  // Stage 1 quality gate: require LinkedIn /in/ profile URL (real human proof)
+  const hasLinkedInProfile = !!candidate.linkedinUrl &&
+    candidate.linkedinUrl.toLowerCase().includes('/in/') &&
+    !candidate.linkedinUrl.toLowerCase().includes('/company/') &&
+    !candidate.linkedinUrl.toLowerCase().includes('/school/');
+
+  return (isValidDecisionMakerLead(candidate) && hasLinkedInProfile) ? candidate : null;
 }
 
 async function executeTregPageRequest(

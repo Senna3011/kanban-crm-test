@@ -1,7 +1,7 @@
 import { prisma } from '../src/lib/prisma';
 import { scrapeApifyLeads, ApifyScrapedLead } from '../src/lib/apify';
 import { scrapeOutscraperLeads } from '../src/lib/outscraper';
-import { searchTregLeadsWithCost, TregSearchResult } from '../src/lib/treg';
+import { searchTregLeadsWithCost, TregSearchResult, getCountriesInContinent } from '../src/lib/treg';
 import { estimateLeadSearchCost } from '../src/lib/treg-billing';
 import { maskSensitiveInfo } from '../src/lib/outreach-error';
 import { OutreachScrapeJob } from '../queue/jobs';
@@ -53,7 +53,7 @@ export async function processOutreachScrape(job: OutreachScrapeJob) {
       const activeProvider = forcedProvider || job.provider;
       if (activeProvider === 'treg' || (!activeProvider && process.env.TREG_API_KEY)) {
         // Redis cache for Treg raw results (24h) to avoid re-billing identical queries
-        const cacheKey = `treg:cache:${Buffer.from(JSON.stringify({q:job.query,r:job.role,l:job.location,i:job.industry})).toString('base64')}`;
+        const cacheKey = `treg:cache:${Buffer.from(JSON.stringify({c:job.campaignId,q:job.query,r:job.role,l:job.location,i:job.industry})).toString('base64')}`;
         try {
           const { default: Redis } = await import('ioredis');
           const redis = new Redis(process.env.REDIS_URL || 'redis://localhost:6379');
@@ -271,25 +271,54 @@ async function insertChunkedWithRetry(chunk: any[]): Promise<number> {
       }
     }
 
-    // Query broadening: if shortfall > 30% after all providers, try one broadened pass (location cleared)
+    // Query broadening: if shortfall > 30% after all providers, try one broadened pass (continent-scoped)
     let broadened = false;
+    let broadenedScope = 'none';
     if (totalInserted < job.limit * 0.7 && totalInserted > 0) {
       broadened = true;
-      console.log(`[Scrape Worker] Shortfall >30% — running broadened pass (location cleared, role widened).`);
-      const broadLeads = await searchTregLeadsWithCost({
-        query: job.query,
-        role: job.role,
-        location: undefined,
-        industry: job.industry,
-        limit: job.limit - totalInserted,
-      }).catch(() => null);
-      if (broadLeads && broadLeads.leads.length > 0) {
+      const continentCountries = getCountriesInContinent(job.location);
+      const targetCountries = continentCountries.length > 0
+        ? continentCountries.filter((c) => c.toLowerCase() !== (job.location || '').toLowerCase())
+        : [];
+      console.log(`[Scrape Worker] Shortfall >30% — running broadened pass (continent-scoped: ${targetCountries.join(', ') || 'global fallback'}, role preserved).`);
+
+      const broadResults: any[] = [];
+      const countriesToQuery = targetCountries.length > 0 ? targetCountries : [undefined];
+      broadenedScope = targetCountries.length > 0 ? 'continent' : 'global';
+
+      const broadPromises = countriesToQuery.map((country) =>
+        searchTregLeadsWithCost({
+          query: job.query,
+          role: job.role,
+          location: country,
+          industry: job.industry,
+          limit: Math.ceil((job.limit - totalInserted) / countriesToQuery.length) + 5,
+        }).catch(() => null)
+      );
+      const broadSettled = await Promise.all(broadPromises);
+      for (const r of broadSettled) {
+        if (r && r.leads.length > 0) {
+          broadResults.push(...r.leads);
+          if (r) tregTelemetry = r;
+        }
+      }
+
+      // Dedup across broad results
+      const seenBroad = new Set<string>();
+      const uniqueBroad = broadResults.filter((l) => {
+        const key = (l.email || l.linkedinUrl || `${l.fullName}|${l.companyName}`).toLowerCase();
+        if (seenBroad.has(key)) return false;
+        seenBroad.add(key);
+        return true;
+      });
+
+      if (uniqueBroad.length > 0) {
         const existingEmails = await prisma.outreachLead.findMany({
-          where: { campaignId: job.campaignId, email: { in: broadLeads.leads.map((l) => l.email).filter(Boolean) as string[] } },
+          where: { campaignId: job.campaignId, email: { in: uniqueBroad.map((l) => l.email).filter(Boolean) as string[] } },
           select: { email: true },
         });
         const existingSet = new Set(existingEmails.map((e) => e.email));
-        const deduped = broadLeads.leads.filter((l) => !l.email || !existingSet.has(l.email));
+        const deduped = uniqueBroad.filter((l) => !l.email || !existingSet.has(l.email));
         const chunkSize = 500;
         for (let i = 0; i < deduped.length; i += chunkSize) {
           const chunk = deduped.slice(i, i + chunkSize);
@@ -312,8 +341,7 @@ async function insertChunkedWithRetry(chunk: any[]): Promise<number> {
           totalInserted += result.count;
           totalScraped += chunk.length;
         }
-        if (broadLeads) tregTelemetry = broadLeads;
-        console.log(`[Scrape Worker] Broadened pass inserted ${totalInserted} total.`);
+        console.log(`[Scrape Worker] Broadened pass inserted ${totalInserted} total (scope: ${broadenedScope}).`);
       }
     }
 
@@ -339,6 +367,7 @@ async function insertChunkedWithRetry(chunk: any[]): Promise<number> {
 
       baseMeta.providersTried = providersTried;
       baseMeta.broadened = broadened;
+      baseMeta.broadenedScope = broadenedScope;
       baseMeta.verifyQueued = verifyQueued;
       baseMeta.verifyApiKeyPresent = Boolean(campaign.account?.reoonApiKey || process.env.REOON_API_KEY);
       if (hasShortfall) {
