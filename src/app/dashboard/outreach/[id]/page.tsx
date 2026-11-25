@@ -199,6 +199,7 @@ export default function CampaignWorkspacePage({
   const [exportingCsv, setExportingCsv] = useState(false);
   const [sourceBatchSize, setSourceBatchSize] = useState(10);
   const [sourceProvider, setSourceProvider] = useState<'treg' | 'outscraper' | 'apify'>('treg');
+  const [hasShortfall, setHasShortfall] = useState(false);
 
   // Selection state for Checkboxes
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
@@ -365,12 +366,14 @@ export default function CampaignWorkspacePage({
             const providersTried = lastRun?.metadata?.providersTried;
 
             if (shortfallMeta) {
+              setHasShortfall(true);
               const tried = Array.isArray(providersTried) ? providersTried.join(' → ') : '';
               toast(
                 `Found ${shortfallMeta.saved} of ${shortfallMeta.requested} requested leads. Tried: ${tried || 'default provider'}. Inventory exhausted or results were duplicates — refine location, role, or industry to increase matches.`,
                 { icon: 'ℹ️', duration: 9000 }
               );
             } else {
+              setHasShortfall(false);
               toast.success(`🎉 Background sourcing complete! Total ${saved} leads collected${costSuffix}.`);
             }
             fetchEngineBalance(true);
@@ -1409,7 +1412,7 @@ export default function CampaignWorkspacePage({
               <button
                 onClick={() => handleSourceLeads(sourceBatchSize, sourceProvider)}
                 disabled={Boolean(actionLoading) || loading || isPollingWorker || campaign.status === 'RUNNING'}
-                className={`px-3 py-2 hover:bg-slate-200 text-slate-800 text-xs font-semibold transition-colors disabled:opacity-50 flex items-center gap-1.5 ${isActionLocked ? 'ring-2 ring-indigo-400/70' : ''}`}
+                className={`px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-md transition-colors disabled:opacity-50 flex items-center gap-1.5 ${isActionLocked ? 'ring-2 ring-indigo-400/70' : ''}`}
               >
                 {actionLoading === 'scrape' || isPollingWorker || campaign.status === 'RUNNING' ? (
                   <>
@@ -1422,28 +1425,31 @@ export default function CampaignWorkspacePage({
                     </>
                   )}
                 </button>
-                <button
-                  onClick={async () => {
-                    try {
-                      const res = await fetch(`/api/outreach/campaigns/${campaignId}/widen-search`, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ limit: sourceBatchSize }),
-                      });
-                      const data = await res.json();
-                      if (!res.ok) throw new Error(data.error || 'Widen search failed');
-                      setIsPollingWorker(true);
-                      toast.success(data.message || 'Widening search queued.');
-                    } catch (e: any) {
-                      toast.error(e.message || 'Widen search failed');
-                    }
-                  }}
-                  disabled={Boolean(actionLoading) || loading || isPollingWorker || campaign.status === 'RUNNING'}
-                  className="px-3 py-2 hover:bg-amber-100 text-amber-800 text-xs font-semibold transition-colors disabled:opacity-50 flex items-center gap-1.5"
-                  title="Widen search globally (lower quality, more volume)"
-                >
-                  Widen Search
-                </button>
+                {hasShortfall && (
+                  <button
+                    onClick={async () => {
+                      if (!confirm('This will source leads globally (lower quality, higher volume). Continue?')) return;
+                      try {
+                        const res = await fetch(`/api/outreach/campaigns/${campaignId}/widen-search`, {
+                          method: 'POST',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({ limit: sourceBatchSize }),
+                        });
+                        const data = await res.json();
+                        if (!res.ok) throw new Error(data.error || 'Widen search failed');
+                        setIsPollingWorker(true);
+                        toast.success(data.message || 'Widening search queued.');
+                      } catch (e: any) {
+                        toast.error(e.message || 'Widen search failed');
+                      }
+                    }}
+                    disabled={Boolean(actionLoading) || loading || isPollingWorker || campaign.status === 'RUNNING'}
+                    className="px-2.5 py-2 border border-amber-300 dark:border-amber-700 text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/30 hover:bg-amber-100 text-xs font-semibold rounded-md transition-colors disabled:opacity-50 flex items-center gap-1.5"
+                    title="Widen search globally (lower quality, more volume)"
+                  >
+                    ⚠ Widen (global)
+                  </button>
+                )}
               <select
                 value={sourceBatchSize}
                 onChange={(e) => setSourceBatchSize(Number(e.target.value))}
