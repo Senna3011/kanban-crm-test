@@ -362,11 +362,13 @@ export default function CampaignWorkspacePage({
             const saved = lastRun?.itemsSaved ?? loaded.leads?.length ?? 0;
             const requested = lastRun?.itemsRequested ?? 0;
             const shortfallMeta = lastRun?.metadata?.shortfall ? lastRun.metadata : null;
+            const providersTried = lastRun?.metadata?.providersTried;
 
             if (shortfallMeta) {
+              const tried = Array.isArray(providersTried) ? providersTried.join(' → ') : '';
               toast(
-                `Found ${shortfallMeta.saved} of ${shortfallMeta.requested} requested leads. Provider inventory was exhausted or results were duplicates — refine location, role, or industry to increase matches.`,
-                { icon: 'ℹ️', duration: 8000 }
+                `Found ${shortfallMeta.saved} of ${shortfallMeta.requested} requested leads. Tried: ${tried || 'default provider'}. Inventory exhausted or results were duplicates — refine location, role, or industry to increase matches.`,
+                { icon: 'ℹ️', duration: 9000 }
               );
             } else {
               toast.success(`🎉 Background sourcing complete! Total ${saved} leads collected${costSuffix}.`);

@@ -44,12 +44,13 @@ export async function processOutreachScrape(job: OutreachScrapeJob) {
 
     // Single-batch scrape helper used by the refill loop below.
     // Returns the leads for the batch plus any treg telemetry (for cost accounting).
-    async function scrapeBatch(limit: number): Promise<{
+    async function scrapeBatch(limit: number, forcedProvider?: string): Promise<{
       leads: ApifyScrapedLead[];
       telemetry: TregSearchResult | null;
     }> {
       let batchTelemetry: TregSearchResult | null = null;
-      if (job.provider === 'treg' || (!job.provider && process.env.TREG_API_KEY)) {
+      const activeProvider = forcedProvider || job.provider;
+      if (activeProvider === 'treg' || (!activeProvider && process.env.TREG_API_KEY)) {
         try {
           batchTelemetry = await searchTregLeadsWithCost({
             query: job.query,
@@ -84,7 +85,7 @@ export async function processOutreachScrape(job: OutreachScrapeJob) {
             return { leads, telemetry: null };
           }
         }
-      } else if (job.provider === 'outscraper' || process.env.OUTSCRAPER_API_KEY) {
+      } else if (activeProvider === 'outscraper' || process.env.OUTSCRAPER_API_KEY) {
         executedProvider = 'outscraper';
         try {
           const leads = await scrapeOutscraperLeads({
@@ -124,10 +125,11 @@ export async function processOutreachScrape(job: OutreachScrapeJob) {
     }
 
     // Refill loop: keep scraping until saved >= limit or max retries reached.
-    const MAX_REFILL = 3;
+    const MAX_REFILL = job.limit >= 500 ? 5 : 3;
     let totalInserted = 0;
     let totalScraped = 0;
     let refillAttempt = 0;
+    const providersTried: string[] = [];
 
     while (totalInserted < job.limit && refillAttempt < MAX_REFILL) {
       refillAttempt++;
@@ -135,6 +137,7 @@ export async function processOutreachScrape(job: OutreachScrapeJob) {
       console.log(`[Scrape Worker] Refill attempt ${refillAttempt}/${MAX_REFILL}: scraping ${remaining} leads (inserted so far: ${totalInserted})`);
 
       const { leads: batchLeads, telemetry: batchTelemetry } = await scrapeBatch(remaining);
+      if (!providersTried.includes(executedProvider)) providersTried.push(executedProvider);
       if (batchTelemetry) tregTelemetry = batchTelemetry;
       totalScraped += batchLeads.length;
       console.log(`[Scrape Worker] Scraped ${batchLeads.length} raw leads from provider (attempt ${refillAttempt}).`);
@@ -195,8 +198,17 @@ async function insertChunkedWithRetry(chunk: any[]): Promise<number> {
     const chunkSize = 500;
     let insertedCount = 0;
 
-    for (let i = 0; i < batchLeads.length; i += chunkSize) {
-      const chunk = batchLeads.slice(i, i + chunkSize);
+    // Dedup pre-filter: skip emails already present in this campaign
+    const existingEmails = await prisma.outreachLead.findMany({
+      where: { campaignId: job.campaignId, email: { in: batchLeads.map((l) => l.email).filter(Boolean) as string[] } },
+      select: { email: true },
+    });
+    const existingSet = new Set(existingEmails.map((e) => e.email));
+    const dedupedLeads = batchLeads.filter((l) => !l.email || !existingSet.has(l.email));
+    console.log(`[Scrape Worker] Dedup pre-filter: ${batchLeads.length} raw -> ${dedupedLeads.length} new (${batchLeads.length - dedupedLeads.length} duplicates skipped).`);
+
+    for (let i = 0; i < dedupedLeads.length; i += chunkSize) {
+      const chunk = dedupedLeads.slice(i, i + chunkSize);
 
       const leadData = chunk.map((lead) => ({
         campaignId: job.campaignId,
@@ -222,7 +234,18 @@ async function insertChunkedWithRetry(chunk: any[]): Promise<number> {
 
       // Early-stop: provider returned leads but none survived dedup — inventory exhausted
       if (insertedCount === 0 && batchLeads.length > 0) {
-        console.warn(`[Scrape Worker] Refill attempt ${refillAttempt} produced 0 new leads after dedup — stopping refill loop early.`);
+        const fallbackOrder = ['treg', 'outscraper', 'apify'].filter((pp) => pp !== executedProvider);
+        const nextProvider = fallbackOrder[0];
+        if (nextProvider) {
+          console.warn(`[Scrape Worker] ${executedProvider} produced 0 new leads — falling back to ${nextProvider}.`);
+          const fb = await scrapeBatch(remaining, nextProvider);
+          if (fb.leads.length > 0) {
+            batchLeads.splice(0, batchLeads.length, ...fb.leads);
+            if (fb.telemetry) tregTelemetry = fb.telemetry;
+            continue;
+          }
+        }
+        console.warn(`[Scrape Worker] No fallback provider available — stopping refill loop early.`);
         break;
       }
       // Early-stop: provider returned nothing at all
@@ -252,6 +275,7 @@ async function insertChunkedWithRetry(chunk: any[]): Promise<number> {
           }
         : {};
 
+      baseMeta.providersTried = providersTried;
       if (hasShortfall) {
         baseMeta.shortfall = true;
         baseMeta.requested = shortfallRequested;
