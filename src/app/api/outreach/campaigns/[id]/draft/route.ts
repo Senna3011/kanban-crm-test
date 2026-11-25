@@ -67,6 +67,17 @@ export async function POST(
   const senderCompany = campaign.account?.name || campaign.tenant?.name || 'JetDigitalPro';
   const customInstructions = [campaign.promptInstructions, requestCustomPrompt].filter(Boolean).join('\n');
 
+  // Extract tone/length from stored prompt prefix like "[Tone: formal, Length: concise]"
+  let parsedTone: 'formal' | 'conversational' | 'direct' | undefined;
+  let parsedLength: 'concise' | 'detailed' | undefined;
+  const prefixMatch = (campaign.promptInstructions || '').match(/\[Tone:\s*(\w+),\s*Length:\s*(\w+)\]/i);
+  if (prefixMatch) {
+    const t = prefixMatch[1].toLowerCase();
+    const l = prefixMatch[2].toLowerCase();
+    if (t === 'formal' || t === 'conversational' || t === 'direct') parsedTone = t as any;
+    if (l === 'concise' || l === 'detailed') parsedLength = l as any;
+  }
+
   const updatedLeads = [];
   for (const lead of leads) {
     const metadata = lead.metadata as any;
@@ -81,9 +92,11 @@ export async function POST(
       industry: campaign.targetIndustry || undefined,
       senderName,
       senderCompany,
-      companyKnowledge: parsedCompanyContext || undefined,
-      customInstructions: customInstructions || undefined,
-    });
+       companyKnowledge: parsedCompanyContext || undefined,
+       customInstructions: customInstructions || undefined,
+       tone: parsedTone,
+       length: parsedLength,
+     });
 
     const firstName = lead.firstName || lead.fullName?.split(' ')[0] || 'there';
     const dripCount = campaign.dripStepsCount || 1;

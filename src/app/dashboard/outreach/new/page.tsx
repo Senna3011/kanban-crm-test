@@ -193,10 +193,16 @@ export default function NewOutreachCampaignPage() {
 
   function handleToneChange(newTone: 'formal' | 'conversational' | 'direct') {
     setAiTone(newTone);
+    if (brandInput.trim()) {
+      handleAutoResearchBrand(newTone, undefined);
+    }
   }
 
   function handleLengthChange(newLength: 'concise' | 'detailed') {
     setAiLength(newLength);
+    if (brandInput.trim()) {
+      handleAutoResearchBrand(undefined, newLength);
+    }
   }
 
   function handleNextStep(e?: React.MouseEvent) {

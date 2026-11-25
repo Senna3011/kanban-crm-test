@@ -45,14 +45,26 @@ export async function POST(
       select: { name: true },
     });
 
-    const generated = await generatePersonalizedColdEmail({
-      prospectName: fullName.trim(),
-      jobTitle: jobTitle?.trim() || 'Decision Maker',
-      companyName: companyName?.trim() || 'Enterprise Partner',
-      senderName: campaign.account?.senderName || 'Outreach Manager',
-      senderCompany: tenant?.name || 'Our Company',
-      customInstructions: campaign.promptInstructions || 'Personalized introductory cold email',
-    });
+  const prefixMatch = (campaign.promptInstructions || '').match(/\[Tone:\s*(\w+),\s*Length:\s*(\w+)\]/i);
+  let parsedTone: 'formal' | 'conversational' | 'direct' | undefined;
+  let parsedLength: 'concise' | 'detailed' | undefined;
+  if (prefixMatch) {
+    const t = prefixMatch[1].toLowerCase();
+    const l = prefixMatch[2].toLowerCase();
+    if (t === 'formal' || t === 'conversational' || t === 'direct') parsedTone = t as any;
+    if (l === 'concise' || l === 'detailed') parsedLength = l as any;
+  }
+
+  const generated = await generatePersonalizedColdEmail({
+    prospectName: fullName.trim(),
+    jobTitle: jobTitle?.trim() || 'Decision Maker',
+    companyName: companyName?.trim() || 'Enterprise Partner',
+    senderName: campaign.account?.senderName || 'Outreach Manager',
+    senderCompany: tenant?.name || 'Our Company',
+    customInstructions: campaign.promptInstructions || 'Personalized introductory cold email',
+    tone: parsedTone,
+    length: parsedLength,
+  });
 
     const newLead = await prisma.outreachLead.create({
       data: {
