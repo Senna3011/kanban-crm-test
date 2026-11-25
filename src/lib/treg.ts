@@ -63,6 +63,7 @@ export interface TregPersonRecord {
   country?: string;
   phone?: string;
   phone_number?: string;
+  profile_url?: string;
   source_url?: string;
   insight?: {
     summary?: string;
@@ -217,7 +218,7 @@ function mapRecordToLead(item: TregPersonRecord, params: TregSearchParams): Apif
 
   const companyDomain = cleanDomain(rawDomain);
 
-  let linkedinUrl = item.linkedin || item.linkedin_url || undefined;
+  let linkedinUrl = item.linkedin || item.linkedin_url || item.profile_url || undefined;
   if (linkedinUrl) {
     if (!linkedinUrl.startsWith('http')) {
       if (linkedinUrl.includes('linkedin.com')) {
