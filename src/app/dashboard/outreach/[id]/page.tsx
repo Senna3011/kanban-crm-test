@@ -1388,23 +1388,6 @@ export default function CampaignWorkspacePage({
               >
                 💳 Campaign Cost: {formatUsdCost(campaign.totalCostUsd || 0)}
               </span>
-              {engineBalance?.configured && (
-                <button
-                  type="button"
-                  onClick={() => fetchEngineBalance(true)}
-                  title="Click to refresh live B2B Verified Database credit balance"
-                  className={`px-2.5 py-0.5 rounded-full text-[11px] font-bold border font-mono transition-colors ${
-                    engineBalance.criticalBalanceWarning
-                      ? 'bg-rose-50 text-rose-800 border-rose-200 hover:bg-rose-100'
-                      : engineBalance.lowBalanceWarning
-                      ? 'bg-amber-50 text-amber-800 border-amber-200 hover:bg-amber-100'
-                      : 'bg-emerald-50 text-emerald-800 border-emerald-200 hover:bg-emerald-100'
-                  }`}
-                >
-                  Database Balance: {formatUsdCost(engineBalance.balanceUsd)}
-                  {engineBalance.lowBalanceWarning ? ' ⚠️ Low' : ''}
-                </button>
-              )}
             </div>
             <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
               Target: <span className="font-semibold text-slate-700 dark:text-slate-300">{campaign.targetRole || 'Executives'}</span> in{' '}
@@ -1877,11 +1860,6 @@ export default function CampaignWorkspacePage({
               <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 border border-amber-200 font-mono">
                 Total: {formatUsdCost(campaign.totalCostUsd || 0)}
               </span>
-              {engineBalance?.lowBalanceWarning && (
-                <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-amber-50 text-amber-800 border border-amber-300">
-                  ⚠️ Database Balance Low ({formatUsdCost(engineBalance.balanceUsd)}) — Monitoring Only
-                </span>
-              )}
             </div>
             <button
               type="button"

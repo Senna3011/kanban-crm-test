@@ -283,7 +283,7 @@ export default function NewOutreachCampaignPage() {
       }
 
       const campaign = await res.json();
-      router.push(`/dashboard/outreach/${campaign.id}?autoSource=true&limit=${leadCount}&provider=${leadProvider}`);
+      router.push(`/dashboard/outreach/${campaign.id}`);
     } catch (err: any) {
       setError(err.message || 'An error occurred while creating the campaign.');
       setLoading(false);

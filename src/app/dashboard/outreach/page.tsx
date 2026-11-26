@@ -166,7 +166,11 @@ export default function OutreachDashboardPage() {
                 <p className="text-[10px] uppercase tracking-wider opacity-75">Database Balance</p>
                 <p className="font-bold">
                   {formatUsdCost(billing.balance.balanceUsd)}
-                  {billing.balance.lowBalanceWarning && ' • Low'}
+                  {billing.balance.criticalBalanceWarning
+                    ? ' • Critical — top up before sourcing'
+                    : billing.balance.lowBalanceWarning
+                    ? ' • Low — top up before sourcing'
+                    : ''}
                 </p>
               </div>
             </button>
