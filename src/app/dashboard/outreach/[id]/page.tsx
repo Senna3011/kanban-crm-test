@@ -470,7 +470,8 @@ export default function CampaignWorkspacePage({
       } else {
         const costInfo = data.costUsd !== undefined ? ` • Cost: ${formatUsdCost(data.costUsd)}` : '';
         const balInfo = typeof data.balanceAfterUsd === 'number' ? ` • Balance: ${formatUsdCost(data.balanceAfterUsd)}` : '';
-        toast.success(`Successfully sourced ${data.count} targeted prospects (${data.skippedDuplicates || 0} duplicates skipped)${costInfo}${balInfo}.`);
+        const preserved = data.skippedDuplicates || 0;
+        toast.success(`Added ${data.count} new leads (${preserved} duplicates skipped, existing leads preserved)${costInfo}${balInfo}.`);
       }
       await fetchCampaign();
       fetchEngineBalance(true);
@@ -622,11 +623,22 @@ export default function CampaignWorkspacePage({
         const data = await res.json();
         const bList = Array.isArray(data) ? data : [];
         setBoardsList(bList);
-        if (bList.length > 0) {
-          setSelectedBoardId(bList[0].id);
-          const cols = bList[0].columns || [];
-          const leadsCol = cols.find((c: any) => c.title.toLowerCase() === 'fresh leads') || cols.find((c: any) => c.title.toLowerCase() === 'leads') || cols[0];
-          if (leadsCol) setSelectedColumnId(leadsCol.id);
+        
+        // Use last push destination if available, otherwise default to first board with "Fresh Leads"
+        let boardId = lastPushBoardId && bList.find((b: any) => b.id === lastPushBoardId) ? lastPushBoardId : bList[0]?.id;
+        let columnId = lastPushColumnId && boardId && bList.find((b: any) => b.id === boardId)?.columns?.find((c: any) => c.id === lastPushColumnId) ? lastPushColumnId : undefined;
+        
+        if (!boardId && bList.length > 0) {
+          boardId = bList[0].id;
+        }
+        if (boardId) {
+          setSelectedBoardId(boardId);
+          const cols = bList.find((b: any) => b.id === boardId)?.columns || [];
+          if (!columnId) {
+            const leadsCol = cols.find((c: any) => c.title.toLowerCase() === 'fresh leads') || cols.find((c: any) => c.title.toLowerCase() === 'leads') || cols[0];
+            if (leadsCol) columnId = leadsCol.id;
+          }
+          if (columnId) setSelectedColumnId(columnId);
         }
       }
     } catch (e) {
@@ -698,6 +710,18 @@ export default function CampaignWorkspacePage({
         columnTitle: targetCol?.title || 'Fresh leads',
         count,
       });
+      
+      // Save last push destination to localStorage
+      if (campaignId && selectedBoardId && selectedColumnId) {
+        localStorage.setItem(`outreach-last-push-${campaignId}`, JSON.stringify({
+          boardId: selectedBoardId,
+          columnId: selectedColumnId,
+          pushedAt: new Date().toISOString(),
+        }));
+        setLastPushBoardId(selectedBoardId);
+        setLastPushColumnId(selectedColumnId);
+      }
+
       clearSelection();
       await fetchCampaign();
       toast.dismiss(pushToast);
@@ -1102,6 +1126,7 @@ export default function CampaignWorkspacePage({
   }
 
   const allLeads = campaign.leads || [];
+  const totalDiscovered = allLeads.length;
   const leadsWithEmail = allLeads.filter((l) => Boolean(l.email)).length;
   const missingEmailCount = allLeads.length - leadsWithEmail;
   const safeLeads = allLeads.filter((l) => l.verifyStatus === 'SAFE').length;
@@ -1109,9 +1134,28 @@ export default function CampaignWorkspacePage({
   const readyDrafts = allLeads.filter((l) => Boolean(l.aiDraftSubject) && Boolean(l.aiDraftBody)).length;
   const dispatchedLeads = allLeads.filter((l) => l.status === 'DISPATCHED' || l.status === 'CONVERTED').length;
   const convertedLeads = allLeads.filter((l) => l.status === 'CONVERTED').length;
+  const totalInCRM = convertedLeads;
   const uncommittedSafeDrafts = allLeads.filter((l) => l.status !== 'CONVERTED' && l.verifyStatus === 'SAFE' && Boolean(l.aiDraftSubject)).length;
-  const uncommittedTotalLeads = allLeads.filter((l) => l.status !== 'CONVERTED' && Boolean(l.email)).length;
+  const readyToPush = allLeads.filter((l) => l.status !== 'CONVERTED' && Boolean(l.email)).length;
+  const uncommittedTotalLeads = readyToPush;
   const isActionLocked = Boolean(actionLoading) || isPollingWorker || campaign.status === 'RUNNING';
+
+  // Last push destination from localStorage
+  const [lastPushBoardId, setLastPushBoardId] = useState<string | null>(null);
+  const [lastPushColumnId, setLastPushColumnId] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (campaignId) {
+      const stored = localStorage.getItem(`outreach-last-push-${campaignId}`);
+      if (stored) {
+        try {
+          const parsed = JSON.parse(stored);
+          setLastPushBoardId(parsed.boardId);
+          setLastPushColumnId(parsed.columnId);
+        } catch {}
+      }
+    }
+  }, [campaignId]);
 
   function computeLeadIcpScore(lead: Lead): { score: number; label: string; badgeClass: string; matchFactors: string[] } {
     const matchFactors: string[] = [];
@@ -1278,7 +1322,7 @@ export default function CampaignWorkspacePage({
     }
   } else {
     // Global Pipeline Progression
-    if (allLeads.length === 0) {
+    if (totalDiscovered === 0) {
       currentStepNumber = 1;
       nextActionPrompt = 'Start by sourcing targeted prospects from LinkedIn matching your ICP criteria.';
       nextActionLabel = 'Source Target Leads';
@@ -1290,15 +1334,15 @@ export default function CampaignWorkspacePage({
       nextActionLabel = `Get Lead Emails (${missingEmailCount})`;
       nextActionHandler = async () => { await handleFindEmails(); };
       nextActionColor = 'bg-indigo-600 hover:bg-indigo-700';
-    } else if (uncommittedTotalLeads > 0) {
+    } else if (readyToPush > 0) {
       currentStepNumber = 3;
-      nextActionPrompt = `Step 3: ${uncommittedTotalLeads} verified leads ready. Push into Kanban CRM pipeline.`;
-      nextActionLabel = `Push ${uncommittedTotalLeads} Leads to CRM`;
+      nextActionPrompt = `Step 3: ${readyToPush} verified leads ready. Push into Kanban CRM pipeline.`;
+      nextActionLabel = `Push ${readyToPush} Leads to CRM`;
       nextActionHandler = () => { openPushCrmModal(); };
       nextActionColor = 'bg-emerald-600 hover:bg-emerald-700 text-white';
-    } else if (convertedLeads > 0 && uncommittedTotalLeads === 0) {
+    } else if (totalInCRM > 0 && readyToPush === 0) {
       currentStepNumber = 3;
-      nextActionPrompt = 'Pipeline fully executed! All verified leads are active in Kanban CRM.';
+      nextActionPrompt = `Pipeline fully executed! All ${totalInCRM} verified leads are active in Kanban CRM.`;
       nextActionLabel = 'View Kanban CRM Board';
       nextActionHandler = () => { router.push('/dashboard'); };
       nextActionColor = 'bg-emerald-600 hover:bg-emerald-700';
@@ -1690,23 +1734,44 @@ export default function CampaignWorkspacePage({
           </div>
 
           {/* Step 3: Push to CRM */}
-          <div className={`p-4 rounded-xl border transition-all ${currentStepNumber === 3 ? 'bg-white/15 border-amber-400 ring-2 ring-amber-400/30' : uncommittedTotalLeads === 0 && allLeads.length > 0 ? 'bg-emerald-950/30 border-emerald-500/30' : 'bg-white/5 border-white/10'} flex flex-col justify-between`}>
+          <div className={`p-4 rounded-xl border transition-all ${currentStepNumber === 3 ? 'bg-white/15 border-amber-400 ring-2 ring-amber-400/30' : readyToPush === 0 && allLeads.length > 0 ? 'bg-emerald-950/30 border-emerald-500/30' : 'bg-white/5 border-white/10'} flex flex-col justify-between`}>
             <div>
               <div className="flex items-center justify-between">
                 <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Step 3</span>
-                {uncommittedTotalLeads === 0 && allLeads.length > 0 ? (
+                {readyToPush === 0 && allLeads.length > 0 ? (
                   <span className="text-emerald-400 text-xs font-bold bg-emerald-500/20 px-2 py-0.5 rounded-md">✓ Active</span>
                 ) : (
-                  <span className="text-slate-400 text-[11px] font-medium">{uncommittedTotalLeads} Ready</span>
+                  <span className="text-slate-400 text-[11px] font-medium">{readyToPush} Ready</span>
                 )}
               </div>
               <p className="text-xs font-semibold text-slate-200 mt-1.5">CRM Pipeline Bridge</p>
-              <p className="text-xl font-bold text-emerald-400 mt-1">
-                {convertedLeads} <span className="text-xs font-normal text-slate-400">/ {leadsWithEmail} In Pipeline</span>
-              </p>
+              <div className="grid grid-cols-3 gap-2 mt-2 text-center">
+                <div className="p-2 bg-emerald-500/20 rounded-lg border border-emerald-400/30">
+                  <p className="text-xl font-bold text-emerald-400">{totalInCRM}</p>
+                  <p className="text-[10px] text-slate-400">In CRM</p>
+                </div>
+                <div className="p-2 bg-amber-500/20 rounded-lg border border-amber-400/30">
+                  <p className="text-xl font-bold text-amber-400">{readyToPush}</p>
+                  <p className="text-[10px] text-slate-400">To Push</p>
+                </div>
+                <div className="p-2 bg-blue-500/20 rounded-lg border border-blue-400/30">
+                  <p className="text-xl font-bold text-blue-400">{totalDiscovered}</p>
+                  <p className="text-[10px] text-slate-400">Total</p>
+                </div>
+              </div>
+              {totalInCRM > 0 && (
+                <p className="text-[10px] text-emerald-400 mt-1.5 font-medium">
+                  ✓ {totalInCRM} leads safely in CRM — never overwritten
+                </p>
+              )}
+              {lastPushBoardId && (
+                <p className="text-[10px] text-slate-400 mt-1.5 font-medium">
+                  Last pushed to: {boardsList.find(b => b.id === lastPushBoardId)?.title || 'Board'} → {boardsList.find(b => b.id === lastPushBoardId)?.columns?.find((c: any) => c.id === lastPushColumnId)?.title || 'Column'}
+                </p>
+              )}
             </div>
             <div className="mt-3 space-y-1.5">
-              {uncommittedTotalLeads === 0 && allLeads.length > 0 ? (
+              {readyToPush === 0 && allLeads.length > 0 ? (
                 <button
                   type="button"
                   onClick={() => router.push('/dashboard')}
@@ -1718,23 +1783,23 @@ export default function CampaignWorkspacePage({
               ) : (
                 <button
                   onClick={() => openPushCrmModal()}
-                  disabled={isActionLocked || uncommittedTotalLeads === 0 || allLeads.length === 0}
+                  disabled={isActionLocked || readyToPush === 0 || allLeads.length === 0}
                   className="w-full py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold rounded-lg transition-colors flex items-center justify-center gap-1.5 shadow-xs disabled:opacity-40 disabled:cursor-not-allowed"
                   title="Bridge leads into Kanban CRM Fresh leads column"
                 >
                   {actionLoading === 'push-crm' ? (
                     <span className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
                   ) : (
-                    <span>📥 Push to CRM ({uncommittedTotalLeads})</span>
+                    <span>📥 Push to CRM ({readyToPush})</span>
                   )}
                 </button>
               )}
-              {(convertedLeads > 0 || uncommittedTotalLeads > 0) && (
+              {(totalInCRM > 0 || readyToPush > 0) && (
                 <div className="pt-2 border-t border-white/10 flex items-center gap-1.5">
                   <button
                     type="button"
                     onClick={() => {
-                      const targetLeads = convertedLeads > 0
+                      const targetLeads = totalInCRM > 0
                         ? allLeads.filter(l => l.status === 'CONVERTED')
                         : allLeads.filter(l => Boolean(l.email));
                       exportStepCsv(targetLeads, `${campaign.name}-step3-crm-leads`);
@@ -1742,7 +1807,7 @@ export default function CampaignWorkspacePage({
                     className="flex-1 py-1 px-2 bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-200 hover:text-white text-[11px] font-semibold rounded-lg transition-colors flex items-center justify-center gap-1 border border-emerald-400/20 shadow-2xs"
                     title="Export Step 3 CRM bridged leads to CSV"
                   >
-                    <span>📥</span> CSV ({convertedLeads > 0 ? convertedLeads : allLeads.filter(l => Boolean(l.email)).length})
+                    <span>📥</span> CSV ({totalInCRM > 0 ? totalInCRM : allLeads.filter(l => Boolean(l.email)).length})
                   </button>
                   <button
                     type="button"

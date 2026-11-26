@@ -28,22 +28,9 @@ export default function SubBoardSelector({
   const [isOpen, setIsOpen] = useState(false);
   const [search, setSearch] = useState('');
   const [filterMode, setFilterMode] = useState<'all' | 'active' | 'unread'>('all');
+  const [showFilters, setShowFilters] = useState(false);
   const popoverRef = useRef<HTMLDivElement>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
-
-  // Close on outside click
-  useEffect(() => {
-    function handleClickOutside(e: MouseEvent) {
-      if (popoverRef.current && !popoverRef.current.contains(e.target as Node)) {
-        setIsOpen(false);
-      }
-    }
-    if (isOpen) {
-      document.addEventListener('mousedown', handleClickOutside);
-      setTimeout(() => searchInputRef.current?.focus(), 50);
-    }
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, [isOpen]);
 
   // Close on Escape key
   useEffect(() => {
@@ -52,6 +39,13 @@ export default function SubBoardSelector({
     }
     if (isOpen) document.addEventListener('keydown', handleKeyDown);
     return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [isOpen]);
+
+  // Focus search input when opened
+  useEffect(() => {
+    if (isOpen) {
+      setTimeout(() => searchInputRef.current?.focus(), 50);
+    }
   }, [isOpen]);
 
   // Compute active sender details
@@ -156,7 +150,8 @@ export default function SubBoardSelector({
 
       {/* Popover Palette */}
       {isOpen && (
-        <div className="absolute left-0 top-full mt-2 w-80 sm:w-96 bg-white rounded-2xl shadow-2xl border border-slate-200/90 z-50 overflow-hidden animate-in fade-in zoom-in-95 duration-100">
+        <div className="fixed inset-0 z-40" onClick={() => setIsOpen(false)}>
+          <div className="absolute right-0 top-12 w-80 sm:w-96 bg-white rounded-2xl shadow-2xl border border-slate-200/90 z-50 overflow-hidden animate-in fade-in zoom-in-95 duration-100" onClick={(e) => e.stopPropagation()}>
           {/* Header */}
           <div className="p-3 border-b border-slate-100 bg-slate-50/80">
             <div className="flex items-center justify-between mb-2">
@@ -203,41 +198,59 @@ export default function SubBoardSelector({
               )}
             </div>
 
-            {/* Quick Filter Tabs */}
-            <div className="flex items-center gap-1 mt-2">
+            {/* Collapsible Quick Filter Tabs */}
+            <div className="mt-2">
               <button
                 type="button"
-                onClick={() => setFilterMode('all')}
-                className={`px-2 py-0.5 rounded-lg text-[10px] font-semibold transition ${
-                  filterMode === 'all'
-                    ? 'bg-slate-900 text-white'
-                    : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-100'
-                }`}
+                onClick={() => setShowFilters((prev) => !prev)}
+                className="flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] font-medium text-slate-500 hover:text-slate-700 hover:bg-slate-100 transition"
               >
-                All ({senders.length})
+                <svg className={`w-3.5 h-3.5 transition-transform ${showFilters ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+                </svg>
+                <span>Filters</span>
+                <span className="px-1.5 py-0.2 rounded-full bg-slate-100 text-slate-600 text-[9px] font-bold">
+                  {senders.filter((s) => s.totalCards > 0).length} active
+                </span>
               </button>
-              <button
-                type="button"
-                onClick={() => setFilterMode('active')}
-                className={`px-2 py-0.5 rounded-lg text-[10px] font-semibold transition ${
-                  filterMode === 'active'
-                    ? 'bg-primary-600 text-white'
-                    : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-100'
-                }`}
-              >
-                Active Only ({senders.filter((s) => s.totalCards > 0).length})
-              </button>
-              <button
-                type="button"
-                onClick={() => setFilterMode('unread')}
-                className={`px-2 py-0.5 rounded-lg text-[10px] font-semibold transition ${
-                  filterMode === 'unread'
-                    ? 'bg-amber-600 text-white'
-                    : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-100'
-                }`}
-              >
-                Unread ({senders.filter((s) => s.unreadCount > 0).length})
-              </button>
+
+              {showFilters && (
+                <div className="flex items-center gap-1 mt-2">
+                  <button
+                    type="button"
+                    onClick={() => setFilterMode('all')}
+                    className={`px-2 py-0.5 rounded-lg text-[10px] font-semibold transition ${
+                      filterMode === 'all'
+                        ? 'bg-slate-900 text-white'
+                        : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-100'
+                    }`}
+                  >
+                    All ({senders.length})
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setFilterMode('active')}
+                    className={`px-2 py-0.5 rounded-lg text-[10px] font-semibold transition ${
+                      filterMode === 'active'
+                        ? 'bg-primary-600 text-white'
+                        : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-100'
+                    }`}
+                  >
+                    Active Only ({senders.filter((s) => s.totalCards > 0).length})
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setFilterMode('unread')}
+                    className={`px-2 py-0.5 rounded-lg text-[10px] font-semibold transition ${
+                      filterMode === 'unread'
+                        ? 'bg-amber-600 text-white'
+                        : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-100'
+                    }`}
+                  >
+                    Unread ({senders.filter((s) => s.unreadCount > 0).length})
+                  </button>
+                </div>
+              )}
             </div>
           </div>
 
@@ -346,6 +359,7 @@ export default function SubBoardSelector({
             )}
           </div>
         </div>
+      </div>
       )}
     </div>
   );
