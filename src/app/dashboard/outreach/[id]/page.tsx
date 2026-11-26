@@ -278,6 +278,23 @@ export default function CampaignWorkspacePage({
   // Background worker polling state
   const [isPollingWorker, setIsPollingWorker] = useState(false);
 
+  // Last push destination from localStorage (must be declared before any early return)
+  const [lastPushBoardId, setLastPushBoardId] = useState<string | null>(null);
+  const [lastPushColumnId, setLastPushColumnId] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (campaignId) {
+      const stored = localStorage.getItem(`outreach-last-push-${campaignId}`);
+      if (stored) {
+        try {
+          const parsed = JSON.parse(stored);
+          setLastPushBoardId(parsed.boardId);
+          setLastPushColumnId(parsed.columnId);
+        } catch {}
+      }
+    }
+  }, [campaignId]);
+
   // Live Engine Balance & Cost History state
   const [engineBalance, setEngineBalance] = useState<{
     configured: boolean;
@@ -1139,23 +1156,6 @@ export default function CampaignWorkspacePage({
   const readyToPush = allLeads.filter((l) => l.status !== 'CONVERTED' && Boolean(l.email)).length;
   const uncommittedTotalLeads = readyToPush;
   const isActionLocked = Boolean(actionLoading) || isPollingWorker || campaign.status === 'RUNNING';
-
-  // Last push destination from localStorage
-  const [lastPushBoardId, setLastPushBoardId] = useState<string | null>(null);
-  const [lastPushColumnId, setLastPushColumnId] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (campaignId) {
-      const stored = localStorage.getItem(`outreach-last-push-${campaignId}`);
-      if (stored) {
-        try {
-          const parsed = JSON.parse(stored);
-          setLastPushBoardId(parsed.boardId);
-          setLastPushColumnId(parsed.columnId);
-        } catch {}
-      }
-    }
-  }, [campaignId]);
 
   function computeLeadIcpScore(lead: Lead): { score: number; label: string; badgeClass: string; matchFactors: string[] } {
     const matchFactors: string[] = [];
