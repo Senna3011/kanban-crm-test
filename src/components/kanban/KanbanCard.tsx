@@ -1,5 +1,7 @@
 'use client';
 
+import { useState, useRef, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import clsx from 'clsx';
@@ -16,6 +18,11 @@ interface Props {
   onToggleSelect?: (cardId: string) => void;
   onSelectSubBoard?: (alias: string) => void;
   activeSubBoard?: string;
+  boardColumns?: { id: string; title: string; color?: string }[];
+  onMoveCard?: (cardId: string, targetColumnId: string) => void;
+  onSnooze?: (cardId: string, days?: number) => void;
+  openMoveMenuCardId?: string | null;
+  onToggleMoveMenu?: (cardId: string) => void;
 }
 
 function getAvatarColor(str: string) {
@@ -75,7 +82,85 @@ export default function KanbanCard({
   onToggleSelect,
   onSelectSubBoard,
   activeSubBoard = 'all',
+  boardColumns,
+  onMoveCard,
+  onSnooze,
+  openMoveMenuCardId,
+  onToggleMoveMenu,
 }: Props) {
+  const moveMenuOpen = openMoveMenuCardId === card.id;
+  const moveBtnRef = useRef<HTMLButtonElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
+  const [menuPos, setMenuPos] = useState<{ top: number; left: number }>({ top: 0, left: 0 });
+  // "Ghost" = menu stays open but is visually hidden while its card is scrolled
+  // out of view horizontally; it reappears when the card comes back into view.
+  const [ghosted, setGhosted] = useState(false);
+
+  function positionMenu() {
+    const rect = moveBtnRef.current?.getBoundingClientRect();
+    if (!rect) return null;
+    const menuHeight = 224; // max-h-56
+    const spaceBelow = window.innerHeight - rect.bottom;
+    const top = spaceBelow < menuHeight + 8 ? rect.top - menuHeight - 4 : rect.bottom + 4;
+    setMenuPos({ top: Math.max(8, top), left: Math.max(8, rect.right - 160) });
+    return rect;
+  }
+
+  function openMoveMenu() {
+    setGhosted(false);
+    positionMenu();
+    onToggleMoveMenu?.(card.id);
+  }
+
+  // While open:
+  // - click/tap outside the menu or its trigger closes it
+  // - vertical scroll closes it for good
+  // - horizontal scroll ghosts it while the card is off-screen, restores on return
+  useEffect(() => {
+    if (!moveMenuOpen) {
+      setGhosted(false);
+      return;
+    }
+
+    const onPointerDown = (e: PointerEvent) => {
+      const target = e.target as Node;
+      if (menuRef.current?.contains(target) || moveBtnRef.current?.contains(target)) return;
+      onToggleMoveMenu?.(card.id);
+    };
+
+    // Track per-element scroll so we can tell horizontal vs vertical even when
+    // the scrolling happens on an inner div (board scroller) rather than window.
+    const lastScroll = new WeakMap<Element, { x: number; y: number }>();
+    const onScroll = (e: Event) => {
+      const el = e.target as Element;
+      const x = (el as any).scrollLeft ?? 0;
+      const y = (el as any).scrollTop ?? 0;
+      const prev = lastScroll.get(el) ?? { x, y };
+      const dx = Math.abs(x - prev.x);
+      const dy = Math.abs(y - prev.y);
+      lastScroll.set(el, { x, y });
+
+      if (dy > 0 && dy >= dx) {
+        onToggleMoveMenu?.(card.id); // vertical → close for good
+        return;
+      }
+      if (dx > 0) {
+        const rect = moveBtnRef.current?.getBoundingClientRect();
+        if (!rect) return;
+        const offscreen = rect.right < 0 || rect.left > window.innerWidth;
+        setGhosted(offscreen);
+        if (!offscreen) positionMenu();
+      }
+    };
+
+    document.addEventListener('pointerdown', onPointerDown, true);
+    document.addEventListener('scroll', onScroll, true);
+    return () => {
+      document.removeEventListener('pointerdown', onPointerDown, true);
+      document.removeEventListener('scroll', onScroll, true);
+    };
+  }, [moveMenuOpen, card.id, onToggleMoveMenu]);
+
   const { attributes, listeners, setNodeRef, transform, transition, isDragging: isSortableDragging } = useSortable({
     id: card.id,
     disabled: !!isDragging || !!selectionMode,
@@ -287,6 +372,69 @@ export default function KanbanCard({
         {/* Hover Quick Actions */}
         {!isDragging && (
           <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0" onClick={(e) => e.stopPropagation()}>
+            {/* Quick Move to another stage */}
+            {boardColumns && boardColumns.length > 1 && onMoveCard && (
+              <div className="relative">
+                <button
+                  ref={moveBtnRef}
+                  onClick={openMoveMenu}
+                  className="p-1 rounded-md text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 transition-colors focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  title="Move to stage"
+                  aria-label="Move to stage"
+                >
+                  <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M7 16l-4-4m0 0l4-4m-4 4h18" />
+                  </svg>
+                </button>
+                {moveMenuOpen &&
+                  createPortal(
+                    <div
+                      ref={menuRef}
+                      className="fixed z-[61] w-40 bg-white dark:bg-[#22272B] border border-slate-200 dark:border-[#2C333A] rounded-lg shadow-xl p-1 max-h-56 overflow-y-auto"
+                      style={{
+                        top: menuPos.top,
+                        left: menuPos.left,
+                        visibility: ghosted ? 'hidden' : 'visible',
+                        pointerEvents: ghosted ? 'none' : 'auto',
+                      }}
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      {boardColumns
+                        .filter((c) => c.id !== card.columnId)
+                        .map((c) => (
+                          <button
+                            key={c.id}
+                            onClick={() => {
+                              onToggleMoveMenu?.(card.id);
+                              onMoveCard(card.id, c.id);
+                            }}
+                            className="group/item w-full text-left px-2 py-1.5 text-[11px] font-medium text-slate-700 dark:text-slate-200 hover:bg-indigo-50 dark:hover:bg-indigo-950/50 hover:text-indigo-700 dark:hover:text-indigo-300 hover:ring-1 hover:ring-indigo-200 dark:hover:ring-indigo-800 rounded-md flex items-center gap-2 transition-colors"
+                          >
+                              <span
+                                className="w-1.5 h-4 rounded-full flex-shrink-0 opacity-70 group-hover/item:opacity-100 group-hover/item:w-2 transition-all"
+                                style={{ backgroundColor: c.color || '#3b82f6' }}
+                              />
+                              <span className="truncate group-hover/item:font-semibold">{c.title}</span>
+                          </button>
+                          ))}
+                    </div>,
+                    document.body
+                  )}
+              </div>
+            )}
+            {/* Quick Snooze follow-up 1 day */}
+            {onSnooze && (
+              <button
+                onClick={() => onSnooze(card.id, 1)}
+                className="p-1 rounded-md text-slate-400 hover:text-amber-600 hover:bg-amber-50 transition-colors focus:outline-none focus:ring-2 focus:ring-amber-500"
+                title="Postpone follow-up 1 day"
+                aria-label="Postpone follow-up 1 day"
+              >
+                <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 2m6-2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+              </button>
+            )}
             <button
               onClick={() => onToggleRead?.(card.id, card.status)}
               className="p-1 rounded-md text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors focus:outline-none focus:ring-2 focus:ring-primary-500"

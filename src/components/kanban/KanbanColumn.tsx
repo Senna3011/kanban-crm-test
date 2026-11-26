@@ -19,6 +19,11 @@ interface Props {
   onStartSendingAll?: (columnId: string, columnTitle: string) => void;
   onSelectSubBoard?: (alias: string) => void;
   activeSubBoard?: string;
+  boardColumns?: { id: string; title: string; color?: string }[];
+  onMoveCard?: (cardId: string, targetColumnId: string) => void;
+  onSnooze?: (cardId: string, days?: number) => void;
+  openMoveMenuCardId?: string | null;
+  onToggleMoveMenu?: (cardId: string) => void;
 }
 
 export default function KanbanColumn({
@@ -34,6 +39,11 @@ export default function KanbanColumn({
   onStartSendingAll,
   onSelectSubBoard,
   activeSubBoard,
+  boardColumns,
+  onMoveCard,
+  onSnooze,
+  openMoveMenuCardId,
+  onToggleMoveMenu,
 }: Props) {
   const { setNodeRef, isOver } = useDroppable({ id: column.id });
   const [localSortMode, setLocalSortMode] = useState<'default' | 'unreads' | 'date'>('default');
@@ -206,6 +216,11 @@ export default function KanbanColumn({
               onToggleSelect={onToggleSelect}
               onSelectSubBoard={onSelectSubBoard}
               activeSubBoard={activeSubBoard}
+              boardColumns={boardColumns}
+              onMoveCard={onMoveCard}
+              onSnooze={onSnooze}
+              openMoveMenuCardId={openMoveMenuCardId}
+              onToggleMoveMenu={onToggleMoveMenu}
             />
           ))}
         </SortableContext>

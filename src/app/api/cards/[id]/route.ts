@@ -132,6 +132,12 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
   if (body.contactRole !== undefined) updateData.contactRole = body.contactRole;
   if (body.probability !== undefined) updateData.probability = body.probability === '' || body.probability === null ? null : Number(body.probability);
   if (body.lostReason !== undefined) updateData.lostReason = body.lostReason;
+  if (body.nextFollowUpAt !== undefined) {
+    updateData.nextFollowUpAt =
+      body.nextFollowUpAt === null || body.nextFollowUpAt === ''
+        ? null
+        : new Date(body.nextFollowUpAt);
+  }
 
   const updated = await prisma.card.update({
     where: { id: id },

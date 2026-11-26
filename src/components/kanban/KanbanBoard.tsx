@@ -78,6 +78,15 @@ export default function KanbanBoard() {
   // Sub-Board per Alias / Sender State
   const [activeSubBoard, setActiveSubBoard] = useState<string>('all');
 
+  // Only one quick-action (Move) menu may be open at a time across the whole board
+  const [openMoveMenuCardId, setOpenMoveMenuCardId] = useState<string | null>(null);
+  function toggleMoveMenu(cardId: string) {
+    setOpenMoveMenuCardId((prev) => (prev === cardId ? null : cardId));
+  }
+
+  // Expand the Sub-Boards chip bar to reveal senders hidden behind "+N more"
+  const [showAllSubBoards, setShowAllSubBoards] = useState(false);
+
   // Load active sub-board and boardId from URL query param if present
   useEffect(() => {
     if (typeof window !== 'undefined') {
@@ -406,6 +415,43 @@ export default function KanbanBoard() {
     } catch {
       toast.error('Failed to update status');
       fetchColumns();
+    }
+  }
+
+  // Quick action: move a card to another column without opening the detail panel
+  async function handleMoveCard(cardId: string, targetColumnId: string) {
+    const targetCol = columns.find((c) => c.id === targetColumnId);
+    if (!targetCol) return;
+    try {
+      const res = await fetch(`/api/cards/${cardId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ columnId: targetColumnId }),
+      });
+      if (!res.ok) throw new Error('Failed to move card');
+      toast.success(`Moved to ${targetCol.title}`);
+      fetchColumns();
+    } catch {
+      toast.error('Failed to move card');
+      fetchColumns();
+    }
+  }
+
+  // Quick action: snooze follow-up by N days (default 1) without opening the detail panel
+  async function handleSnooze(cardId: string, days = 1) {
+    const target = new Date();
+    target.setDate(target.getDate() + days);
+    try {
+      const res = await fetch(`/api/cards/${cardId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ nextFollowUpAt: target.toISOString() }),
+      });
+      if (!res.ok) throw new Error('Failed to snooze');
+      toast.success(`Follow-up postponed ${days} day${days > 1 ? 's' : ''}`);
+      fetchColumns();
+    } catch {
+      toast.error('Failed to postpone follow-up');
     }
   }
 
@@ -1078,7 +1124,7 @@ export default function KanbanBoard() {
               All ({subBoardSenders.reduce((acc, s) => acc + s.totalCards, 0)})
             </button>
 
-            {topQuickSenders.map((sender) => {
+            {(showAllSubBoards ? subBoardSenders.filter((s) => s.totalCards > 0) : topQuickSenders).map((sender) => {
               const isSelected = activeSubBoard.toLowerCase() === sender.email.toLowerCase();
               return (
                 <button
@@ -1105,10 +1151,16 @@ export default function KanbanBoard() {
               );
             })}
 
-            {subBoardSenders.length > topQuickSenders.length && (
-              <span className="text-[11px] font-medium text-slate-400 px-1 shrink-0">
-                +{subBoardSenders.length - topQuickSenders.length} more in selector above
-              </span>
+            {subBoardSenders.filter((s) => s.totalCards > 0).length > topQuickSenders.length && (
+              <button
+                type="button"
+                onClick={() => setShowAllSubBoards((v) => !v)}
+                className="shrink-0 px-2.5 py-1 rounded-lg text-[11px] font-bold text-indigo-700 bg-indigo-50 border border-indigo-200 hover:bg-indigo-100 transition cursor-pointer"
+              >
+                {showAllSubBoards
+                  ? 'Show less ▲'
+                  : `+${subBoardSenders.filter((s) => s.totalCards > 0).length - topQuickSenders.length} more ▼`}
+              </button>
             )}
           </div>
         )}
@@ -1279,6 +1331,11 @@ export default function KanbanBoard() {
               onStartSendingAll={handleStartSendingColumn}
               onSelectSubBoard={handleSelectSubBoard}
               activeSubBoard={activeSubBoard}
+              boardColumns={columns.map((c) => ({ id: c.id, title: c.title, color: c.color }))}
+              onMoveCard={handleMoveCard}
+              onSnooze={handleSnooze}
+              openMoveMenuCardId={openMoveMenuCardId}
+              onToggleMoveMenu={toggleMoveMenu}
             />
           ))}
         </div>
