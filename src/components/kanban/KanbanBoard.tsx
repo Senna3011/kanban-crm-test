@@ -418,10 +418,33 @@ export default function KanbanBoard() {
     }
   }
 
-  // Quick action: move a card to another column without opening the detail panel
+  // Quick action: move a card to another column without opening the detail panel.
+  // Optimistic: the card moves instantly in state; the PUT runs in the background
+  // and we only refetch to roll back if it fails (avoids slow full-board refetch).
   async function handleMoveCard(cardId: string, targetColumnId: string) {
     const targetCol = columns.find((c) => c.id === targetColumnId);
     if (!targetCol) return;
+
+    let movedCard: CardData | null = null;
+    let sourceColId = '';
+    setColumns((prev) => {
+      const next = prev.map((col) => ({ ...col, cards: [...col.cards] }));
+      for (const col of next) {
+        const idx = col.cards.findIndex((c) => c.id === cardId);
+        if (idx !== -1) {
+          [movedCard] = col.cards.splice(idx, 1);
+          sourceColId = col.id;
+          break;
+        }
+      }
+      const dest = next.find((c) => c.id === targetColumnId);
+      if (dest && movedCard) {
+        (movedCard as CardData).columnId = targetColumnId;
+        dest.cards.push(movedCard as CardData);
+      }
+      return next;
+    });
+
     try {
       const res = await fetch(`/api/cards/${cardId}`, {
         method: 'PUT',
@@ -430,28 +453,35 @@ export default function KanbanBoard() {
       });
       if (!res.ok) throw new Error('Failed to move card');
       toast.success(`Moved to ${targetCol.title}`);
-      fetchColumns();
     } catch {
       toast.error('Failed to move card');
-      fetchColumns();
+      fetchColumns(); // rollback to server truth
     }
   }
 
-  // Quick action: snooze follow-up by N days (default 1) without opening the detail panel
+  // Quick action: snooze follow-up by N days (default 1) without opening the detail panel.
+  // Optimistic: updates the card's nextFollowUpAt in place; no full refetch.
   async function handleSnooze(cardId: string, days = 1) {
     const target = new Date();
     target.setDate(target.getDate() + days);
+    const iso = target.toISOString();
+    setColumns((prev) =>
+      prev.map((col) => ({
+        ...col,
+        cards: col.cards.map((c) => (c.id === cardId ? { ...c, nextFollowUpAt: iso } : c)),
+      }))
+    );
     try {
       const res = await fetch(`/api/cards/${cardId}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ nextFollowUpAt: target.toISOString() }),
+        body: JSON.stringify({ nextFollowUpAt: iso }),
       });
       if (!res.ok) throw new Error('Failed to snooze');
       toast.success(`Follow-up postponed ${days} day${days > 1 ? 's' : ''}`);
-      fetchColumns();
     } catch {
       toast.error('Failed to postpone follow-up');
+      fetchColumns();
     }
   }
 
