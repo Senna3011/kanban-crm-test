@@ -84,7 +84,7 @@ export function checkRateLimit(
  */
 export const LOGIN_RATE_LIMIT: RateLimitOptions = {
   identifier: 'login',
-  maxAttempts: 5,
+  maxAttempts: process.env.NODE_ENV === 'production' ? 5 : 1000,
   windowMs: 15 * 60 * 1000, // 15 minutes
 };
 
