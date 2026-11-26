@@ -162,7 +162,7 @@ export default function KanbanCard({
         </div>
 
         {/* Badges */}
-        <div className="flex items-center gap-1.5 flex-shrink-0 flex-wrap justify-end">
+        <div className="flex items-center gap-1.5 flex-shrink-0 flex-wrap justify-end max-w-[60%]">
           {cardAlias && activeSubBoard === 'all' && (
             <button
               type="button"
@@ -289,7 +289,7 @@ export default function KanbanCard({
           <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0" onClick={(e) => e.stopPropagation()}>
             <button
               onClick={() => onToggleRead?.(card.id, card.status)}
-              className="p-1 rounded-md text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors"
+              className="p-1 rounded-md text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors focus:outline-none focus:ring-2 focus:ring-primary-500"
               title={isUnread ? 'Mark as read' : 'Mark as unread'}
             >
               {isUnread ? (
@@ -304,7 +304,7 @@ export default function KanbanCard({
             </button>
             <button
               onClick={() => onDelete?.(card.id)}
-              className="p-1 rounded-md text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-colors"
+              className="p-1 rounded-md text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-colors focus:outline-none focus:ring-2 focus:ring-rose-500"
               title="Delete card"
             >
               <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
