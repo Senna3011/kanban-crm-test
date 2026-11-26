@@ -1393,6 +1393,7 @@ export default function KanbanBoard() {
         onClose={() => setIsReviewDrawerOpen(false)}
         boardTitle={boardName}
         boardId={activeBoardId}
+        boards={boards}
         columns={columns}
         availableSenders={availableBoardSenders}
         onCardClick={(card) => {

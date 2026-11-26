@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import type { ColumnData, CardData } from '@/types';
 import toast from 'react-hot-toast';
 
@@ -26,6 +26,7 @@ interface Props {
   onClose: () => void;
   boardTitle: string;
   boardId?: string;
+  boards?: { id: string; title: string }[];
   columns: ColumnData[];
   availableSenders: BoardSenderOption[];
   onCardClick: (card: CardData) => void;
@@ -36,6 +37,8 @@ export default function BoardLeadsReviewDrawer({
   isOpen,
   onClose,
   boardTitle,
+  boardId,
+  boards = [],
   columns,
   availableSenders,
   onCardClick,
@@ -49,6 +52,44 @@ export default function BoardLeadsReviewDrawer({
   const [applyingSender, setApplyingSender] = useState(false);
   const [previewDraft, setPreviewDraft] = useState<{ leadName: string; subject: string; body: string } | null>(null);
   const [deleting, setDeleting] = useState<Set<string>>(new Set());
+
+  // Move-to-board (bulk transfer) state
+  const [targetBoardId, setTargetBoardId] = useState('');
+  const [targetColumnId, setTargetColumnId] = useState('');
+  const [targetColumns, setTargetColumns] = useState<{ id: string; title: string }[]>([]);
+  const [loadingColumns, setLoadingColumns] = useState(false);
+  const [moving, setMoving] = useState(false);
+
+  // Load columns of the chosen destination board
+  useEffect(() => {
+    if (!isOpen || !targetBoardId) {
+      setTargetColumns([]);
+      setTargetColumnId('');
+      return;
+    }
+    let cancelled = false;
+    setLoadingColumns(true);
+    fetch(`/api/columns?boardId=${targetBoardId}`)
+      .then((r) => (r.ok ? r.json() : []))
+      .then((data) => {
+        if (cancelled) return;
+        const list = Array.isArray(data) ? data.map((c: any) => ({ id: c.id, title: c.title })) : [];
+        setTargetColumns(list);
+        setTargetColumnId(list[0]?.id ?? '');
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setTargetColumns([]);
+          setTargetColumnId('');
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setLoadingColumns(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [isOpen, targetBoardId]);
 
   // Flatten all cards from all columns (outreach prospects only)
   const allBoardCards = useMemo(() => {
@@ -210,6 +251,40 @@ export default function BoardLeadsReviewDrawer({
     }
   };
 
+  const handleMoveToBoard = async () => {
+    if (selectedCardIds.size === 0) {
+      toast.error('Select at least one lead to move.');
+      return;
+    }
+    if (!targetBoardId || !targetColumnId) {
+      toast.error('Choose a destination board and column first.');
+      return;
+    }
+    const ids = Array.from(selectedCardIds);
+    const destBoard = boards.find((b) => b.id === targetBoardId);
+    const destCol = targetColumns.find((c) => c.id === targetColumnId);
+    setMoving(true);
+    try {
+      const res = await fetch('/api/cards', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ cardIds: ids, columnId: targetColumnId }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to move leads');
+      toast.success(
+        `Moved ${data.count ?? ids.length} lead(s) to ${destBoard?.title ?? 'board'}${destCol ? ` / ${destCol.title}` : ''}`
+      );
+      setSelectedCardIds(new Set());
+      onRefresh();
+    } catch (err: any) {
+      toast.error(err.message || 'Failed to move leads to board');
+      onRefresh();
+    } finally {
+      setMoving(false);
+    }
+  };
+
   if (!isOpen) return null;
 
   return (
@@ -358,9 +433,76 @@ export default function BoardLeadsReviewDrawer({
               </button>
             </div>
           </div>
-        </div>
 
-        {/* Table Content */}
+          {/* Bulk Move to Another Board Toolbar */}
+          {boards.filter((b) => b.id !== boardId).length > 0 && (
+            <div className="flex flex-wrap items-center justify-between gap-2.5 p-2.5 rounded-xl bg-emerald-50/70 dark:bg-[#1c2b22] border border-emerald-100 dark:border-emerald-900/50">
+              <div className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  checked={filteredItems.length > 0 && selectedCardIds.size === filteredItems.length}
+                  onChange={toggleSelectAll}
+                  className="w-4 h-4 text-primary-600 rounded border-slate-300 cursor-pointer"
+                />
+                <span className="text-xs font-bold text-slate-800 dark:text-white">
+                  Move {selectedCardIds.size} selected lead(s) to another board
+                </span>
+              </div>
+
+              <div className="flex flex-wrap items-center gap-2">
+                <select
+                  value={targetBoardId}
+                  onChange={(e) => setTargetBoardId(e.target.value)}
+                  className="px-2.5 py-1.5 text-xs rounded-lg border border-slate-300 dark:border-[#2C333A] bg-white dark:bg-[#161A1D] text-slate-800 dark:text-slate-200 font-medium focus:outline-none max-w-[180px]"
+                >
+                  <option value="">-- Destination Board --</option>
+                  {boards
+                    .filter((b) => b.id !== boardId)
+                    .map((b) => (
+                      <option key={b.id} value={b.id}>
+                        {b.title}
+                      </option>
+                    ))}
+                </select>
+
+                <select
+                  value={targetColumnId}
+                  onChange={(e) => setTargetColumnId(e.target.value)}
+                  disabled={!targetBoardId || loadingColumns || targetColumns.length === 0}
+                  className="px-2.5 py-1.5 text-xs rounded-lg border border-slate-300 dark:border-[#2C333A] bg-white dark:bg-[#161A1D] text-slate-800 dark:text-slate-200 font-medium focus:outline-none max-w-[180px] disabled:opacity-50"
+                >
+                  {loadingColumns ? (
+                    <option value="">Loading columns…</option>
+                  ) : targetColumns.length === 0 ? (
+                    <option value="">-- Column --</option>
+                  ) : (
+                    targetColumns.map((c) => (
+                      <option key={c.id} value={c.id}>
+                        {c.title}
+                      </option>
+                    ))
+                  )}
+                </select>
+
+                <button
+                  type="button"
+                  onClick={handleMoveToBoard}
+                  disabled={moving || selectedCardIds.size === 0 || !targetBoardId || !targetColumnId}
+                  className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-lg transition-colors flex items-center gap-1 shadow-xs disabled:opacity-50 cursor-pointer"
+                >
+                  {moving ? (
+                    <span>Moving…</span>
+                  ) : (
+                    <>
+                      <span>↔️</span>
+                      <span>Move to Board</span>
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
         <div className="flex-1 overflow-y-auto">
           {filteredItems.length === 0 ? (
             <div className="py-16 text-center text-slate-400 text-xs">
