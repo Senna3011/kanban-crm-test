@@ -68,11 +68,25 @@ Thumbs.db
 .turbo
 .npm-cache
 
-# Documentation & Internal Reports
-docs/
-AI-Rules-FrontEnd-BackEnd.md
-RANGKUMAN-UPDATE.md
-.skills/
-.temp-modern-web-guidance/
+# Playwright artifacts
+/test-results/
+/playwright-report/
+/playwright/.cache/
+/blob-report/
+/playwright.config.ts.bak
+
+# Environment variants
+.env.*
+!.env.example
+!.env.local.example
+
+# Sensitive exports/backups
 .kilo/
-temp-modern-web-guidance/
+*.bak
+*.old
+*.backup
+docs/
+.skills/
+tests/
+playwright.config.ts
+RANGKUMAN-UPDATE.md
